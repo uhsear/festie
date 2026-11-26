@@ -51,7 +51,7 @@ function PriorityMark({ label, priority }: { label: string; priority?: Priority 
   if (!priority) return null;
   return (
     <span className="inline-flex items-center gap-1 type-meta text-text-secondary">
-      <PriorityIcon priority={priority} className="w-3 h-3" filled />
+      <PriorityIcon priority={priority} className="w-4 h-4" filled />
       {label}: {PRIORITY_LABEL[priority]}
     </span>
   );

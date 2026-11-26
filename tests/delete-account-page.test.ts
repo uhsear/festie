@@ -38,7 +38,9 @@ describe('public/delete-account.html', () => {
   test('runs no script and loads nothing from another host', () => {
     assert.doesNotMatch(html, /<script/i);
     assert.doesNotMatch(html, /(?:src|href)="https?:\/\/(?!festie\.us)/i);
-    assert.match(html, /href="\/fonts\/space-grotesk\/space-grotesk\.css"/);
+    assert.match(html, /href="\/legal\.css"/);
+    const css = readFileSync(path.join(import.meta.dirname, '..', 'public', 'legal.css'), 'utf8');
+    assert.match(css, /@font-face \{ font-family: 'Space Grotesk';[^}]*src: url\('\/fonts\/space-grotesk\//);
   });
 });
 

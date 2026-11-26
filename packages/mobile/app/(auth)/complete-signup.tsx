@@ -22,6 +22,7 @@ import { AUTH_COPY, GUEST_LEGAL_COPY, PROVIDER_COPY } from '@festie/shared/const
 import type { ProviderSignupPayload } from '@festie/shared/types';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import BrandWordmark from '../../components/BrandWordmark';
 import { openPage } from '../../components/GuestLegalFooter';
 import { takePendingSignup } from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
@@ -32,7 +33,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/us
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg.primary },
   inner: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: t.spacing[6] },
-  title: { ...typeStyle('display-lg'), color: t.colors.accent.coral, textAlign: 'center', marginBottom: t.spacing[1] },
+  title: { ...typeStyle('title'), color: t.colors.text.primary, textAlign: 'center', marginBottom: t.spacing[1] },
   body: { ...typeStyle('body'), color: t.colors.text.secondary, textAlign: 'center', marginBottom: t.spacing[6] },
   error: { ...typeStyle('label'), color: t.colors.text.danger, textAlign: 'center', marginBottom: t.spacing[4] },
   label: { ...typeStyle('label', 600), color: t.colors.text.primary, marginBottom: t.spacing[1] },
@@ -201,6 +202,7 @@ export default function CompleteSignupScreen() {
         showsVerticalScrollIndicator={false}
       >
         <BrandMark />
+        <BrandWordmark />
         <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">
           {PROVIDER_COPY.finishTitle}
         </Text>
@@ -251,7 +253,7 @@ export default function CompleteSignupScreen() {
           accessibilityHint={errors.dateOfBirth ?? 'Opens a date picker. You must be 18 or older.'}
         >
           <Text style={dobLabel ? styles.dobText : styles.dobPlaceholder}>{dobLabel ?? 'Date of birth'}</Text>
-          <Ionicons name="calendar-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="calendar-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </Pressable>
         {errors.dateOfBirth ? (
           <Text style={styles.fieldError} accessibilityRole="alert" accessibilityLiveRegion="assertive">
@@ -274,7 +276,7 @@ export default function CompleteSignupScreen() {
           >
             <Ionicons
               name={tosAccepted ? 'checkbox' : 'square-outline'}
-              size={20}
+              size={t.iconSize.md}
               color={tosAccepted ? t.colors.accent.aqua : t.colors.text.secondary}
             />
           </TouchableOpacity>

@@ -108,7 +108,7 @@ export default function SmsHandoff() {
         <View style={styles.cardHeader}>
           {/* Aqua, not coral: sharing a meeting point is a neutral navigation
               action; coral is reserved for danger/SOS (one-accent rule). */}
-          <Ionicons name="navigate" size={18} color={t.colors.accent.aqua} />
+          <Ionicons name="navigate" size={t.iconSize.action} color={t.colors.accent.aqua} />
           <Text style={styles.cardTitle}>Text the meeting point to your crew</Text>
         </View>
         <Text style={styles.previewLabel}>Message preview:</Text>

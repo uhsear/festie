@@ -48,8 +48,8 @@ const VARIANT_CLASS: Record<StageBadgeVariant, string> = {
 // black, as in the dark theme they are lightened. Falls back to the historical
 // constants in non-DOM contexts (SSR / tests).
 const FALLBACK_BG_RGB: Record<ThemePreference, [number, number, number]> = {
-  stage: [10, 10, 10], // #0a0a0a
-  daylight: [244, 244, 247], // #f4f4f7
+  stage: [10, 10, 10], // Stage canvas
+  daylight: [244, 244, 247], // Daylight canvas
 };
 const _bgRgbCache: Partial<Record<ThemePreference, [number, number, number]>> = {};
 

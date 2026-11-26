@@ -97,7 +97,7 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
         <input type="url" maxLength={2048} placeholder="https://" value={website} onChange={(e) => setWebsite(e.target.value)} className={`${INPUT_CLASS} min-h-11`} />
       </label>
       <div className="md:col-span-2">
-        <button type="submit" disabled={busy || name.trim().length < 2} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
+        <button type="submit" disabled={busy || name.trim().length < 2} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-[var(--text-on-light-accent)] disabled:opacity-50">
           Save organization
         </button>
       </div>

@@ -102,7 +102,7 @@ async function getOg(deps: any, slug: string, handler = handlerFor(deps, '/f/:sl
   return res;
 }
 
-const CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'";
+const CSP = "default-src 'none'; img-src 'self'; font-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'";
 
 describe('festival page: routes', () => {
   it('registers /f/:slug and the og image before the SPA catch-all, with their rate limits', () => {
@@ -153,6 +153,17 @@ describe('festival page: GET /f/:slug', () => {
     assert.ok(html.includes('<h2>Day 2 <span class="fp-date">Sat, Nov 7</span></h2>'));
     assert.ok(html.includes('Set times to come.'));
     assert.ok(!html.includes('<script>') && !html.includes('<img'), 'no scripts or images');
+  });
+
+  it('uses the brand shell: token CTA, inline mark, folded lineup, no legacy crimson or coral', async () => {
+    const html = (await getPage(buildDeps().deps, 'edc-orlando-2026'))._sent as string;
+    assert.ok(html.includes('class="ds-cta"') && html.includes('class="ds-lockup"'));
+    assert.ok(html.includes('<details class="fp-full"><summary>Full lineup</summary>'));
+    assert.ok(html.includes('rel="apple-touch-icon"'));
+    assert.ok(!/d6154f|ff5c85|border-top: 4px/i.test(html), 'no legacy colours');
+    assert.ok(!html.includes('fp-eyebrow'));
+    const empty = (await getPage(buildDeps({ festival: { ...FESTIVAL, days: [] } }).deps, 'edc-orlando-2026'))._sent as string;
+    assert.ok(!empty.includes('<details') && empty.includes("The lineup isn't out yet."));
   });
 
   it('passes an allow-listed ref through the CTA and falls back to festival-page for anything else', async () => {

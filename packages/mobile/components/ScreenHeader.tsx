@@ -97,7 +97,7 @@ export default function ScreenHeader({
       {icon ? (
         <Ionicons
           name={icon}
-          size={24}
+          size={t.iconSize.lg}
           color={t.colors.accent.aqua}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
@@ -121,7 +121,7 @@ export default function ScreenHeader({
             style={styles.titleButton}
           >
             <View style={styles.titleButtonText}>{titleText}</View>
-            <Ionicons name="chevron-down" size={18} color={t.colors.text.secondary} />
+            <Ionicons name="chevron-down" size={t.iconSize.action} color={t.colors.text.secondary} />
           </AppPressable>
         ) : (
           titleText

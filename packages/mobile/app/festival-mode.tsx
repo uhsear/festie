@@ -154,7 +154,7 @@ export default function FestivalModeScreen() {
                   accessibilityHint="Asks for confirmation before sending"
                   accessibilityState={{ disabled: raising }}
                 >
-                  <Ionicons name="alert-circle" size={18} color={t.colors.text.onAccent} />
+                  <Ionicons name="alert-circle" size={t.iconSize.action} color={t.colors.text.onAccent} />
                   <Text style={styles.sosButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                     SOS
                   </Text>

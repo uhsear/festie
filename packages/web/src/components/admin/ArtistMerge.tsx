@@ -257,7 +257,7 @@ export default function ArtistMerge({ artist, suggested = [], onMerged, onStale,
       )}
 
       {error && (
-        <p role="alert" className="text-xs text-accent-coral">
+        <p role="alert" className="text-xs text-text-danger">
           {error}
         </p>
       )}

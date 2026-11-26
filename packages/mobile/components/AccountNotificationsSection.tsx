@@ -52,7 +52,7 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
         <View style={styles.rowIcon}>
           <Ionicons
             name={registered ? 'notifications' : 'notifications-outline'}
-            size={20}
+            size={t.iconSize.md}
             color={registered ? t.colors.accent.aqua : t.colors.text.secondary}
           />
         </View>
@@ -80,7 +80,7 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
 
       {error ? (
         <View style={styles.errorRow} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+          <Ionicons name="alert-circle-outline" size={t.iconSize.compact} color={t.colors.text.danger} style={styles.errorIcon} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}

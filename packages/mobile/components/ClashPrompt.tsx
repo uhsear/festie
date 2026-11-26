@@ -120,7 +120,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
     <View style={styles.wrap}>
       {active.length > 1 ? (
         <View style={styles.summary} accessibilityRole="header">
-          <Ionicons name="warning" size={t.iconSize.sm} color={t.colors.accent.coral} />
+          <Ionicons name="warning" size={t.iconSize.sm} color={t.colors.clash.mark} />
           <Text style={styles.summaryText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {`${active.length} clashes with ${currentName}`}
           </Text>
@@ -142,7 +142,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
         const card = (
           <View style={styles.card} accessibilityRole="alert">
             <View style={styles.header}>
-              <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.accent.coral} />
+              <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.clash.mark} />
               <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {title}
               </Text>
@@ -199,7 +199,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
       })}
       {quiet.length > 0 ? (
         <View style={styles.quiet}>
-          <Ionicons name="warning" size={14} color={t.colors.text.muted} />
+          <Ionicons name="warning" size={t.iconSize.compact} color={t.colors.text.muted} />
           <Text style={styles.quietText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {clashesWith(quiet.map((c) => artistDisplayName(c, b2bSeparator)))}
           </Text>
@@ -220,7 +220,7 @@ const useStyles = makeStyles((t) => ({
   },
   summaryText: {
     ...typeStyle('label'),
-    color: t.colors.accent.coral,
+    color: t.colors.clash.mark,
     flexShrink: 1,
   },
   quiet: {
@@ -238,8 +238,8 @@ const useStyles = makeStyles((t) => ({
     padding: t.spacing[4],
     borderRadius: t.radii.default,
     borderWidth: 1,
-    borderColor: t.colors.accent.coral,
-    backgroundColor: t.colors.ring.coral,
+    borderColor: t.colors.clash.mark,
+    backgroundColor: t.colors.clash.tint,
   },
   header: {
     flexDirection: 'row',
@@ -248,7 +248,7 @@ const useStyles = makeStyles((t) => ({
   },
   title: {
     ...typeStyle('label'),
-    color: t.colors.accent.coral,
+    color: t.colors.clash.mark,
     flex: 1,
   },
   body: {

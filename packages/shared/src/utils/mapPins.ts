@@ -24,6 +24,7 @@
  * GeoJSON [lng, lat] input is converted at the boundary here.
  */
 
+import { colors } from '../tokens/colors';
 import type { Coord } from './geo';
 import type { CrewMeetingPoint, Stage, Festival, FestivalMapConfig, AmenityType } from '../types/domain';
 
@@ -176,7 +177,7 @@ const AMENITY_GLYPHS: Record<AmenityType, AmenityGlyph> = {
   toilet: { glyph: '\u{1F6BB}', color: '#9b8cff' }, // restroom — violet
   food: { glyph: '\u{1F354}', color: '#ffa53a' }, // burger — amber
   atm: { glyph: '\u{1F4B5}', color: '#3ad29f' }, // banknote — green
-  entrance: { glyph: '\u{1F6AA}', color: '#19e3d3' }, // door — aqua (in)
+  entrance: { glyph: '\u{1F6AA}', color: colors.accent.aqua }, // door — aqua (in)
   exit: { glyph: '\u{1F6AA}', color: '#ff8c42' }, // door — orange (out)
   info: { glyph: '\u{2139}', color: '#8aa4ff' }, // info — indigo
   charging: { glyph: '\u{1F50C}', color: '#ffd23a' }, // plug — yellow

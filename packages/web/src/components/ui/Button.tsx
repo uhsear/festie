@@ -27,13 +27,13 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseStyles =
-    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,transform,outline-color] duration-200 ease-out cursor-pointer active:scale-[0.97] active:brightness-95 motion-reduce:transform-none disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
+    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,scale,outline-color] duration-200 ease-out cursor-pointer press-scale active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
 
   const variantStyles: Record<ButtonVariant, string> = {
     primary:
-      'bg-accent-aqua text-bg-primary hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-accent-aqua',
+      'bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-accent-aqua',
     // DANGER/SOS only. Filled with the deepened coral so WHITE label text clears
-    // WCAG AA (white on brand #ff3366 fails). Primary actions use aqua, not coral.
+    // WCAG AA (white on brand coral fails). Primary actions use aqua, not coral.
     danger:
       'bg-accent-coral-strong text-text-on-accent hover:bg-[var(--color-accent-coral-strong-hover)] focus-visible:outline-accent-coral',
     ghost:
@@ -43,7 +43,7 @@ export default function Button({
     // Single solid aqua per screen lives on `primary`; this is everything else.
     secondary:
       'bg-transparent text-text-secondary border border-accent-aqua/70 hover:border-accent-aqua hover:text-text-primary focus-visible:outline-accent-aqua',
-    utility: 'bg-[var(--color-overlay-2)] text-text-secondary border border-border-light text-[length:var(--font-size-12)] font-semibold tracking-wide hover:border-accent-aqua hover:text-text-primary hover:bg-[var(--color-overlay-4)] focus-visible:outline-accent-aqua [&_svg]:w-[11px] [&_svg]:h-[11px]',
+    utility: 'bg-[var(--color-overlay-2)] text-text-secondary border border-border-light text-[length:var(--font-size-12)] font-semibold tracking-wide hover:border-accent-aqua hover:text-text-primary hover:bg-[var(--color-overlay-4)] focus-visible:outline-accent-aqua [&_svg]:size-4',
     delete:
       'w-11 h-11 min-w-11 min-h-11 rounded-full bg-transparent text-accent-coral border border-transparent hover:bg-accent-coral/10 hover:border-accent-coral focus-visible:outline-accent-coral',
   };

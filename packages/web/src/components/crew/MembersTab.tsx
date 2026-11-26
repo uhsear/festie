@@ -53,7 +53,7 @@ export default function MembersTab({
       {isAdmin && (
         <div className="py-1.5 px-2 rounded-md border border-border bg-bg-card flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+            <UserPlus className="w-4 h-4" aria-hidden="true" />
             <span className="font-semibold">Admin</span>
           </div>
           <Button variant="secondary" onClick={onForceAdd} disabled={adminAddBusy} className="!py-1 !px-2.5 text-xs">
@@ -90,7 +90,7 @@ export default function MembersTab({
                     <MemberDayChips userId={m.userId} name={displayName} days={festivalDays} />
                     {rowIsOwner && (
                       <div className="text-xs text-text-secondary inline-flex items-center gap-1">
-                        <Crown className="w-3 h-3" aria-hidden="true" /> Owner
+                        <Crown className="w-4 h-4" aria-hidden="true" /> Owner
                       </div>
                     )}
                   </div>
@@ -105,7 +105,7 @@ export default function MembersTab({
                     >
                       Manage
                       <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
+                        className={`w-4 h-4 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`}
                         aria-hidden="true"
                       />
                     </Button>

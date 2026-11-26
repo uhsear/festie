@@ -10,6 +10,8 @@ export interface Toast {
   type: ToastType;
   duration?: number;
   onUndo?: () => void;
+  /** Set by removeToast while the exit animation plays. */
+  leaving?: boolean;
 }
 
 interface ToastContextType {
@@ -22,6 +24,9 @@ interface ToastContextType {
   pauseToast: (id: string) => void;
   resumeToast: (id: string) => void;
 }
+
+/** Matches the .toast-leave animation length (--duration-fast) in animations.css. */
+export const TOAST_EXIT_MS = 120;
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
@@ -55,7 +60,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const removeToast = useCallback(
     (id: string) => {
       clearTimer(id);
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), TOAST_EXIT_MS);
     },
     [clearTimer],
   );

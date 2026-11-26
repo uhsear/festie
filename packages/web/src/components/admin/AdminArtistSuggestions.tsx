@@ -109,7 +109,7 @@ export default function AdminArtistSuggestions() {
                       </li>
                     ))}
                   </ul>
-                  {merged && <p className="text-xs text-accent-coral">This artist was merged into another one. Reject the suggestion.</p>}
+                  {merged && <p className="text-xs text-text-danger">This artist was merged into another one. Reject the suggestion.</p>}
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

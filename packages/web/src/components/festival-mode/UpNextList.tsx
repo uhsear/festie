@@ -18,7 +18,7 @@ export default function UpNextList({ items, nowMs, timeZone, b2bSeparator, getSt
   return (
     <section aria-labelledby="fm-next-title" className="flex flex-col gap-2">
       <h2 id="fm-next-title" className="type-label font-semibold text-text-primary flex items-center gap-1">
-        <SkipForward className="w-3.5 h-3.5" aria-hidden="true" />
+        <SkipForward className="w-4 h-4" aria-hidden="true" />
         Up next
       </h2>
       <ul className="list-none m-0 p-0 rounded-lg border border-border bg-bg-card divide-y divide-border">

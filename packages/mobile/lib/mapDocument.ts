@@ -72,13 +72,25 @@ import {
  */
 const DARK_CHROME = {
   bg: colors.bg.primary,
-  text: '#eaeaf2',
+  text: colors.text.primary,
   chipText: '#cfcfe0',
   chipBorder: 'rgba(255,255,255,0.14)',
   zoneBorder: 'rgba(255,255,255,0.25)',
 };
 
-/** Document ground + chip colours per theme. Stage keeps the original dark values byte-for-byte. */
+/** Brand colours the document paints, read from the theme's tokens and injected as CSS variables. */
+function documentBrand(theme: ThemePreference) {
+  const c = theme === 'daylight' ? colorsDaylight : colors;
+  return {
+    coral: c.accent.coral,
+    aqua: c.accent.aqua,
+    self: c.map.self,
+    ink: c.text.onAccent,
+    fallback: c.stage.fallback,
+  };
+}
+
+/** Document ground + chip colours per theme. */
 function documentChrome(theme: ThemePreference) {
   if (theme !== 'daylight') return DARK_CHROME;
   return {
@@ -90,7 +102,7 @@ function documentChrome(theme: ThemePreference) {
   };
 }
 
-function rgba(hex: string, alpha: number): string {
+function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
@@ -130,6 +142,7 @@ export function buildMapHtml(
   savedArchive: { url: string } | null = null,
 ): string {
   const ui = documentChrome(theme);
+  const brand = documentBrand(theme);
   // center is numeric, non-user-controlled coords — safe to template. Still run
   // it through the hardened serializer for uniformity.
   const centerJson = safeJsonForScript(center ?? { latitude: 0, longitude: 0 });
@@ -198,31 +211,35 @@ export function buildMapHtml(
   <script id="mlgl-worker" type="text/plain">${MAPLIBRE_WORKER_SRC}</script>
   <script id="mlgl-main" type="text/plain">${MAPLIBRE_JS_SRC}</script>
   <style>
+    :root {
+      --festie-coral: ${brand.coral}; --festie-aqua: ${brand.aqua}; --festie-self: ${brand.self}; --festie-self-ring: ${withAlpha(brand.self, 0.25)};
+      --festie-ink: ${brand.ink}; --festie-fallback: ${brand.fallback};
+    }
     html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; background: ${ui.bg}; }
     .festie-marker {
       width: 18px; height: 18px; border-radius: 50%;
-      background: #ff3366; border: 2px solid #fff;
-      box-shadow: 0 0 8px rgba(255,51,102,0.6);
+      background: var(--festie-coral); border: 2px solid var(--festie-ink);
+      box-shadow: 0 0 8px ${withAlpha(brand.coral, 0.6)};
     }
     /* Live peer: aqua avatar disc with the member's initials + a pulsing ring,
        visually distinct from the coral meeting-point pins. */
     .festie-peer {
       width: 26px; height: 26px; border-radius: 50%;
-      background: #00e8d0; color: ${DARK_CHROME.bg}; border: 2px solid #fff;
+      background: var(--festie-aqua); color: ${ui.bg}; border: 2px solid var(--festie-ink);
       font: 700 11px -apple-system, system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 0 4px rgba(0,232,208,0.25);
+      box-shadow: 0 0 0 4px ${withAlpha(brand.aqua, 0.25)};
       animation: festiePulse 2s ease-out infinite;
     }
     /* Stale peer (Snap Map-style): desaturated, no pulse, "last seen N ago" chip
        so an out-of-date dot can't be mistaken for a live one. */
     .festie-peer-stale {
-      background: #6b6b80; color: #0c0c12; border-color: #cfcfe0;
+      background: #6b6b80; color: #0c0c12; border-color: ${ui.chipText};
       box-shadow: none; animation: none; opacity: 0.9; filter: grayscale(1);
     }
     .festie-chip {
       position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
-      white-space: nowrap; background: ${rgba(ui.bg, 0.9)}; color: ${ui.chipText};
+      white-space: nowrap; background: ${withAlpha(ui.bg, 0.9)}; color: ${ui.chipText};
       font: 600 10px -apple-system, system-ui, sans-serif;
       padding: 1px 6px; border-radius: 8px; border: 1px solid ${ui.chipBorder};
     }
@@ -231,20 +248,20 @@ export function buildMapHtml(
     .festie-peer-dir {
       position: absolute; bottom: calc(100% - 1px); left: 50%;
       transform-origin: 50% 16px; font-size: 9px; line-height: 1;
-      color: #00e8d0; text-shadow: 0 0 2px rgba(8,8,16,0.9); pointer-events: none;
+      color: var(--festie-aqua); text-shadow: 0 0 2px ${withAlpha(ui.bg, 0.9)}; pointer-events: none;
     }
     /* SOS: emphasized, larger coral marker with a stronger pulse. */
     .festie-sos {
       width: 30px; height: 30px; border-radius: 50%;
-      background: #ff3366; color: #fff; border: 3px solid #fff;
+      background: var(--festie-coral); color: var(--festie-ink); border: 3px solid var(--festie-ink);
       font: 700 16px -apple-system, system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 0 6px rgba(255,51,102,0.35);
+      box-shadow: 0 0 0 6px ${withAlpha(brand.coral, 0.35)};
       animation: festiePulse 1.2s ease-out infinite;
     }
     @keyframes festiePulse {
-      0% { box-shadow: 0 0 0 0 rgba(0,232,208,0.45); }
-      100% { box-shadow: 0 0 0 14px rgba(0,232,208,0); }
+      0% { box-shadow: 0 0 0 0 ${withAlpha(brand.aqua, 0.45)}; }
+      100% { box-shadow: 0 0 0 14px ${withAlpha(brand.aqua, 0)}; }
     }
     /* Respect the OS Reduce Motion setting inside the WebView (the RN reduce-motion
        hook can't reach this document) — drop the infinite pulse, keep the dot. */
@@ -257,19 +274,19 @@ export function buildMapHtml(
        per-marker from the shared amenityGlyph/stage-color source on the RN side. */
     .festie-stage {
       width: 14px; height: 14px; border-radius: 50%;
-      border: 2px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,0.5);
+      border: 2px solid var(--festie-ink); box-shadow: 0 0 6px rgba(0,0,0,0.5);
     }
     .festie-stage-tag {
       position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%);
       white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
-      background: ${rgba(ui.bg, 0.82)}; color: ${ui.text};
+      background: ${withAlpha(ui.bg, 0.82)}; color: ${ui.text};
       font: 700 10px/1.4 -apple-system, system-ui, sans-serif;
       padding: 1px 6px; border-radius: 8px;
     }
     .festie-amenity {
       display: flex; align-items: center; justify-content: center;
       width: 24px; height: 24px; border-radius: 50%;
-      border: 2px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,0.5);
+      border: 2px solid var(--festie-ink); box-shadow: 0 0 6px rgba(0,0,0,0.5);
       font-size: 13px; line-height: 1;
     }
     /* Zone label (Phase 4A): small uppercase chip at the zone centroid, tinted
@@ -277,7 +294,7 @@ export function buildMapHtml(
        marker. Non-interactive. */
     .festie-zone-label {
       white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis;
-      background: ${rgba(ui.bg, 0.7)}; color: ${ui.text};
+      background: ${withAlpha(ui.bg, 0.7)}; color: ${ui.text};
       font: 700 10px/1.3 -apple-system, system-ui, sans-serif;
       letter-spacing: 0.02em; text-transform: uppercase;
       padding: 2px 7px; border-radius: 8px; border: 1px solid ${ui.zoneBorder};
@@ -288,15 +305,15 @@ export function buildMapHtml(
        overlay render threshold. Non-interactive. */
     .festie-draft-dot {
       width: 12px; height: 12px; border-radius: 50%;
-      background: #19e3d3; border: 2px solid #fff;
-      box-shadow: 0 0 6px rgba(25,227,211,0.85);
+      background: var(--festie-aqua); border: 2px solid var(--festie-ink);
+      box-shadow: 0 0 6px ${withAlpha(brand.aqua, 0.85)};
       pointer-events: none;
     }
     /* "You are here" dot. No position property: MapLibre positions markers absolutely. */
     .festie-self {
       width: 16px; height: 16px; border-radius: 50%;
-      background: #2f80ff; border: 3px solid #fff;
-      box-shadow: 0 0 0 6px rgba(47,128,255,0.25);
+      background: var(--festie-self); border: 3px solid var(--festie-ink);
+      box-shadow: 0 0 0 6px var(--festie-self-ring);
       pointer-events: none;
       z-index: 3; /* above stage and amenity markers, which are re-added after it */
     }
@@ -512,7 +529,7 @@ export function buildMapHtml(
         var el = document.createElement('div');
         if (p.kind === 'stage') {
           el.className = 'festie-stage';
-          el.style.background = p.color || '#19e3d3';
+          el.style.background = p.color || 'var(--festie-aqua)';
           var tag = document.createElement('span');
           tag.className = 'festie-stage-tag';
           tag.style.border = '1px solid ' + (p.color || 'rgba(255,255,255,0.18)');
@@ -520,7 +537,7 @@ export function buildMapHtml(
           el.appendChild(tag);
         } else {
           el.className = 'festie-amenity';
-          el.style.background = p.color || '#8787a8';
+          el.style.background = p.color || 'var(--festie-fallback)';
           el.textContent = p.glyph || '';
         }
         var aLabel = (p.kind === 'stage' ? 'Stage: ' : 'Amenity: ') + p.label;

@@ -68,7 +68,7 @@ export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
   return (
     <section aria-labelledby="fm-crew-title" className="flex flex-col gap-2" data-testid="fm-crew">
       <h2 id="fm-crew-title" className="type-label font-semibold text-text-primary flex items-center gap-1.5 min-w-0">
-        <Users className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+        <Users className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span className="truncate">{crewName}</span>
       </h2>
       <div className="rounded-lg border border-border bg-bg-card">

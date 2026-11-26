@@ -18,7 +18,7 @@ interface SegmentedTablistProps<T extends string> {
 
 const ACTIVE = {
   soft: 'bg-accent-aqua/15 text-accent-aqua',
-  solid: 'bg-accent-aqua text-bg-primary',
+  solid: 'bg-accent-aqua text-[var(--text-on-light-accent)]',
 } as const;
 
 export default function SegmentedTablist<T extends string>({

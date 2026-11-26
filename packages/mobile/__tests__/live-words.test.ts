@@ -6,9 +6,10 @@ const root = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
 describe('T13 live words and colour', () => {
-  it('LiveDot uses coral, not aqua, for the dot', () => {
+  it('LiveDot reads the live group, not coral or aqua, for the dot', () => {
     const src = read('components/LiveDot.tsx');
-    expect(src).toContain('accent.coral');
+    expect(src).toContain('colors.live.fill');
+    expect(src).not.toContain('accent.coral');
     expect(src).not.toContain('backgroundColor: t.colors.accent.aqua');
   });
   it('SetCardMobile says Clash, not Conflict', () => {

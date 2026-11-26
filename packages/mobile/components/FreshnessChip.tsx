@@ -128,7 +128,7 @@ const useStyles = makeStyles((t) => ({
     borderRadius: 4,
   },
   chipText: {
-    ...typeStyle('caption'),
+    ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.muted,
     flexShrink: 1,
   },

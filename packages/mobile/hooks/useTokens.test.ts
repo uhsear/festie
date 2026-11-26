@@ -15,7 +15,7 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ fontScale: 1 }),
 }));
 
-const { MAX_FONT_SCALE, isLargeText, makeStyles, tokensForTheme, typeScaleCap, typeStyle, useTokens } =
+const { MAX_FONT_SCALE, isLargeText, makeStyles, posterFont, tokensForTheme, typeScaleCap, typeStyle, useTokens } =
   await import('./useTokens');
 
 beforeEach(() => {
@@ -119,5 +119,22 @@ describe('typeScaleCap — per-role Dynamic Type cap', () => {
     for (let i = 1; i < caps.length; i++) {
       expect(caps[i - 1]!).toBeLessThanOrEqual(caps[i]!);
     }
+  });
+});
+
+describe('typeStyle — tabular figures', () => {
+  it('adds tabular-nums only when asked, and leaves the numeral role alone', () => {
+    expect(typeStyle('caption').fontVariant).toBeUndefined();
+    expect(typeStyle('caption', undefined, { tabular: true }).fontVariant).toEqual(['tabular-nums']);
+    expect(typeStyle('numeral').fontVariant).toEqual(['tabular-nums']);
+  });
+});
+
+describe('posterFont', () => {
+  it('resolves the family that typeStyle resolves, body by default and Clash when display', () => {
+    expect(posterFont(700).fontFamily).toBe('SpaceGrotesk_700Bold');
+    expect(posterFont(400).fontFamily).toBe('SpaceGrotesk_400Regular');
+    expect(posterFont(700, true).fontFamily).toBe('ClashDisplay-Bold');
+    expect(posterFont(600, true).fontFamily).toBe('ClashDisplay-Semibold');
   });
 });

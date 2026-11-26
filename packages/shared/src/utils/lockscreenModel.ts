@@ -1,4 +1,6 @@
 import type { FestivalSet, Priority, Stage } from '../types/domain';
+import { colors } from '../tokens/colors';
+import { colorsDaylight } from '../tokens/colorsDaylight';
 import { clashBadgeBySetId, detectConflicts } from './conflicts';
 import { contrastRatioRgb, parseHex, toHex } from './contrast';
 import { artistDisplayName, formatTime, formatTimeCompact, formatTimeParts } from './format';
@@ -37,7 +39,7 @@ const DARK_BG = '#0a0a0a';
 const LIGHT_SHEET = '#ffffff';
 const NEAR_BLACK = '#0a0a0a';
 const WHITE = '#ffffff';
-const FALLBACK_STAGE = '#9999bb';
+const FALLBACK_STAGE = colors.text.secondary;
 const LEGEND = '■ pick  ★ must  ● want  ○ maybe';
 /** Grid text floor: hour labels, stage headers, block times, names and the legend. */
 const GRID_LABEL_U = 2.8;
@@ -65,11 +67,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export const LOCKSCREEN_PALETTES: Record<LockscreenTheme, LockscreenPalette> = {
   dark: {
     text: '#eaeaf2', text2: '#9999bb', muted: '#8787a8', surface: '#17171f', border: '#26263a',
-    must: '#ff3366', want: '#00e8d0', maybe: '#c8c8cf', clash: '#b4b4d4',
+    must: colors.priority.must, want: colors.priority.want, maybe: '#c8c8cf', clash: '#b4b4d4',
   },
   light: {
     text: '#0b0b12', text2: '#2e2e44', muted: '#45455c', surface: '#eeeef4', border: '#c9c9d6',
-    must: '#a8002a', want: '#00594f', maybe: '#2f2f35', clash: '#55557a',
+    must: colorsDaylight.priority.must, want: colorsDaylight.priority.want, maybe: '#2f2f35', clash: '#55557a',
   },
 };
 

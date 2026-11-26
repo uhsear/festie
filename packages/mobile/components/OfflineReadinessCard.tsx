@@ -86,9 +86,9 @@ function StepRow({
       {/* Step indicator */}
       <View style={styles.indicator}>
         {isDone ? (
-          <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="checkmark-circle" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         ) : isError ? (
-          <Ionicons name="alert-circle" size={16} color={t.colors.accent.coral} />
+          <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.accent.coral} />
         ) : isActive ? (
           <ActiveDot />
         ) : (
@@ -169,13 +169,13 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
 
   const icon =
     summary.overall === 'ready' ? (
-      <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} />
+      <Ionicons name="checkmark-circle" size={t.iconSize.sm} color={t.colors.accent.aqua} />
     ) : summary.overall === 'partial' && summary.hasError ? (
-      <Ionicons name="alert-circle" size={16} color={t.colors.accent.coral} />
+      <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.accent.coral} />
     ) : summary.overall === 'syncing' ? (
       <ActiveDot />
     ) : (
-      <Ionicons name="download-outline" size={16} color={t.colors.text.muted} />
+      <Ionicons name="download-outline" size={t.iconSize.sm} color={t.colors.text.muted} />
     );
 
   return (
@@ -192,7 +192,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
           accessibilityState={{ expanded }}
           style={styles.chevron}
         >
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.muted} />
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.text.muted} />
         </TouchableOpacity>
       </View>
       <TouchableOpacity
@@ -396,15 +396,15 @@ const useRowStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
   },
   labelError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   timeLabel: {
-    ...typeStyle('micro'),
+    ...typeStyle('micro', undefined, { tabular: true }),
     color: t.colors.accent.aqua,
     flexShrink: 0,
   },
   timeLabelError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   retryButton: {
     minWidth: 44,

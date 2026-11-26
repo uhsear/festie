@@ -211,7 +211,7 @@ input[type='reset'] {
 
 /* Selection */
 ::selection {
-  background-color: rgba(0, 232, 208, 0.25);
+  background-color: var(--color-aqua-a25);
   color: var(--color-text-primary);
 }
 
@@ -258,4 +258,13 @@ button {
   transform: translateY(0);
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
+}
+
+/* Lucide stroke: one weight for every icon. Regular-weight rows set a lighter stroke through --icon-stroke. */
+.font-normal {
+  --icon-stroke: 1.5;
+}
+
+.lucide {
+  stroke-width: var(--icon-stroke, 1.75);
 }

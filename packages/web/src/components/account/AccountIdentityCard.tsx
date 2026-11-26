@@ -72,7 +72,7 @@ export default function AccountIdentityCard() {
           className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-accent-aqua text-text-on-accent"
           aria-hidden="true"
         >
-          <Camera className="w-3.5 h-3.5" />
+          <Camera className="w-4 h-4" />
         </span>
       </button>
       <input

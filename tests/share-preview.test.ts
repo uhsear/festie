@@ -93,7 +93,7 @@ describe('share page previews', () => {
     assert.match(res.text, /<meta property="og:image" content="http:\/\/localhost:3000\/s\/tok123\/og\.png">/);
     assert.ok(res.text.includes('<meta name="twitter:card" content="summary_large_image">'));
     assert.ok(!res.text.includes('content="summary"'));
-    assert.ok(res.text.includes('<meta name="theme-color" content="#0a0a0a">'));
+    assert.ok(res.text.includes('<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">'));
     assert.ok(res.text.includes('og:image:alt" content="testuser&#39;s picks for Test Fest"'));
     const blocks = jsonLdBlocks(res.text);
     assert.equal(blocks.length, 1);

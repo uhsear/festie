@@ -45,7 +45,7 @@ export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { 
     return (
       <div className="space-y-4">
         {back}
-        <div role="alert" className="text-accent-coral">
+        <div role="alert" className="text-text-danger">
           {error}
         </div>
       </div>

@@ -49,7 +49,7 @@ export default function AccountDataSection() {
         accessibilityState={{ disabled, busy }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="download-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="download-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{DATA_COPY.title}</Text>
@@ -58,7 +58,7 @@ export default function AccountDataSection() {
         {busy ? (
           <ActivityIndicator size="small" color={t.colors.accent.aqua} />
         ) : (
-          <Ionicons name="share-outline" size={18} color={t.colors.text.placeholder} />
+          <Ionicons name="share-outline" size={t.iconSize.action} color={t.colors.text.placeholder} />
         )}
       </TouchableOpacity>
     </View>

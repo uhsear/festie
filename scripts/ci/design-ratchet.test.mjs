@@ -24,6 +24,10 @@ const CASES = {
     ['ease', 'src/a.tsx', 'const c = "ease-[ease]";'],
     ['hex', 'src/a.css', '.a { color: #fff; }'],
   ],
+  server: [
+    ['hex', 'routes/email-auth.ts', 'const c = "#ff00aa";'],
+    ['rgb', 'lib/email.ts', 'const c = "rgba(1,2,3,.5)";'],
+  ],
   mobile: [
     ['hex', 'components/A.tsx', 'const c = "#ff00aa";'],
     ['fontSize', 'components/A.tsx', 'const s = { fontSize: 14 };'],

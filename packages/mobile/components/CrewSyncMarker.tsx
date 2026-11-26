@@ -19,7 +19,7 @@ export default function CrewSyncMarker({ item }: { item: { id: string; _optimist
   const color = failed ? t.colors.accent.amber : t.colors.text.secondary;
   return (
     <View style={styles.row} accessible accessibilityLabel={failed ? FAILED_ROW_LABEL : PENDING_ROW_LABEL}>
-      <Ionicons name={failed ? 'alert-circle-outline' : 'cloud-offline-outline'} size={12} color={color} />
+      <Ionicons name={failed ? 'alert-circle-outline' : 'cloud-offline-outline'} size={t.iconSize.xs} color={color} />
       <Text style={[styles.text, { color }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {failed ? FAILED_ROW_LABEL : PENDING_ROW_LABEL}
       </Text>

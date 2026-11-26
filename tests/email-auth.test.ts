@@ -183,6 +183,12 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     assert.match(res.text, /Invalid verification link/);
     assert.match(res.text, /Link not valid/);
     assert.match(res.text, /href="\/"/);
+    // The result page is built from lib/design-css.ts: tokens, the lockup, the pill CTA and a danger icon.
+    assert.match(res.text, /--ds-bg:/);
+    assert.match(res.text, /class="ds-lockup"/);
+    assert.match(res.text, /class="ds-cta"/);
+    assert.match(res.text, /\.icon \{[^}]*color: var\(--ds-danger\)/);
+    assert.doesNotMatch(res.text, /#22c55e|#ef4444|\.btn/i);
   });
 
   test('rejects unknown/expired token with 400 HTML page', async () => {
@@ -670,6 +676,8 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
     const res = await server.request.post(url);
     assert.equal(res.status, 200);
     assert.match(res.text, /You are unsubscribed/);
+    assert.match(res.text, /\.icon \{[^}]*color: var\(--ok\)/);
+    assert.match(res.text, /--ok: #39ff14;/i);
     const row = await prefs(userId);
     assert.deepEqual([row.lineup_drops, row.crew_reformed, row.wrap_ready], [0, 0, 0]);
     assert.equal(row.set_reminders, 1, 'unrelated switches stay on');

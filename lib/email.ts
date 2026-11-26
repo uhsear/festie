@@ -3,6 +3,7 @@
 
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
+import { emailColors } from './design-css';
 import { escapeHtml } from './helpers';
 import { isSafeOrganizationName } from './schemas/organization';
 
@@ -117,23 +118,27 @@ export async function sendEmail({ to, subject, html, text, headers, idempotencyK
   }
 }
 
+// Hosted 2x of the 40 px header mark (public/icons/email-mark.png). DP-58 swaps it for the lockup PNG.
+const EMAIL_MARK_URL = 'https://festie.us/icons/email-mark.png';
+
 // `footer` is overridable because a security alert must not close with "you can
 // safely ignore this email" directly under "change your password immediately".
 function _wrapTemplate(title: any, bodyHtml: any, footer = "If you didn't request this, you can safely ignore this email.") {
+  const c = emailColors;
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Festie: ${title}</title></head>
-<body style="margin:0;padding:0;background:#0a0a0f;font-family:'Segoe UI',Roboto,sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 20px">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark"><title>Festie: ${title}</title></head>
+<body bgcolor="${c.ground}" style="margin:0;padding:0;background:${c.ground};font-family:'Space Grotesk','Segoe UI',Roboto,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="${c.ground}" style="background:${c.ground};padding:40px 20px">
 <tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden">
-  <tr><td style="padding:32px 32px 24px;text-align:center">
-    <h1 style="margin:0 0 4px;color:#e4e4e7;font-size:22px;font-weight:600">Festie</h1>
-    <p style="margin:0;color:rgba(255,255,255,0.5);font-size:13px">${title}</p>
+<table width="100%" cellpadding="0" cellspacing="0" bgcolor="${c.card}" style="max-width:480px;background:${c.card};border-radius:16px;overflow:hidden">
+  <tr><td style="padding:32px 32px 8px;text-align:left">
+    <img src="${EMAIL_MARK_URL}" width="40" height="40" alt="Festie" style="display:block;border:0;margin:0 0 16px">
+    <h1 style="margin:0;color:${c.text};font-size:22px;font-weight:700;line-height:1.2">${title}</h1>
   </td></tr>
-  <tr><td style="padding:0 32px 24px">${bodyHtml}</td></tr>
-  <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06)">
-    <p style="color:#a1a1aa;font-size:12px;line-height:1.5;margin:0">${footer}</p>
+  <tr><td style="padding:16px 32px 24px;text-align:left">${bodyHtml}</td></tr>
+  <tr><td style="padding:20px 32px;border-top:1px solid ${c.ground}">
+    <p style="color:${c.textMuted};font-size:12px;line-height:1.5;margin:0">${footer}</p>
   </td></tr>
 </table>
 </td></tr>
@@ -143,14 +148,14 @@ function _wrapTemplate(title: any, bodyHtml: any, footer = "If you didn't reques
 }
 
 function _buttonHtml(url: any, label: any) {
-  return `<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-      <a href="${escapeHtml(url)}" style="display:inline-block;background:#00e8d0;color:#0a0a0f;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px">${label}</a>
+  return `<table cellpadding="0" cellspacing="0"><tr><td bgcolor="${emailColors.accent}" style="border-radius:999px;background:${emailColors.accent}">
+      <a href="${escapeHtml(url)}" style="display:inline-block;color:${emailColors.accentInk};text-decoration:none;font-size:15px;font-weight:600;padding:14px 32px;border-radius:999px">${label}</a>
     </td></tr></table>`;
 }
 
 function _urlFallback(url: any) {
-  return `<p style="color:#a1a1aa;font-size:13px;line-height:1.5;margin:24px 0 0">If the button doesn't work, copy and paste this URL into your browser:</p>
-    <p style="color:#00e8d0;font-size:12px;line-height:1.5;word-break:break-all;margin:8px 0 0">${escapeHtml(url)}</p>`;
+  return `<p style="color:${emailColors.textMuted};font-size:13px;line-height:1.5;margin:24px 0 0">If the button doesn't work, copy and paste this URL into your browser:</p>
+    <p style="color:${emailColors.accent};font-size:12px;line-height:1.5;word-break:break-all;margin:8px 0 0">${escapeHtml(url)}</p>`;
 }
 
 // The verify link lifetime is configurable, so the mail must not hard-code it.
@@ -164,14 +169,13 @@ function _hoursText(config: any) {
  */
 export async function sendPasswordResetEmail({ to, username, resetUrl, config, log, _client, redis }: any) {
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Your username is <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>.</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">We received a request to reset your password. Click the button below to choose a new one. This link expires in 60 minutes.</p>
-    ${_buttonHtml(resetUrl, 'Reset Password')}
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Your username is <strong style="color:${emailColors.text}">${escapeHtml(username)}</strong>.</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">We received a request to reset your password. Click the button below to choose a new one. This link expires in 60 minutes.</p>
+    ${_buttonHtml(resetUrl, 'Reset password')}
     ${_urlFallback(resetUrl)}`;
 
-  const html = _wrapTemplate('Password Reset Request', bodyHtml);
-  const text = `Hey ${username},\n\nYour username is ${username}.\n\nWe received a request to reset your Festie password.\n\nReset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you didn't request this, you can safely ignore this email.`;
+  const html = _wrapTemplate('Reset your password', bodyHtml);
+  const text = `Your username is ${username}.\n\nWe received a request to reset your Festie password.\n\nReset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you didn't request this, you can safely ignore this email.`;
 
   return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client, type: 'password_reset', redis, dedupe: false });
 }
@@ -187,12 +191,12 @@ export function verifyEmailUrl(config: { PUBLIC_ORIGIN: string }, token: string)
 export async function sendVerificationEmail({ to, username, verifyUrl, config, log, _client, redis }: any) {
   const hours = _hoursText(config);
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">Thanks for signing up! Please verify your email address by clicking the button below. This link expires in ${hours}.</p>
-    ${_buttonHtml(verifyUrl, 'Verify Email')}
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username)}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">Thanks for signing up! Please verify your email address by clicking the button below. This link expires in ${hours}.</p>
+    ${_buttonHtml(verifyUrl, 'Verify email')}
     ${_urlFallback(verifyUrl)}`;
 
-  const html = _wrapTemplate('Verify Your Email', bodyHtml);
+  const html = _wrapTemplate('Verify your email', bodyHtml);
   const text = `Hey ${username},\n\nThanks for signing up for Festie!\n\nVerify your email: ${verifyUrl}\n\nThis link expires in ${hours}.\n\nIf you didn't create this account, you can safely ignore this email.`;
 
   return sendEmail({ to, subject: 'Verify your Festie email', html, text, config, log, _client, type: 'verify_email', redis, dedupe: false });
@@ -206,18 +210,18 @@ export async function sendEmailChangeConfirmEmail({ to, username, verifyUrl, con
   const hours = _hoursText(config);
   const intro = `You asked to use this address for your Festie account. Your login email changes when you confirm. This link expires in ${hours}.`;
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${intro}</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username)}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">${intro}</p>
     ${_buttonHtml(verifyUrl, 'Confirm new email')}
     ${_urlFallback(verifyUrl)}`;
   const footer = 'If you did not ask for this, ignore this email. Your account email stays the same.';
-  const html = _wrapTemplate('Confirm New Email', bodyHtml, footer);
+  const html = _wrapTemplate('Confirm your new email', bodyHtml, footer);
   const text = `Hey ${username},\n\n${intro}\n\nConfirm your new email: ${verifyUrl}\n\n${footer}`;
   return sendEmail({ to, subject: 'Confirm your new Festie email', html, text, config, log, _client, type: 'email_change_confirm', dedupe: false });
 }
 
 const SECURITY_FOOTER = 'Festie will never ask you for your password by email.';
-const ALERT_P = 'color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px';
+const ALERT_P = `color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px`;
 
 /**
  * Security alert to the address on file when an email change is requested.
@@ -245,7 +249,7 @@ export async function sendEmailChangeNoticeEmail({ to, resetUrl, config, log, _c
     bodyHtml += `\n    ${_buttonHtml(resetUrl, "This wasn't me")}\n    ${_urlFallback(resetUrl)}`;
     text += `\n\nThis wasn't me: ${resetUrl}`;
   }
-  const html = _wrapTemplate('Security Alert', bodyHtml, SECURITY_FOOTER);
+  const html = _wrapTemplate('Security alert', bodyHtml, SECURITY_FOOTER);
   return sendEmail({
     to,
     subject: 'Security alert: Festie email change requested',
@@ -270,7 +274,7 @@ export async function sendEmailChangedEmail({ to, config, log, _client }: any) {
     'If this was not you, write to support@festie.us right away.',
   ];
   const bodyHtml = lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ');
-  const html = _wrapTemplate('Security Alert', bodyHtml, SECURITY_FOOTER);
+  const html = _wrapTemplate('Security alert', bodyHtml, SECURITY_FOOTER);
   return sendEmail({
     to,
     subject: 'Your Festie email was changed',
@@ -410,7 +414,7 @@ function _marketingPrep(type: string, userId: any, config: any, log: any) {
 function _reengagementFooter(label: string, config: any, prep: { url: string; address: string }) {
   const settings = `${_origin(config)}/account`;
   return {
-    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${prep.url}" style="color:rgba(255,255,255,0.5)">Unsubscribe</a> in one click, or change your <a href="${settings}" style="color:rgba(255,255,255,0.5)">notification settings</a>.<br>${escapeHtml(prep.address)}`,
+    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${prep.url}" style="color:${emailColors.textMuted}">Unsubscribe</a> in one click, or change your <a href="${settings}" style="color:${emailColors.textMuted}">notification settings</a>.<br>${escapeHtml(prep.address)}`,
     text: `You get this email because "${label}" is on in your Festie notification settings. Unsubscribe in one click: ${prep.url}
 Notification settings: ${settings}
 ${prep.address}`,
@@ -427,12 +431,12 @@ export async function sendWrapReadyEmail({ to, userId, username, festivalName, f
   const wrapUrl = `${origin}/wrap${festivalId ? `?festival=${encodeURIComponent(festivalId)}` : ''}`;
   const name = festivalName || 'your festival';
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(name)} wrapped up. Your recap is ready: top sets, crew superlatives, and your numbers.</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(name)} wrapped up. Your recap is ready: top sets, crew superlatives, and your numbers.</p>
     ${_buttonHtml(wrapUrl, 'See your wrap-up')}
     ${_urlFallback(wrapUrl)}`;
   const footer = _reengagementFooter('Wrap and rating nudges', config, prep);
-  const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml, footer.html);
+  const html = _wrapTemplate('Your festival wrap-up', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}\n\n${footer.text}`;
   return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: prep.headers, config, log, _client, type: 'wrap_ready' });
 }
@@ -451,12 +455,12 @@ export async function sendLineupDropEmail({ to, userId, username, festivalName, 
     ? 'is out. Start picking your sets before tickets move.'
     : "is out. See who is playing. We'll tell you when set times are out.";
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> ${escapeHtml(sentence)}</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:${emailColors.text}">${escapeHtml(name)}</strong> ${escapeHtml(sentence)}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups, days and set times', config, prep);
-  const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
+  const html = _wrapTemplate('New lineup', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} ${hasTimes ? 'just dropped.' : sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
   const subject = hasTimes ? `${name} lineup just dropped` : `${name} lineup is out`;
   return sendEmail({ to, subject, html, text, headers: prep.headers, config, log, _client, type: 'lineup_drop' });
@@ -473,12 +477,12 @@ export async function sendDaysOutEmail({ to, userId, username, festivalName, fes
   const name = festivalName || 'Your festival';
   const sentence = 'See who plays which day. Set times come later.';
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The days for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. ${sentence}</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">The days for <strong style="color:${emailColors.text}">${escapeHtml(name)}</strong> are out. ${sentence}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups, days and set times', config, prep);
-  const html = _wrapTemplate('Days Are Out', bodyHtml, footer.html);
+  const html = _wrapTemplate('Days are out', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe days for ${name} are out. ${sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
   return sendEmail({ to, subject: `${name} days are out`, html, text, headers: prep.headers, config, log, _client, type: 'days_out' });
 }
@@ -501,15 +505,15 @@ export async function sendSetTimesOutEmail({ to, userId, username, festivalName,
   const name = festivalName || 'Your festival';
   const days = joinDayLabels(dayLabels);
   const the = days ? `The ${days} set times` : 'The set times';
-  const noteHtml = note ? `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(note)}</p>` : '';
+  const noteHtml = note ? `<p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(note)}</p>` : '';
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(the)} for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(the)} for <strong style="color:${emailColors.text}">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
     ${noteHtml}
     ${_buttonHtml(festivalUrl, 'See the schedule')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups, days and set times', config, prep);
-  const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
+  const html = _wrapTemplate('Set times are out', bodyHtml, footer.html);
   const noteText = note ? `\n\n${note}` : '';
   const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
   const subject = days ? `${name}: ${days} set times are out` : `${name} set times are out`;
@@ -539,12 +543,12 @@ export async function sendCrewReformEmail({
   const crew = crewName || 'Your crew';
   const fest = festivalName ? ` for ${festivalName}` : '';
   const bodyHtml = `
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px"><strong style="color:#e4e4e7">${escapeHtml(crew)}</strong> is getting back together${escapeHtml(fest)}. Jump in to plan picks, meeting points, and logistics with the crew.</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:${emailColors.text}">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 24px"><strong style="color:${emailColors.text}">${escapeHtml(crew)}</strong> is getting back together${escapeHtml(fest)}. Jump in to plan picks, meeting points, and logistics with the crew.</p>
     ${_buttonHtml(url, 'Join the crew')}
     ${_urlFallback(url)}`;
   const footer = _reengagementFooter('Crew re-forms', config, prep);
-  const html = _wrapTemplate('Your Crew Reformed', bodyHtml, footer.html);
+  const html = _wrapTemplate('Your crew is back together', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}\n\n${footer.text}`;
   return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: prep.headers, config, log, _client, type: 'crew_reformed' });
 }
@@ -563,7 +567,7 @@ export async function sendPolicyNoticeEmail({ to, subject, text, html, idempoten
     html ??
     text
       .split(/\n{2,}/)
-      .map((p: string) => `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .map((p: string) => `<p style="color:${emailColors.textSecondary};font-size:15px;line-height:1.6;margin:0 0 16px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
       .join('');
   return sendEmail({
     to,

@@ -49,7 +49,7 @@
 }
 @container (max-width: 319px) {
   .set-card .card-artist {
-    font-size: 15px !important;
+    font-size: var(--font-size-14);
     letter-spacing: -0.2px;
   }
   .set-card .card-stage {
@@ -64,12 +64,12 @@
 }
 @container (min-width: 320px) and (max-width: 419px) {
   .set-card .card-artist {
-    font-size: 17px !important;
+    font-size: var(--font-size-16);
   }
 }
 @container (min-width: 420px) {
   .set-card .card-artist {
-    font-size: 20px !important;
+    font-size: var(--font-size-20);
     letter-spacing: -0.4px;
   }
 }
@@ -96,7 +96,7 @@
   background: radial-gradient(
     circle,
     rgba(var(--accent-coral-rgb), 0.06) 0%,
-    rgba(0, 232, 208, 0.03) 50%,
+    color-mix(in srgb, var(--color-accent-aqua) 3%, transparent) 50%,
     transparent 70%
   );
   pointer-events: none;
@@ -332,9 +332,9 @@ button[aria-label='Back to app'] {
   inline-size: 18px;
   block-size: 18px;
   border-radius: 50%;
-  background: var(--color-accent-coral, #ff3366);
+  background: var(--color-accent-coral);
   border: 2px solid #fff;
-  box-shadow: 0 0 8px rgba(255, 51, 102, 0.6);
+  box-shadow: 0 0 8px rgba(var(--accent-coral-rgb), 0.6);
   cursor: pointer;
   z-index: 2;
 }
@@ -351,29 +351,29 @@ button[aria-label='Back to app'] {
   transform: translate(-50%, -50%);
 }
 .festie-map-canvas .maplibregl-popup-content {
-  background: var(--color-bg-elevated, #18182c);
-  color: var(--color-text-primary, #eaeaf2);
-  border: 1px solid var(--color-border-light, rgba(255, 255, 255, 0.1));
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--font-size-14);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 .festie-map-canvas .festie-map-sub {
-  color: var(--color-text-secondary, #9999bb);
+  color: var(--color-text-secondary);
 }
 .festie-map-canvas .maplibregl-popup-tip {
-  border-top-color: var(--color-bg-elevated, #18182c);
-  border-bottom-color: var(--color-bg-elevated, #18182c);
+  border-top-color: var(--color-bg-elevated);
+  border-bottom-color: var(--color-bg-elevated);
 }
 /* Opaque: a translucent fill let the bright tiles through and dropped the text under 4.5:1. */
 .festie-map-canvas .maplibregl-ctrl-attrib {
   background: var(--color-bg-primary);
-  color: var(--color-text-muted, #8787a8);
+  color: var(--color-text-muted);
 }
 .festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact,
 .festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact-show {
   background: var(--color-bg-primary);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
 }
 /* Zoom buttons: 44px touch targets (maplibre ships 29px). */
 .festie-map-canvas .maplibregl-ctrl-group button {
@@ -385,7 +385,7 @@ button[aria-label='Back to app'] {
   filter: invert(1);
 }
 .festie-map-canvas .maplibregl-ctrl-attrib a {
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   display: inline-block;
   min-block-size: 24px;
   line-height: 24px;
@@ -402,13 +402,13 @@ button[aria-label='Back to app'] {
   inline-size: 26px;
   block-size: 26px;
   border-radius: 50%;
-  background: var(--color-accent-aqua, #19e3d3);
-  color: var(--color-bg-primary, #08080f);
+  background: var(--color-accent-aqua);
+  color: var(--color-bg-primary);
   border: 2px solid #fff;
-  font-size: 13px;
+  font-size: var(--font-size-12);
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 0 8px rgba(25, 227, 211, 0.6);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-aqua) 60%, transparent);
   cursor: pointer;
   z-index: 3;
 }
@@ -417,7 +417,7 @@ button[aria-label='Back to app'] {
   position: absolute;
   inset: -6px;
   border-radius: 50%;
-  border: 2px solid var(--color-accent-aqua, #19e3d3);
+  border: 2px solid var(--color-accent-aqua);
   animation: festie-live-pulse 2s ease-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -429,9 +429,9 @@ button[aria-label='Back to app'] {
    and a "last seen N ago" chip hangs below so an out-of-date dot can't be read as
    live. The honesty lives in both the marker treatment and the popup copy. */
 .festie-peer-marker--stale {
-  background: var(--color-text-muted, #8787a8);
-  color: var(--color-bg-primary, #08080f);
-  border-color: var(--color-border-light, rgba(255, 255, 255, 0.4));
+  background: var(--color-text-muted);
+  color: var(--color-bg-primary);
+  border-color: var(--color-border-light);
   box-shadow: none;
   filter: grayscale(1);
   opacity: 0.9;
@@ -446,13 +446,13 @@ button[aria-label='Back to app'] {
   transform: translateX(-50%);
   white-space: nowrap;
   background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
-  color: var(--color-text-secondary, #9999bb);
+  color: var(--color-text-secondary);
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 8px;
-  border: 1px solid var(--color-border-light, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--color-border-light);
   pointer-events: none;
 }
 /* Phase 4C: direction-of-travel pointer for a live peer. A small caret pinned
@@ -463,9 +463,9 @@ button[aria-label='Back to app'] {
   bottom: calc(100% - 1px);
   left: 50%;
   transform-origin: 50% 14px;
-  font-size: 9px;
+  font-size: var(--font-size-10);
   line-height: 1;
-  color: var(--color-accent-aqua, #19e3d3);
+  color: var(--color-accent-aqua);
   text-shadow: 0 0 2px var(--color-bg-primary);
   pointer-events: none;
 }
@@ -480,13 +480,13 @@ button[aria-label='Back to app'] {
   inline-size: 34px;
   block-size: 34px;
   border-radius: 50%;
-  background: var(--color-accent-coral, #ff3366);
+  background: var(--color-accent-coral);
   color: #fff;
   border: 3px solid #fff;
   font-size: 20px;
   font-weight: 900;
   line-height: 1;
-  box-shadow: 0 0 14px rgba(255, 51, 102, 0.85);
+  box-shadow: 0 0 14px rgba(var(--accent-coral-rgb), 0.85);
   cursor: pointer;
   z-index: 4;
 }
@@ -495,7 +495,7 @@ button[aria-label='Back to app'] {
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  border: 3px solid var(--color-accent-coral, #ff3366);
+  border: 3px solid var(--color-accent-coral);
   animation: festie-live-pulse 1.4s ease-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -504,12 +504,12 @@ button[aria-label='Back to app'] {
   }
 }
 .festie-map-canvas .festie-sos-title {
-  color: var(--color-accent-coral, #ff3366);
+  color: var(--color-accent-coral);
 }
 .festie-map-canvas .festie-sos-link {
   display: inline-block;
   margin-top: 4px;
-  color: var(--color-accent-aqua, #19e3d3);
+  color: var(--color-accent-aqua);
   font-weight: 600;
 }
 
@@ -527,7 +527,7 @@ button[aria-label='Back to app'] {
   inline-size: 14px;
   block-size: 14px;
   border-radius: 50%;
-  background: var(--stage-color, var(--color-accent-aqua, #19e3d3));
+  background: var(--stage-color, var(--color-accent-aqua));
   border: 2px solid #fff;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   cursor: pointer;
@@ -544,13 +544,13 @@ button[aria-label='Back to app'] {
   overflow: hidden;
   text-overflow: ellipsis;
   background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 8px;
-  border: 1px solid var(--stage-color, var(--color-border-light, rgba(255, 255, 255, 0.18)));
+  border: 1px solid var(--stage-color, var(--color-border-light));
   pointer-events: none;
 }
 .festie-amenity-marker {
@@ -560,10 +560,10 @@ button[aria-label='Back to app'] {
   inline-size: 24px;
   block-size: 24px;
   border-radius: 50%;
-  background: var(--amenity-color, var(--color-text-muted, #8787a8));
+  background: var(--amenity-color, var(--color-text-muted));
   border: 2px solid #fff;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
-  font-size: 13px;
+  font-size: var(--font-size-12);
   line-height: 1;
   cursor: pointer;
 }
@@ -576,7 +576,7 @@ button[aria-label='Back to app'] {
   overflow: hidden;
   text-overflow: ellipsis;
   background: color-mix(in srgb, var(--color-bg-primary) 75%, transparent);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -593,8 +593,8 @@ button[aria-label='Back to app'] {
   inline-size: 10px;
   block-size: 10px;
   border-radius: 50%;
-  background: var(--color-accent-aqua, #19e3d3);
-  box-shadow: 0 0 0 0 rgba(25, 227, 211, 0.6);
+  background: var(--color-accent-aqua);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-aqua) 60%, transparent);
   animation: festie-live-pulse 1.8s ease-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -626,7 +626,7 @@ button[aria-label='Back to app'] {
   inline-size: 14px;
   block-size: 14px;
   border-radius: 50%;
-  background: var(--color-accent-aqua, #19e3d3);
+  background: var(--color-accent-aqua);
   border: 2px solid #fff;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
 }
@@ -636,8 +636,8 @@ button[aria-label='Back to app'] {
   inset-inline-start: 50%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-accent-aqua, #19e3d3) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-accent-aqua, #19e3d3) 40%, transparent);
+  background: color-mix(in srgb, var(--color-accent-aqua) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-aqua) 40%, transparent);
   pointer-events: none;
 }
 

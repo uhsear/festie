@@ -180,7 +180,7 @@ export default function MeetingPointForm({
           className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent-aqua/15 text-accent-aqua text-xs font-medium"
           title={`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`}
         >
-          <Check className="w-3 h-3" aria-hidden="true" />
+          <Check className="w-4 h-4" aria-hidden="true" />
           {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
           <button
             type="button"
@@ -188,7 +188,7 @@ export default function MeetingPointForm({
             onClick={() => onCoordsChange(null)}
             className="ml-0.5 hover:text-accent-coral"
           >
-            <X className="w-3 h-3" />
+            <X className="w-4 h-4" />
           </button>
         </span>
       )}

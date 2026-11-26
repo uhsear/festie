@@ -79,9 +79,9 @@ export default function CrewFindTab({
         accessibilityRole="button"
         accessibilityLabel="Open the map with your crew and meeting points"
       >
-        <Ionicons name="map-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="map-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <Text style={styles.overlapToggleText}>Open map</Text>
-        <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       </TouchableOpacity>
 
       <SectionLabel>Meeting points</SectionLabel>

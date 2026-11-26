@@ -90,7 +90,7 @@ export default function AccountPrivacySection() {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Ionicons name="shield-checkmark-outline" size={20} color={t.colors.text.secondary} />
+        <Ionicons name="shield-checkmark-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         <Text style={styles.title} accessibilityRole="header">
           {PRIVACY_COPY.title}
         </Text>
@@ -126,7 +126,7 @@ export default function AccountPrivacySection() {
         accessibilityRole="link"
         accessibilityLabel={PRIVACY_COPY.policyLink}
       >
-        <Ionicons name="document-text-outline" size={18} color={t.colors.text.secondary} />
+        <Ionicons name="document-text-outline" size={t.iconSize.action} color={t.colors.text.secondary} />
         <Text style={styles.policyText}>{PRIVACY_COPY.policyLink}</Text>
       </TouchableOpacity>
     </View>

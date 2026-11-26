@@ -3,75 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon-daylight.svg" type="image/svg+xml" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)">
 <title>Offline — Festie</title>
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <style>
-@font-face{
-  font-family:"Clash Display";font-weight:700;font-style:normal;font-display:swap;
-  src:url("/fonts/clash-display/clash-display-700.woff2") format("woff2");
-}
-:root{
-  --bg-primary:#0a0a0a;
-  --bg-elev:#11111c;
-  --fg-primary:#f2f2f7;
-  --fg-muted:#9a9ab0;
-  --accent-aqua:#00e8d0;
-  --border:rgba(255,255,255,.08);
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg-primary);color:var(--fg-primary);min-height:100%}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"Space Grotesk","Segoe UI",Roboto,sans-serif;
-  display:flex;align-items:center;justify-content:center;
-  min-height:100vh;min-height:100dvh;padding:1.5rem;line-height:1.5;
-}
-main{
-  max-width:420px;width:100%;text-align:center;
-  background:var(--bg-elev);border:1px solid var(--border);
-  border-radius:16px;padding:2rem 1.5rem;
-}
-.dot{
-  width:14px;height:14px;border-radius:50%;
-  background:var(--accent-aqua);margin:0 auto 1rem;
-  box-shadow:0 0 24px var(--accent-aqua);
-  animation:pulse 2s ease-in-out infinite;
-}
-h1{
-  font-family:"Clash Display",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:700;
-  font-size:1.5rem;letter-spacing:.05em;text-transform:uppercase;
-  margin:0 0 .75rem;color:var(--fg-primary);
-}
-p{color:var(--fg-muted);margin:0 0 1.5rem;font-size:.95rem}
-a.retry{
-  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;text-decoration:none;
-  background:var(--accent-aqua);color:var(--bg-primary);
-  border:0;border-radius:10px;padding:.75rem 1.5rem;
-  font-weight:600;font-size:.95rem;cursor:pointer;
-  font-family:inherit;min-height:44px;min-width:120px;
-  transition:transform .15s ease,opacity .15s ease;
-}
-a.retry:hover{opacity:.9}
-a.retry:active{transform:scale(.97)}
-a.retry:focus-visible{outline:2px solid var(--fg-primary);outline-offset:2px}
-@keyframes pulse{
-  0%,100%{opacity:1;transform:scale(1)}
-  50%{opacity:.5;transform:scale(.9)}
-}
-@media(prefers-reduced-motion:reduce){
-  .dot{animation:none}
-  a.retry{transition:none}
-}
+/* design-css:begin */
+:root { color-scheme: dark light; --ds-bg: #0a0a0a; --ds-card: rgba(26, 26, 26, 0.65); --ds-border: rgba(255, 255, 255, 0.06); --ds-text: #eaeaf2; --ds-text-secondary: #9999bb; --ds-text-muted: #8787a8; --ds-danger: #f87171; --ds-accent: #00e8d0; --ds-accent-ink: #0a0a0a; --ds-mark-pin: #00e8d0; --ds-mark-tent: #ff3366; }
+@media (prefers-color-scheme: light) { :root { --ds-bg: #f4f4f7; --ds-card: #ffffff; --ds-border: rgba(0, 0, 0, 0.12); --ds-text: #0b0b12; --ds-text-secondary: #2e2e44; --ds-text-muted: #45455c; --ds-danger: #a3001f; --ds-accent: #00594f; --ds-accent-ink: #ffffff; --ds-mark-pin: #00594f; --ds-mark-tent: #a8002a; } }
+@font-face { font-family: 'Clash Display'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/clash-display/clash-display-700.woff2') format('woff2'); }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/space-grotesk/space-grotesk-vietnamese.woff2') format('woff2'); unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/space-grotesk/space-grotesk-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/space-grotesk/space-grotesk-latin.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ds-bg); color: var(--ds-text); font-family: 'Space Grotesk', system-ui, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.2; text-wrap: balance; }
+h1 { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+p, li { text-wrap: pretty; }
+time, .ds-time { font-variant-numeric: tabular-nums; }
+.ds-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 24px; border-radius: 999px; background: var(--ds-accent); color: var(--ds-accent-ink); font-family: inherit; font-size: 1rem; font-weight: 600; text-decoration: none; }
+.ds-cta:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 3px; }
+.ds-lockup { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ds-text); text-decoration: none; }
+.ds-lockup svg { width: 2rem; height: 2rem; }
+.ds-wordmark { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; font-size: 1.5rem; letter-spacing: -0.02em; }
+/* design-css:end */
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:1.5rem}
+main{max-width:420px;width:100%;text-align:center;background:var(--ds-card);border:1px solid var(--ds-border);border-radius:16px;padding:2rem 1.5rem}
+.mark svg{width:64px;height:64px;margin-bottom:1rem}
+h1{font-size:1.5rem;line-height:1.15;margin:0 0 .75rem}
+p{color:var(--ds-text-secondary);margin:0 0 1.5rem;font-size:.95rem}
+.ds-cta{min-width:120px;transition:transform .15s ease,opacity .15s ease}
+.ds-cta:hover{opacity:.9}
+.ds-cta:active{transform:scale(.97)}
+@media(prefers-reduced-motion:reduce){.ds-cta{transition:none}}
 </style>
 </head>
 <body>
 <main>
-<div class="dot" aria-hidden="true"></div>
+<div class="mark">
+<!-- design-mark:begin -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Festie"><path fill="var(--ds-mark-tent)" d="M132 372 212 372 256 300 250.11 290.08 249.72 289.78 249.35 289.47 248.99 289.13 248.65 288.79 248.33 288.42 248.03 288.04 247.75 287.65 245.89 284.94 244.07 282.29 242.26 279.69 240.48 277.13 238.72 274.62 235.26 269.72 227.04 258.10 223.95 253.70 222.44 251.53 220.96 249.39 219.51 247.28 218.09 245.18 216.66 243.05 215.07 240.64ZM256 300 300 372 380 372 296.93 240.64 295.34 243.05 293.91 245.18 292.49 247.28 291.04 249.39 289.56 251.53 288.05 253.70 284.96 258.10 276.74 269.72 273.28 274.62 271.52 277.13 269.74 279.69 267.93 282.29 266.11 284.94 264.25 287.65 263.97 288.04 263.67 288.42 263.35 288.79 263.01 289.13 262.65 289.47 262.28 289.78 261.89 290.08Z"/><path fill="var(--ds-mark-pin)" fill-rule="evenodd" d="M256 282c-30-44-52-68-52-98a52 52 0 0 1 104 0c0 30-22 54-52 98zm0-78a20 20 0 1 0 0-40 20 20 0 0 0 0 40z"/></svg>
+<!-- design-mark:end -->
+</div>
 <h1>You're offline</h1>
 <p>We couldn't reach Festie. Once you're back online, the app will load your schedule automatically.</p>
 <!-- A plain link: the CSP (script-src-attr none) blocks an inline onclick handler. -->
-<a class="retry" href="">Retry</a>
+<a class="ds-cta" href="">Retry</a>
 </main>
 </body>
 </html>

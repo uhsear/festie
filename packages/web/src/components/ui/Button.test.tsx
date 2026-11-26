@@ -193,4 +193,12 @@ describe('Button', () => {
     expect(btn).toHaveAttribute('type', 'submit');
     expect(btn).toHaveAttribute('name', 'submit-btn');
   });
+
+  it('animates the press through the scale property, not transform', () => {
+    render(<Button>Press</Button>);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toMatch(/transition-\[[^\]]*scale[^\]]*\]/);
+    expect(cls).not.toMatch(/transition-\[[^\]]*transform/);
+    expect(cls).toContain('press-scale');
+  });
 });

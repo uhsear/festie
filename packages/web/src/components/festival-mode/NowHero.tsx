@@ -19,7 +19,7 @@ import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
 import ArtistName, { RowOpenButton } from '../features/ArtistName';
 
-// Countdown turns coral and bold when a set is this close, so "go now" reads
+// Countdown turns amber and bold when a set is this close, so "go now" reads
 // at a glance in a crowd.
 const IMMINENT_MIN = 5;
 
@@ -47,7 +47,7 @@ function startsInWords(startsAt: number, nowMs: number, timeZone: string | undef
 }
 
 const card =
-  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100';
+  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
 
 function Quiet({ icon, title, body, action }: { icon: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (
@@ -96,7 +96,7 @@ export default function NowHero({
             <div
               key={set.id}
               data-testid="fm-now-card"
-              className={cn(card, 'border-accent-coral/60 bg-coral-ring shadow-[0_6px_24px_-8px_rgba(var(--accent-coral-rgb),0.45)]')}
+              className={cn(card, 'border-live-fill/60 bg-[var(--color-live-ring)] shadow-[0_6px_24px_-8px_var(--color-live-ring)]')}
             >
               <RowOpenButton
                 onClick={() => onOpenSet(set)}
@@ -187,7 +187,7 @@ export default function NowHero({
             <span
               className={cn(
                 'text-2xl font-semibold tabular-nums leading-none',
-                imminent || walk?.late ? 'text-accent-coral font-bold' : 'text-accent-aqua',
+                imminent || walk?.late ? 'text-accent-amber font-bold' : 'text-accent-aqua',
               )}
             >
               {startsIn}

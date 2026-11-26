@@ -8,7 +8,7 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
   label: string;
   /** default: muted → primary on hover; danger: muted → coral on hover; ghost: same as default, slightly lighter baseline. */
   variant?: 'default' | 'ghost' | 'danger';
-  /** md = 44×44 (WCAG 2.5.5 AAA); sm = 44×44 (WCAG AA minimum). */
+  /** md = 44×44 (WCAG 2.5.5 AAA); sm = 44×44 (WCAG AA minimum). Both render the same target. */
   size?: 'sm' | 'md';
   ref?: Ref<HTMLButtonElement>;
 }
@@ -23,13 +23,12 @@ function IconButton({
   icon,
   label,
   variant = 'default',
-  size = 'md',
+  size: _size,
   className,
   type = 'button',
   ref,
   ...rest
 }: IconButtonProps) {
-  const sizeClass = size === 'sm' ? 'min-h-11 min-w-11' : 'min-h-11 min-w-11';
   const variantClass =
     variant === 'danger' ? 'text-text-muted hover:text-accent-coral' : 'text-text-muted hover:text-text-primary';
 
@@ -40,10 +39,11 @@ function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex items-center justify-center rounded-md transition-colors',
+        'inline-flex items-center justify-center rounded-md transition-[color,background-color,scale] duration-(--duration-fast) ease-out press-scale',
+        'hover:bg-[var(--color-overlay-3)]',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-        sizeClass,
+        'min-h-11 min-w-11',
         variantClass,
         className,
       )}

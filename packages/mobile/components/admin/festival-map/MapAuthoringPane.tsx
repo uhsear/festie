@@ -52,7 +52,7 @@ export default function MapAuthoringPane({
       />
       {armed ? (
         <View style={styles.armedBanner} pointerEvents="none">
-          <Ionicons name="locate-outline" size={14} color={t.colors.text.onLightAccent} />
+          <Ionicons name="locate-outline" size={t.iconSize.compact} color={t.colors.text.onLightAccent} />
           <Text style={styles.armedBannerText} numberOfLines={1}>
             {armed.kind === 'venue'
               ? 'Tap the map at the venue'

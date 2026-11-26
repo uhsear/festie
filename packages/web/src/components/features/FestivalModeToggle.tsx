@@ -22,7 +22,7 @@ export default function FestivalModeToggle() {
       title={COPY.nowNext.name}
       data-testid="festival-mode-toggle"
       className={cn(
-        'relative px-2.5 py-2 rounded-xl transition-[background-color,color,box-shadow] duration-300 min-h-11 min-w-11 flex items-center justify-center active:scale-95 motion-reduce:active:transform-none',
+        'relative px-2.5 py-2 rounded-xl transition-[background-color,color,box-shadow,scale] duration-300 min-h-11 min-w-11 flex items-center justify-center press-scale',
         active
           ? 'bg-accent-aqua text-[var(--text-on-light-accent)] shadow-lg shadow-accent-aqua/50'
           : 'bg-glass text-text-secondary hover:text-text-primary',

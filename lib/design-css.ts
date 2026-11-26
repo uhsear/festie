@@ -6,7 +6,7 @@
 // legal, offline) and the transactional email read the design tokens. Values
 // come from the shared token files, never from hand-copied hex, so a token
 // change reaches these pages with no second edit. The build bundles the shared
-// sources imported by relative path, as lib/festival-tint.ts does.
+// sources imported by relative path.
 
 import { FESTIE_MARK_VIEWBOX, festieMarkSvgBody } from '../packages/shared/src/brand/festieMark';
 import { colors } from '../packages/shared/src/tokens/colors';

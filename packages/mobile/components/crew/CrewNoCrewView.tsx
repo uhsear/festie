@@ -2,7 +2,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   ScrollView,
   type TextInputInstance,
   type StyleProp,
@@ -11,6 +10,7 @@ import {
 import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import ScreenHeader from '../ScreenHeader';
 import CreateCrewForm from '../CreateCrewForm';
+import Button from '../Button';
 import EmptyState from '../EmptyState';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { useStyles } from './styles';
@@ -92,16 +92,13 @@ export default function CrewNoCrewView({
           onSubmitEditing={handleJoin}
           accessibilityLabel="Invite code"
         />
-        <TouchableOpacity
-          style={[styles.outlineButton, !inviteCode.trim() && styles.buttonDisabled]}
+        <Button
+          label="Join by Code"
+          variant="secondary"
           onPress={handleJoin}
           disabled={!inviteCode.trim()}
-          activeOpacity={0.8}
-          accessibilityRole="button"
           accessibilityLabel="Join crew by code"
-        >
-          <Text style={styles.outlineButtonText}>Join by Code</Text>
-        </TouchableOpacity>
+        />
       </View>
     </ScrollView>
   </View>

@@ -10,7 +10,7 @@ const DISMISS_KEY = 'fp-offline-banner-dismissed';
 /**
  * Banner surfacing the offline-sync state. Three states, in priority order:
  *
- *  1. FAILED  — failedSync.length > 0: a coral/warning bar "{n} change(s)
+ *  1. FAILED  — failedSync.length > 0: an amber (delivery.failed) bar "{n} change(s)
  *     couldn't sync" with a button that opens the PendingSyncSheet to retry or
  *     dismiss each one. Highest priority because dropped writes are the thing
  *     the user most needs to know about.
@@ -73,13 +73,13 @@ export default function OfflineBanner() {
   let tone: string;
   let message: string;
   if (showFailed) {
-    tone = 'bg-[var(--color-accent-coral-strong)] border-b border-[var(--color-accent-coral-strong-hover)] text-[var(--color-text-on-accent)]';
+    tone = 'bg-delivery-failed border-b border-delivery-failed/60 text-[var(--text-on-light-accent)]';
     message = `${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync`;
   } else if (showOffline) {
-    tone = 'bg-accent-amber/90 border-b border-accent-amber/20 text-bg-primary';
+    tone = 'bg-accent-amber/90 border-b border-accent-amber/20 text-[var(--text-on-light-accent)]';
     message = "You're offline. Showing your saved schedule. Changes sync when you reconnect.";
   } else {
-    tone = 'bg-accent-aqua/90 border-b border-accent-aqua/20 text-bg-primary';
+    tone = 'bg-accent-aqua/90 border-b border-accent-aqua/20 text-[var(--text-on-light-accent)]';
     message = `Syncing ${pendingSync} pending change${pendingSync === 1 ? '' : 's'}…`;
   }
 
@@ -124,7 +124,7 @@ export default function OfflineBanner() {
           {!showFailed && showOffline && (
             <button
               onClick={handleDismiss}
-              className="text-bg-primary hover:opacity-70 transition-opacity min-h-11 min-w-11 inline-flex items-center justify-center"
+              className="text-[var(--text-on-light-accent)] hover:opacity-70 transition-opacity min-h-11 min-w-11 inline-flex items-center justify-center"
               aria-label="Dismiss offline notice"
             >
               <X className="w-4 h-4" aria-hidden="true" />

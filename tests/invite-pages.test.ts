@@ -54,18 +54,28 @@ describe('invite-pages: renderInviteJoinPage', () => {
     origin: 'https://festie.us',
   };
 
-  it('tints the page with the festival colour', () => {
-    const html = renderInviteJoinPage({ ...defaultArgs, festivalName: 'Coachella' });
-    assert.ok(html.includes('body { background: #08160c; }'));
+  const NOW = new Date('2026-10-28T12:00:00Z');
+
+  it('uses the brand tokens: aqua CTA, Clash Display, both schemes, no legacy colours or eyebrow', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, memberInitials: ['D'], now: NOW });
+    assert.ok(html.includes('class="ds-cta"'));
+    assert.ok(html.includes("font-family: 'Clash Display'"));
+    assert.ok(html.includes('@media (prefers-color-scheme: light)'));
+    assert.ok(!/d6154f|ff5c85|Crew invite|border-top: 4px/i.test(html));
+    assert.ok(renderInviteErrorPage('https://festie.us', 'x').includes('@media (prefers-color-scheme: light)'));
   });
 
-  it('has a light-scheme block that follows the tint rules, on the join and error pages', () => {
-    const html = renderInviteJoinPage(defaultArgs);
-    const light = html.indexOf('@media (prefers-color-scheme: light)');
-    assert.ok(light > html.indexOf('body { background: #'), 'light block must come after the tint');
-    assert.ok(html.includes('background: #f4f4f7'));
-    assert.ok(html.includes('border-top-color'));
-    assert.ok(renderInviteErrorPage('https://festie.us', 'x').includes('@media (prefers-color-scheme: light)'));
+  it('leads with the faces, the festival name and the countdown', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, memberInitials: ['D', 'A', '<'], now: NOW });
+    assert.ok(html.includes('<span class="iv-face">D</span><span class="iv-face">A</span><span class="iv-face">&lt;</span>'));
+    assert.ok(html.includes('<h1>EDC Orlando</h1>'));
+    assert.ok(html.includes('<p class="iv-when">Fri in 9 days</p>'));
+    assert.ok(html.includes('<p>Test Crew</p>'), 'the crew name stays on the page');
+  });
+
+  it('shows no faces row content without initials, and no countdown once the festival is over', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, now: new Date('2026-12-01T00:00:00Z') });
+    assert.ok(!html.includes('iv-face"') && !html.includes('iv-when">'));
   });
 
   it('returns valid HTML document', () => {
@@ -78,7 +88,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(html.includes('<title>Join Test Crew on Festie</title>'));
     assert.ok(html.includes('<meta property="og:title" content="Join Test Crew on Festie">'));
-    assert.ok(html.includes('<h1>Test Crew</h1>'));
+    assert.ok(html.includes('<h1>EDC Orlando</h1>'));
   });
 
   it('describes festival, dates and spots in og:description', () => {
@@ -109,13 +119,13 @@ describe('invite-pages: renderInviteJoinPage', () => {
   });
 
   it('renders the body lines in order', () => {
-    const html = renderInviteJoinPage(defaultArgs);
+    const html = renderInviteJoinPage({ ...defaultArgs, now: NOW });
     const bodyStart = html.indexOf('<body>');
     const order = [
-      'Crew invite',
-      '<h1>Test Crew</h1>',
       'Crew of 6 · 2 spots left',
-      'EDC Orlando · Nov 6 – Nov 8, 2026',
+      '<h1>EDC Orlando</h1>',
+      'Fri in 9 days',
+      'Nov 6 – Nov 8, 2026',
       'Led by Dana',
       '>Join Test Crew</a>',
       'New to Festie? You can create an account after you tap Join.',
@@ -161,11 +171,11 @@ describe('invite-pages: renderInviteJoinPage', () => {
   it('offers Save for later under Join when the festival has dates', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(
-      html.includes('<a href="https://festie.us/join/ABC123/save.ics" class="invite-link invite-save" download>Save for later</a>'),
+      html.includes('<a href="https://festie.us/join/ABC123/save.ics" class="iv-link" download>Save for later</a>'),
     );
     assert.ok(html.includes('Adds the festival dates and this invite to your calendar.'));
     assert.ok(html.indexOf('>Join Test Crew</a>') < html.indexOf('Save for later'));
-    assert.ok(html.includes('.invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }'));
+    assert.ok(/\.iv-link \{[^}]*min-height: 2\.75rem/.test(html), 'the link is 44 px tall');
   });
 
   it('has no Save for later link without both dates', () => {
@@ -297,6 +307,13 @@ describe('invite-pages: renderInviteErrorPage', () => {
   it('escapes ampersands in error message', () => {
     const html = renderInviteErrorPage('https://festie.us', 'A & B');
     assert.ok(html.includes('A &amp; B'));
+  });
+
+  it('carries the mark and an aqua Open Festie button', () => {
+    const html = renderInviteErrorPage('https://festie.us', 'error');
+    assert.ok(html.includes('class="ds-lockup"') && html.includes('aria-label="Festie"'));
+    assert.ok(html.includes('<a href="https://festie.us/" class="ds-cta">Open Festie</a>'));
+    assert.ok(!/d6154f|ff5c85/i.test(html));
   });
 
   it('contains viewport meta tag', () => {

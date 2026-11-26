@@ -124,11 +124,10 @@ export const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#ffffff',
+    borderColor: t.colors.text.onAccent,
   },
   paletteGlyphText: {
-    fontSize: 13,
-    lineHeight: 16,
+    ...typeStyle('caption'),
   },
   paletteLabel: {
     ...typeStyle('caption'),
@@ -140,7 +139,7 @@ export const useStyles = makeStyles((t) => ({
     height: 20,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ffffff',
+    borderColor: t.colors.text.onAccent,
   },
   zoneStartBtn: {
     alignSelf: 'flex-start',
@@ -255,7 +254,7 @@ export const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#ffffff',
+    borderColor: t.colors.text.onAccent,
   },
   placedLabel: {
     ...typeStyle('caption'),

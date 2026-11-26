@@ -2071,7 +2071,7 @@ describe('routes/share.js', () => {
       const { app } = await buildShareApp();
       const res = await request(app).get('/s/u/INVALID!!!');
       assert.equal(res.status, 400);
-      assert.ok(res.text.includes('Invalid Link'));
+      assert.ok(res.text.includes('We cannot open that link'));
     });
 
     test('accepts a username with a space and shows a readable date, still noindex', async () => {
@@ -2118,7 +2118,7 @@ describe('routes/share.js', () => {
       });
       const res = await request(app).get('/s/u/unknown');
       assert.equal(res.status, 404);
-      assert.ok(res.text.includes('User Not Found'));
+      assert.ok(res.text.includes('We cannot find that user'));
     });
 
     test('returns 404 when user has no profiles', async () => {
@@ -2130,7 +2130,7 @@ describe('routes/share.js', () => {
       });
       const res = await request(app).get('/s/u/testuser');
       assert.equal(res.status, 404);
-      assert.ok(res.text.includes('No Schedule Yet'));
+      assert.ok(res.text.includes('No schedule yet'));
     });
 
     test('renders the most recent profile in place, without a redirect', async () => {
@@ -2195,7 +2195,7 @@ describe('routes/share.js', () => {
       const { app } = await buildShareApp();
       const res = await request(app).get('/s/bad$id!');
       assert.equal(res.status, 400);
-      assert.ok(res.text.includes('Invalid Link'));
+      assert.ok(res.text.includes('We cannot open that link'));
     });
 
     test('returns error for too-long profileId', async () => {
@@ -2208,7 +2208,7 @@ describe('routes/share.js', () => {
       const { app } = await buildShareApp();
       const res = await request(app).get('/s/unknown123');
       assert.equal(res.status, 404);
-      assert.ok(res.text.includes('Schedule Not Found'));
+      assert.ok(res.text.includes('We cannot find that schedule'));
       assert.ok(res.text.includes('ask them for a new one'));
     });
 
@@ -2224,7 +2224,7 @@ describe('routes/share.js', () => {
       const html = await request(app).get('/s/p1');
       const json = await request(app).get('/s/p1/json');
       assert.equal(html.status, 404);
-      assert.ok(html.text.includes('Schedule Not Found'));
+      assert.ok(html.text.includes('We cannot find that schedule'));
       assert.equal(json.status, 404);
       assert.equal(getById.mock.callCount(), 0);
     });
@@ -2272,7 +2272,7 @@ describe('routes/share.js', () => {
       });
       const res = await request(app).get('/s/p1');
       assert.equal(res.status, 404);
-      assert.ok(res.text.includes('Festival Not Found'));
+      assert.ok(res.text.includes('We cannot find that festival'));
     });
 
     test('renders share page with picks grouped by day', async () => {

@@ -46,7 +46,7 @@ export default function GridToolbar({
             'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
           )}
         >
-          <TriangleAlert aria-hidden="true" className="w-3.5 h-3.5 text-[var(--color-clash)]" />
+          <TriangleAlert aria-hidden="true" className="w-4 h-4 text-[var(--color-clash)]" />
           <span>{clashChip(clashCount)}</span>
         </button>
       )}
@@ -88,9 +88,9 @@ export default function GridToolbar({
           className={cn(
             'inline-flex items-center justify-center w-11 h-11 rounded-md cursor-pointer',
             'text-accent-aqua',
-            'transition-[background-color,transform]',
+            'transition-[background-color,scale]',
             'hover:bg-[color-mix(in_srgb,var(--color-accent-aqua)_24%,transparent)]',
-            'active:scale-[0.93]',
+            'press-scale',
             'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
             'aria-busy:opacity-70 aria-busy:cursor-progress',
           )}
@@ -105,7 +105,7 @@ export default function GridToolbar({
           disabled={exporting}
           type="button"
         >
-          <Share2 size={14} aria-hidden="true" />
+          <Share2 size={16} aria-hidden="true" />
         </button>
       </div>
     </div>

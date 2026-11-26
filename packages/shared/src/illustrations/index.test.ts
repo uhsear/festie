@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { illustrationDataUri, illustrationSvg, type IllustrationName } from './index';
+import { illustrationDataUri, illustrationSlot, illustrationSvg, type IllustrationName } from './index';
 import * as svgs from './svgs';
 
 const NAMES: IllustrationName[] = ['noPicks', 'noCrew', 'emptyList', 'offline'];
@@ -30,5 +30,9 @@ describe('illustrations', () => {
     const uri = illustrationDataUri('noCrew', '#123456');
     expect(uri.startsWith('data:image/svg+xml;utf8,%3Csvg')).toBe(true);
     expect(decodeURIComponent(uri.slice('data:image/svg+xml;utf8,'.length))).toBe(illustrationSvg('noCrew', '#123456'));
+  });
+
+  it('has one 160 by 112 slot', () => {
+    expect(illustrationSlot).toEqual({ width: 160, height: 112 });
   });
 });

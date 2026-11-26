@@ -376,7 +376,7 @@ export default function AdminUsersScreen() {
                             {!isSelf ? (
                               <Ionicons
                                 name={selected.has(user.id) ? 'checkbox' : 'square-outline'}
-                                size={22}
+                                size={t.iconSize.lg}
                                 color={selected.has(user.id) ? t.colors.accent.aqua : t.colors.text.placeholder}
                               />
                             ) : null}
@@ -414,7 +414,7 @@ export default function AdminUsersScreen() {
                         >
                           <Ionicons
                             name={expanded ? 'chevron-up' : 'chevron-forward'}
-                            size={18}
+                            size={t.iconSize.action}
                             color={t.colors.text.placeholder}
                           />
                         </TouchableOpacity>

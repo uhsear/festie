@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 
-import { loadInvitePreview, formatInviteDateRange } from '../lib/invite-preview';
+import { loadInvitePreview, formatInviteDateRange, inviteCountdown } from '../lib/invite-preview';
 
 const CREW = {
   id: 'c1',
@@ -50,6 +50,7 @@ describe('loadInvitePreview', () => {
     const result = await loadInvitePreview(deps, 'ABC123');
     assert.deepEqual(result, {
       status: 'ok',
+      memberInitials: ['D', 'X'],
       preview: {
         crewName: 'Bass Gang',
         ownerName: 'DJ Dana',
@@ -115,6 +116,7 @@ describe('loadInvitePreview', () => {
     const members = Array.from({ length: 10 }, (_, i) => ({ userId: `u${i}`, role: i ? 'member' : 'owner', username: `u${i}` }));
     const result = await loadInvitePreview(makeDeps({ crew: CREW, members }).deps, 'ABC123');
     assert.equal(result.status === 'ok' && result.preview.spotsLeft, 0);
+    assert.equal(result.status === 'ok' && result.memberInitials.length, 5, 'faces stop at five');
   });
 });
 
@@ -127,5 +129,23 @@ describe('formatInviteDateRange', () => {
     assert.equal(formatInviteDateRange(null, '2026-11-08'), null);
     assert.equal(formatInviteDateRange('2026-11-06', null), null);
     assert.equal(formatInviteDateRange('nope', '2026-11-08'), null);
+  });
+});
+
+describe('inviteCountdown', () => {
+  const at = (day: string) => new Date(`${day}T15:30:00Z`);
+  it('counts days to the first day with its weekday', () => {
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-10-28')), 'Fri in 9 days');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-05')), 'Fri tomorrow');
+  });
+  it('says today, on now, then nothing once it is over', () => {
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-06')), 'Starts today');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-07')), 'On now');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-08')), 'On now');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-09')), null);
+  });
+  it('returns null without usable dates', () => {
+    assert.equal(inviteCountdown(null, '2026-11-08'), null);
+    assert.equal(inviteCountdown('nope', '2026-11-08'), null);
   });
 });

@@ -34,11 +34,11 @@ export default function PicksListenSection({
     accessibilityRole="button"
     accessibilityState={{ expanded: listenOpen }}
   >
-    <Ionicons name="musical-notes-outline" size={16} color={t.colors.accent.aqua} />
+    <Ionicons name="musical-notes-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
     <Text style={styles.listenTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
       Listen before you go
     </Text>
-    <Ionicons name={listenOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+    <Ionicons name={listenOpen ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.text.secondary} />
   </TouchableOpacity>
   {listenOpen && (
     <View>
@@ -74,7 +74,7 @@ export default function PicksListenSection({
         activeOpacity={0.8}
         accessibilityRole="button"
       >
-        <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="share-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
           Share as text
         </Text>

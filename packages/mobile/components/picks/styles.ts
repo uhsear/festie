@@ -1,3 +1,4 @@
+import { elevation } from '@festie/shared/tokens';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
 
 export const useStyles = makeStyles((t) => ({
@@ -472,10 +473,6 @@ export const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.aqua,
     // Soft elevation so the FAB floats above the list on both platforms.
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    ...elevation.low,
   },
 }));

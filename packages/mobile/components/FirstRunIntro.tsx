@@ -251,7 +251,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
                 accessibilityElementsHidden
                 importantForAccessibility="no-hide-descendants"
               >
-                <Ionicons name={SLIDE_ICON[slideKey]} size={88} color={t.colors.accent.aqua} />
+                <Ionicons name={SLIDE_ICON[slideKey]} size={t.iconSize.hero} color={t.colors.accent.aqua} />
               </View>
             )}
           </View>
@@ -301,7 +301,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
                 <Text style={styles.choiceName} maxFontSizeMultiplier={MAX_FONT_SCALE}>{f.name}</Text>
                 {dates ? <Text style={styles.choiceDates} maxFontSizeMultiplier={MAX_FONT_SCALE}>{dates}</Text> : null}
               </View>
-              {selected ? <Ionicons name="checkmark-circle" size={22} color={t.colors.accent.aqua} /> : null}
+              {selected ? <Ionicons name="checkmark-circle" size={t.iconSize.lg} color={t.colors.accent.aqua} /> : null}
             </AppPressable>
           );
         })}

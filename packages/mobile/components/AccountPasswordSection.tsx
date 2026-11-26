@@ -84,13 +84,13 @@ function SetPasswordForm({ onDone }: { onDone: () => void }) {
         accessibilityState={{ expanded: open }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="key-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="key-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{PROVIDER_COPY.setPassword}</Text>
           <Text style={styles.rowHint}>So you can also sign in with a password</Text>
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={t.iconSize.action} color={t.colors.text.placeholder} />
       </TouchableOpacity>
       {open ? (
         <View style={styles.form}>
@@ -253,13 +253,13 @@ function ChangePasswordForm() {
         accessibilityState={{ expanded: open }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="key-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="key-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Change Password</Text>
           <Text style={styles.rowHint}>Change your password</Text>
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={t.iconSize.action} color={t.colors.text.placeholder} />
       </TouchableOpacity>
 
       {open ? (
@@ -332,12 +332,12 @@ function ChangePasswordForm() {
           <View style={styles.metaRow}>
             {matchState === 'match' ? (
               <View style={styles.matchPill}>
-                <Ionicons name="checkmark-circle" size={13} color={t.colors.status.verified} style={styles.matchIcon} />
+                <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.matchIcon} />
                 <Text style={[styles.matchText, { color: t.colors.status.verified }]}>Passwords match</Text>
               </View>
             ) : matchState === 'mismatch' ? (
               <View style={styles.matchPill}>
-                <Ionicons name="close-circle" size={13} color={t.colors.text.danger} style={styles.matchIcon} />
+                <Ionicons name="close-circle" size={t.iconSize.compact} color={t.colors.text.danger} style={styles.matchIcon} />
                 <Text style={[styles.matchText, { color: t.colors.text.danger }]}>Doesn’t match</Text>
               </View>
             ) : (
@@ -352,7 +352,7 @@ function ChangePasswordForm() {
               accessibilityState={{ checked: reveal }}
               style={styles.reveal}
             >
-              <Ionicons name={reveal ? 'eye-off-outline' : 'eye-outline'} size={15} color={t.colors.text.secondary} style={styles.revealIcon} />
+              <Ionicons name={reveal ? 'eye-off-outline' : 'eye-outline'} size={t.iconSize.sm} color={t.colors.text.secondary} style={styles.revealIcon} />
               <Text style={styles.revealText}>{reveal ? 'Hide' : 'Show'}</Text>
             </TouchableOpacity>
           </View>
@@ -365,7 +365,7 @@ function ChangePasswordForm() {
 
           {saved ? (
             <View style={styles.savedRow} accessibilityLiveRegion="polite">
-              <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.savedIcon} />
+              <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.savedIcon} />
               <Text style={styles.savedText}>{PASSWORD_CHANGED_MESSAGE}</Text>
             </View>
           ) : null}

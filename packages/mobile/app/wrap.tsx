@@ -282,7 +282,7 @@ export default function WrapScreen() {
             {sharing ? (
               <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
             ) : (
-              <Ionicons name="share-social-outline" size={16} color={t.colors.text.onLightAccent} />
+              <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
             )}
             <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share this card'}</Text>
           </TouchableOpacity>
@@ -754,7 +754,7 @@ function CrewWrapTab({
               {sharing ? (
                 <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
               ) : (
-                <Ionicons name="share-social-outline" size={16} color={t.colors.text.onLightAccent} />
+                <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
               )}
               <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share Crew Wrap'}</Text>
             </TouchableOpacity>
@@ -823,8 +823,7 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: t.spacing[2],
   },
   heroValue: {
-    fontFamily: 'ClashDisplay-Bold',
-    fontSize: 48,
+    ...typeStyle('display-xl'),
     lineHeight: 56,
     color: t.colors.accent.aqua,
     // No negative tracking on iOS: UIKit clips the trailing glyph.

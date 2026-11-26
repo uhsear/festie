@@ -56,7 +56,7 @@ export default function ScheduleHeaderActions({
     accessibilityLabel="Open Now and Next"
   >
     {/* "Live" is reserved for location (P1-2); flash = Now & Next. */}
-    <Ionicons name="flash" size={20} color={t.colors.accent.aqua} />
+    <Ionicons name="flash" size={t.iconSize.md} color={t.colors.accent.aqua} />
     <Text style={styles.headerNowText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
       Now
     </Text>

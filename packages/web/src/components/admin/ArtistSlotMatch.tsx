@@ -82,7 +82,7 @@ export default function ArtistSlotMatch({ name, match, onPick, onNotThisOne, onC
             Create artist
           </button>
           {error && (
-            <p role="alert" className="text-accent-coral">
+            <p role="alert" className="text-text-danger">
               {error}
             </p>
           )}

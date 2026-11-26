@@ -18,9 +18,9 @@
     color: var(--color-text-primary);
   }
 }
-.admin-mobile-only button.bg-accent-aqua.text-bg-primary,
-.admin-desktop-sidebar button.bg-accent-aqua.text-bg-primary {
-  color: var(--color-bg-primary);
+.admin-mobile-only button.bg-accent-aqua,
+.admin-desktop-sidebar button.bg-accent-aqua {
+  color: var(--text-on-light-accent);
 }
 
 /* ── #main-content ───────────────────────────────────────────────────── */
@@ -55,8 +55,13 @@
 
 /* ── /cards: interaction overrides ───────────────────────────────────── */
 .card-grid .set-card:has(.set-card-click-target:active) {
-  transform: scale(0.985);
-  transition: transform 90ms var(--ease-standard);
+  scale: var(--press-scale);
+  transition: scale 90ms var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-grid .set-card:has(.set-card-click-target:active) {
+    scale: 1;
+  }
 }
 /* Desktop hover lightens the interactive card border (mirrors the touch
    behavior in components.css `@media (hover: none)`, which desktop hovers
@@ -70,32 +75,6 @@
   outline: 2px solid var(--color-accent-aqua);
   outline-offset: -3px;
   border-radius: 12px;
-}
-@keyframes card-priority-pop {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.18);
-  }
-  70% {
-    transform: scale(0.94);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.card-grid .card-priority-btn[aria-pressed='true'] {
-  animation: card-priority-pop 260ms var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .card-grid .card-priority-btn:hover {
-    transform: translateY(-1px) scale(1.08);
-  }
-}
-.card-grid .card-priority-btn:active {
-  transform: scale(0.92);
-  transition: transform 60ms var(--ease-standard);
 }
 @keyframes card-crew-in {
   from {
@@ -179,7 +158,7 @@
     width: 24px;
     pointer-events: none;
     z-index: 20;
-    background: linear-gradient(to right, transparent, var(--color-bg-primary, #0d0d1a));
+    background: linear-gradient(to right, transparent, var(--color-bg-primary));
   }
   /* Crew is a normal scrolling page — keep the shell's `px-6 py-4` inset so the
      crew selector/name sits below the chrome with the same top/side breathing
@@ -393,12 +372,9 @@
     transform: none !important;
     transition: none !important;
   }
-  .card-grid .card-priority-btn[aria-pressed='true'],
   .card-grid .card-overlap {
     animation: none;
   }
-  .card-grid .card-priority-btn:hover,
-  .card-grid .card-priority-btn:active,
   .card-grid .set-card:has(.set-card-click-target:active) {
     transform: none;
   }

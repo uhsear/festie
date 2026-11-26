@@ -26,10 +26,10 @@ import type { ThemePreference } from '@festie/shared/stores';
  * Icon-size scale. Reach for these instead of inline literals.
  *
  * New-code rule: never write `size={N}` for an Ionicons/icon where N isn't in
- * this scale. Map to the nearest step (13→xs/12, 15→sm/16 are the historical
- * off-grid values; both are explicitly snapped here).
+ * this scale. Map to the nearest step (9/11→xs, 13→compact, 15→sm, 22/26/28/32→lg,
+ * 40→xl, 56/88/96→hero). The design-ratchet check fails on a numeric Ionicons size.
  *
- * Scale: 12/14/16/18/20/24/48. `compact` (14) and `action` (18) were promoted
+ * Scale: 12/14/16/18/20/24/48/64. `compact` (14) and `action` (18) were promoted
  * from de-facto usage in this audit — 18 alone covers 56 row-action call sites.
  *
  *   xs: 12       — inline badge / meta-row indicators
@@ -38,7 +38,8 @@ import type { ThemePreference } from '@festie/shared/stores';
  *   action: 18   — row-action icons (most-used size in the app)
  *   md: 20       — medium stand-alone controls
  *   lg: 24       — screen-level leading icons, header icons
- *   xl: 48       — empty-state / hero icons
+ *   xl: 48       — empty-state icons
+ *   hero: 64     — empty-state hero icons
  */
 export const iconSize = {
   xs: 12,
@@ -48,6 +49,7 @@ export const iconSize = {
   md: 20,
   lg: 24,
   xl: 48,
+  hero: 64,
 } as const;
 
 export const tokens = {
@@ -115,6 +117,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  * Pass an optional `weight` to override the role's default — the correct
  * weight-specific font cut is selected automatically (800/900 clamp to 700Bold).
  * `opts.brandFace` opts a label into Space Grotesk (labels default to the system face).
+ * `opts.tabular` turns on tabular figures for ticking or aligned numbers (times, countdowns).
  * Use this instead of spreading typeStyle() and then adding a raw `fontWeight`
  * override (which is inert on native because the weighted family wins).
  *
@@ -125,7 +128,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  *   // Right — selects SpaceGrotesk_700Bold:
  *   typeStyle('caption', 700)
  */
-export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFace?: boolean }): TextStyle {
+export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFace?: boolean; tabular?: boolean }): TextStyle {
   const r = typeRoles[role];
   const resolvedWeight = weight ?? r.weight;
   // Clamp 800/900 to 700 — no loaded cut above Bold for either brand face.
@@ -165,9 +168,33 @@ export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFac
   // so confidence/delivery figures keep column alignment while they tick.
   if ('numeric' in r && r.numeric) {
     style.fontVariant = [r.numeric];
+  } else if (opts?.tabular) {
+    style.fontVariant = ['tabular-nums'];
   }
   return style;
 }
+
+/**
+ * Poster size path. Posters render at a fixed artboard size (their own sizes, with
+ * allowFontScaling off), so only the face comes from the type system. Returns the
+ * fontFamily/fontWeight that typeStyle() resolves for the weight: body (Space Grotesk)
+ * by default, Clash Display when `display` is set.
+ */
+export function posterFont(weight: number, display = false): Pick<TextStyle, 'fontFamily' | 'fontWeight'> {
+  const { fontFamily, fontWeight } = typeStyle(display ? 'display-xl' : 'body', weight);
+  return { fontFamily, fontWeight };
+}
+
+/**
+ * Pushed-route header title. 18 is a deliberate step between `label` (14) and `title`
+ * (20): native headers need the room, and the brand face keeps the semibold cut.
+ * Exception to the ramp, recorded in DESIGN.md.
+ */
+export const headerTitleType: TextStyle = {
+  ...typeStyle('label', 600, { brandFace: true }),
+  fontSize: fontSize[18],
+  lineHeight: Math.round(fontSize[18] * 1.3),
+};
 
 const TYPE_SCALE_CAPS: Partial<Record<TypeRoleName, number>> = {
   'display-xl': 1.2,

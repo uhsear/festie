@@ -1,24 +1,6 @@
 {
   "entries": [
     {
-      "file": "src/components/admin/AdminCrews.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/admin/FestivalEditForm.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/admin/FestivalMapEditor.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "src/components/admin/FestivalPickInsight.tsx",
       "rule": "duration",
       "max": 1,
@@ -39,32 +21,20 @@
     {
       "file": "src/components/crew/BeaconOverlay.tsx",
       "rule": "hex",
-      "max": 3,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 2,
+      "reason": "Beacon overlay: white border and text on the near-black ground, the same in both themes."
     },
     {
       "file": "src/components/crew/crew-map/useDraftMarkers.ts",
       "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/crew/crew-map/useDraftMarkers.ts",
-      "rule": "rgb",
       "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "Map marker ring: white in both themes so a marker reads on any basemap."
     },
     {
       "file": "src/components/crew/CrewTabBar.tsx",
       "rule": "duration",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/crew/CrewTabBar.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/crew/CrewTabContent.tsx",
@@ -73,34 +43,16 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/crew/CrewTotemCard.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/crew/ExpenseItem.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/crew/InviteQRDialog.tsx",
       "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "QR quiet zone: scanners need a white background in both themes."
     },
     {
       "file": "src/components/crew/PollOptionButton.tsx",
       "rule": "duration",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/CrewSelector.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/features/CrewSuggestionStrip.tsx",
@@ -113,18 +65,6 @@
       "rule": "duration",
       "max": 2,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/DetailPanel.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/features/DetailPanel.tsx",
-      "rule": "rgb",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
     },
     {
       "file": "src/components/features/DetailPriorityPicker.tsx",
@@ -151,12 +91,6 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/features/LiveBadge.tsx",
-      "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "src/components/features/OfflineReadinessCard.tsx",
       "rule": "duration",
       "max": 1,
@@ -175,46 +109,22 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/features/PickConflicts.tsx",
-      "rule": "text-px",
-      "max": 3,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/RatingButtons.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/ScheduleImagePoster.tsx",
-      "rule": "hex",
-      "max": 6,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "src/components/features/ScheduleImagePoster.tsx",
       "rule": "rgb",
       "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "Poster artwork: html-to-image does not resolve CSS variables, so the glow gradient carries literal channels."
     },
     {
       "file": "src/components/features/SetCard.tsx",
       "rule": "duration",
-      "max": 5,
+      "max": 4,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/SetCard.tsx",
-      "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
     },
     {
       "file": "src/components/features/SharePicksDialog.tsx",
       "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "QR quiet zone: scanners need a white background in both themes."
     },
     {
       "file": "src/components/features/TimelineGridCell.tsx",
@@ -235,40 +145,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/layout/BottomNav.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/BottomNav.tsx",
-      "rule": "ease",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/BottomNav.tsx",
-      "rule": "text-px",
-      "max": 3,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/FestivalPicker.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/layout/Header.tsx",
       "rule": "duration",
       "max": 3,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/Header.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/layout/ScheduleViewSwitcher.tsx",
@@ -289,16 +169,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/layout/UserMenuProfileCard.tsx",
-      "rule": "rgb",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "src/components/manage/FestivalLinkQRDialog.tsx",
       "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "QR quiet zone: scanners need a white background in both themes."
     },
     {
       "file": "src/components/timeline/TBASection.tsx",
@@ -313,46 +187,16 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/timeline/TimelineLegend.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/timeline/TimelineLegend.tsx",
-      "rule": "rgb",
-      "max": 4,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "src/components/ui/AuthTabs.tsx",
       "rule": "duration",
       "max": 2,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/ui/Avatar.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/ui/Avatar.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/ui/Button.tsx",
       "rule": "duration",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/Button.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
     },
     {
       "file": "src/components/ui/Card.tsx",
@@ -361,30 +205,6 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/ui/Input.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/PromptDialog.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/skeletons/CardsSkeleton.tsx",
-      "rule": "rgb",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/ui/skeletons/TimelineSkeleton.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/ui/StageBadge.tsx",
       "rule": "duration",
       "max": 1,
@@ -393,14 +213,14 @@
     {
       "file": "src/components/ui/StageBadge.tsx",
       "rule": "hex",
-      "max": 3,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "Contrast maths: pure black is where darkening a stage colour ends."
     },
     {
       "file": "src/components/ui/StageBadge.tsx",
       "rule": "rgb",
       "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "Text shadow alpha on a stage-colour fill."
     },
     {
       "file": "src/components/ui/Switch.tsx",
@@ -412,25 +232,13 @@
       "file": "src/components/wrap/PosterFrame.tsx",
       "rule": "rgb",
       "max": 3,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "Poster artwork: builds rgba strings from token hex for the glow gradient, because html-to-image does not resolve CSS variables."
     },
     {
       "file": "src/lib/avatarInk.ts",
       "rule": "hex",
       "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/lib/shareImage.ts",
-      "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/lib/sharePoster.ts",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "Contrast maths: the white ink option, compared against the avatar fill."
     },
     {
       "file": "src/lib/styles.ts",
@@ -439,22 +247,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/routes/crew-plan.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/routes/forgot-password.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
       "file": "src/routes/friend-picks.tsx",
       "rule": "hex",
       "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "reason": "URL hash \"#add\", not a colour. The pattern matches it."
     },
     {
       "file": "src/routes/grid.tsx",
@@ -465,44 +261,32 @@
     {
       "file": "src/styles/animations.css",
       "rule": "rgb",
-      "max": 7,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/styles/base.css",
-      "rule": "rgb",
-      "max": 1,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 4,
+      "reason": "Alpha applied to the --accent-coral-rgb channel variable, so Daylight darkens the SOS glow."
     },
     {
       "file": "src/styles/components.css",
       "rule": "hex",
-      "max": 35,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 7,
+      "reason": "Map marker rings and label ink: white in both themes so a marker reads on any basemap."
     },
     {
       "file": "src/styles/components.css",
       "rule": "rgb",
-      "max": 15,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 8,
+      "reason": "Shadow alpha, the --accent-coral-rgb channel variable for marker glow, and the zone outline fallback: shadows are not theme colours."
     },
     {
       "file": "src/styles/pages.css",
       "rule": "hex",
-      "max": 35,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/styles/theme.css",
-      "rule": "hex",
-      "max": 3,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 34,
+      "reason": "Print sheet paper and ink, and CSS mask alpha stops. A mask reads only alpha, never a theme colour."
     },
     {
       "file": "src/styles/theme.css",
       "rule": "rgb",
-      "max": 7,
-      "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "Alpha applied to the --accent-coral-rgb channel variable, so Daylight darkens the focus glow."
     }
   ]
 }

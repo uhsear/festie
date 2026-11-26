@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { POSTER } from '@festie/shared/tokens';
 import { festivalTint } from '@festie/shared/utils';
+import { posterFont } from '../../hooks/useTokens';
 
 interface Props {
   festivalName: string;
@@ -53,28 +54,28 @@ const s = StyleSheet.create({
   poster: { width: W, height: H, padding, flexDirection: 'column', overflow: 'hidden' },
   header: { alignItems: 'center' },
   wordmark: {
-    fontFamily: 'ClashDisplay-Bold',
+    ...posterFont(700, true),
     fontSize: F.wordmark,
     letterSpacing: 8,
     color: C.wordmark,
     lineHeight: 104,
   },
   kicker: {
-    fontFamily: 'SpaceGrotesk_400Regular',
+    ...posterFont(400),
     fontSize: F.kicker,
     color: C.secondary,
     marginTop: 16,
     letterSpacing: 3,
   },
   festival: {
-    fontFamily: 'SpaceGrotesk_700Bold',
+    ...posterFont(700),
     fontSize: F.festival,
     color: C.text,
     marginTop: 18,
     textAlign: 'center',
   },
   byline: {
-    fontFamily: 'SpaceGrotesk_400Regular',
+    ...posterFont(400),
     fontSize: F.byline,
     color: C.secondary,
     marginTop: 8,
@@ -82,7 +83,7 @@ const s = StyleSheet.create({
   },
   body: { flex: 1, justifyContent: 'center' },
   footer: {
-    fontFamily: 'SpaceGrotesk_400Regular',
+    ...posterFont(400),
     textAlign: 'center',
     fontSize: F.footer,
     color: C.secondary,

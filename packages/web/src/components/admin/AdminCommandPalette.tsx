@@ -114,7 +114,7 @@ export default function AdminCommandPalette() {
             Type f, u or c and a space to search only festivals, users or crews.
           </p>
           {loadFailed && (
-            <p role="alert" className="text-sm text-accent-coral">
+            <p role="alert" className="text-sm text-text-danger">
               Couldn&apos;t load festivals and crews. Close this and try again.
             </p>
           )}
@@ -144,7 +144,7 @@ export default function AdminCommandPalette() {
                         onClick={() => choose(row)}
                         onMouseMove={() => setActive(index)}
                         className={`cursor-pointer rounded-md px-2 py-2 min-h-11 ${
-                          index === active ? 'bg-accent-aqua text-bg-primary' : 'text-text-primary'
+                          index === active ? 'bg-accent-aqua text-[var(--text-on-light-accent)]' : 'text-text-primary'
                         }`}
                       >
                         <div className="text-sm font-medium">{row.label}</div>

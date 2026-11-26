@@ -247,7 +247,7 @@ export default function ManageTeam({ organization }: Props) {
                 ))}
               </select>
             </label>
-            <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
+            <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-[var(--text-on-light-accent)] disabled:opacity-50">
               Add member
             </button>
           </form>

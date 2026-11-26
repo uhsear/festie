@@ -382,7 +382,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
                     )}
                   </div>
                   {(rowStatus?.kind === 'conflict' || rowStatus?.kind === 'error') && (
-                    <p role="alert" className="text-xs text-accent-coral">
+                    <p role="alert" className="text-xs text-text-danger">
                       {rowStatus.message}
                     </p>
                   )}

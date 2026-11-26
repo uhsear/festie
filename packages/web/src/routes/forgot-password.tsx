@@ -102,7 +102,7 @@ function ForgotPasswordPageInner() {
         ) : (
           // Success message
           <div
-            className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-300"
+            className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4 dialog-enter"
             role="status"
             aria-live="polite"
           >

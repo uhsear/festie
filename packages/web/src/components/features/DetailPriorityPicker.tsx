@@ -33,7 +33,7 @@ const activeStyles: Record<Priority, string> = {
 };
 
 const baseButtonClass =
-  'flex-1 py-3 min-h-[44px] rounded-DEFAULT text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,transform,box-shadow,color] duration-200 ease-[var(--ease-standard)] text-text-primary touch-manipulation appearance-none overflow-hidden hover:border-text-muted hover:bg-bg-card-hover active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
+  'flex-1 py-3 min-h-[44px] rounded-DEFAULT text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,scale,box-shadow,color] duration-200 ease-[var(--ease-standard)] text-text-primary touch-manipulation appearance-none overflow-hidden hover:border-text-muted hover:bg-bg-card-hover press-scale focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
 
 export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPriorityClick }: Props) {
   const { sync, retry } = usePickSync(setId);
@@ -69,7 +69,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
               aria-hidden="true"
             />
             <div className="text-[length:var(--font-size-12)] font-bold mt-1 uppercase tracking-[0.5px]">{short}</div>
-            {active && pending && <Clock className="w-3 h-3 mx-auto mt-1" aria-hidden="true" />}
+            {active && pending && <Clock className="w-4 h-4 mx-auto mt-1" aria-hidden="true" />}
           </button>
         );
       })}

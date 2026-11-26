@@ -115,7 +115,7 @@ export default function ClashCards({ groups, days }: { groups: ConflictGroup[]; 
       ) : null}
       {groups.length > 0 ? (
         <View style={styles.clashHeading}>
-          <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
+          <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.clash.mark} />
           <Text style={styles.clashHeadingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {clashCount(groups.length)}
           </Text>
@@ -337,12 +337,12 @@ const useStyles = makeStyles((t) => ({
   },
   clashHeadingText: {
     ...typeStyle('label'),
-    color: t.colors.accent.coral,
+    color: t.colors.clash.mark,
   },
   clashCard: {
     borderRadius: t.radii.default,
     borderWidth: 1,
-    borderColor: t.colors.accent.coral,
+    borderColor: t.colors.clash.mark,
     borderLeftWidth: 4,
     backgroundColor: t.colors.bg.card,
     padding: t.spacing[3],

@@ -1,4 +1,4 @@
-import React, { memo, useRef, useState, useMemo } from 'react';
+import React, { memo, useEffect, useRef, useState, useMemo } from 'react';
 import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
@@ -78,25 +78,34 @@ function SetCard({
   // Dim ended sets only while the festival is running; before/after, every set reads the same.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [spotlightPos, setSpotlightPos] = useState({ x: '50%', y: '50%' });
 
-  // R12: Spotlight hover effect — mousemove listener updates CSS vars
-  // for radial gradient spotlight. Desktop-only via @media (hover: hover).
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setSpotlightPos({
-      x: `${x}px`,
-      y: `${y}px`,
-    });
-  };
-
-  const handleMouseLeave = () => {
-    // Reset to center on leave (will fade out via CSS transition)
-    setSpotlightPos({ x: '50%', y: '50%' });
-  };
+  // R12: spotlight follows the pointer. Writes CSS vars straight to the node
+  // (no React state, so no render per mousemove), one write per frame, and
+  // only for a real hover pointer.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    let frame = 0;
+    const setPos = (x: string, y: string) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        card.style.setProperty('--mx', x);
+        card.style.setProperty('--my', y);
+      });
+    };
+    const onMove = (e: MouseEvent) => {
+      const rect = card.getBoundingClientRect();
+      setPos(`${e.clientX - rect.left}px`, `${e.clientY - rect.top}px`);
+    };
+    const onLeave = () => setPos('50%', '50%');
+    card.addEventListener('mousemove', onMove);
+    card.addEventListener('mouseleave', onLeave);
+    return () => {
+      cancelAnimationFrame(frame);
+      card.removeEventListener('mousemove', onMove);
+      card.removeEventListener('mouseleave', onLeave);
+    };
+  }, []);
 
   const artistName = artistDisplayName(set, b2bSeparator);
   const subtitle = artistSubtitle(set, b2bSeparator);
@@ -166,17 +175,16 @@ function SetCard({
         // as an AI tell). Softer radius + density.
         'relative bg-bg-card border border-glass-border rounded-lg',
         'p-4 cursor-pointer overflow-hidden',
-        // Transition + will-change — token-eased, reduce-motion safe.
-        'transition-[background-color,box-shadow,transform] duration-200 ease-out will-change-transform',
-        'motion-reduce:transition-none motion-reduce:transform-none',
+        // Tailwind writes -translate-y-* to `translate`, so the list names `translate`.
+        'transition-[background-color,box-shadow,translate] duration-[var(--duration-med)] ease-[var(--ease-out)]',
+        'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         // Hover — gentle lift + surface shift + light glow (no heavy drop shadow).
         // R12: Aqua spotlight effect with 200ms ease-out transition.
         'hover:bg-bg-card-hover hover:-translate-y-0.5',
         'hover:shadow-[0_0_12px_var(--color-aqua-a25),0_0_1px_var(--color-aqua-a4)]',
-        'transition-shadow duration-200 ease-out',
         // R12: Radial spotlight gradient via ::after pseudo-element.
         'after:content-[""] after:absolute after:inset-0 after:rounded-[inherit]',
-        'after:opacity-0 after:transition-opacity after:duration-200 after:pointer-events-none',
+        'after:opacity-0 after:transition-opacity after:duration-[var(--duration-med)] after:pointer-events-none',
         'after:pointer-events-none',
         'hover:after:opacity-100',
         // R19: Animated gradient border when set is live (single featured card on screen).
@@ -188,17 +196,8 @@ function SetCard({
         // Conflict marker class (for tests + potential styling)
         hasConflict && 'has-conflict',
       )}
-      style={
-        {
-          // R12: CSS vars for radial spotlight gradient
-          '--mx': spotlightPos.x,
-          '--my': spotlightPos.y,
-        } as React.CSSProperties
-      }
       data-testid="set-card"
       data-artist={artistName}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
     >
       {/* Click/keyboard target — positioned absolute to fill the card so the
           outer div can stay non-interactive (avoids nested-interactive axe
@@ -308,7 +307,7 @@ function SetCard({
         )}
         {myNote && (
           <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
-            <StickyNote className="w-3.5 h-3.5" aria-hidden="true" />
+            <StickyNote className="w-4 h-4" aria-hidden="true" />
           </span>
         )}
         {hasConflict && (
@@ -321,7 +320,7 @@ function SetCard({
             )}
             title={clashLabel}
           >
-            <AlertTriangle className="w-3 h-3 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
             <span className="max-w-full truncate">{clashLabel}</span>
           </span>
         )}
@@ -332,7 +331,7 @@ function SetCard({
             title={move.line}
             className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
           >
-            <ArrowRightLeft className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <ArrowRightLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
             {move.chip}
           </span>
         )}
@@ -367,17 +366,17 @@ function SetCard({
                     'flex items-center justify-center',
                     'bg-[var(--color-overlay-3)] border border-border-light',
                     'text-sm text-text-muted cursor-pointer',
-                    'transition-[transform,box-shadow,background,border-color,color] duration-200 ease-out',
+                    'transition-[scale,box-shadow,background,border-color,color] duration-100 ease-[var(--ease-out)]',
                     'hover:border-text-secondary hover:bg-[var(--color-overlay-5)]',
                     'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-[-2px]',
-                    'active:scale-[0.92] motion-reduce:transform-none',
+                    'press-scale',
                     // Active priority states — static glow (mobile keeps these
                     // static for list-scroll perf; no infinite pulse animation).
                     active &&
                       priKey === 'must' && [
                         'active-must',
                         // Fill = coral-strong so white label clears WCAG AA (white on
-                        // #ff3366 is only 3.55:1); brand coral #ff3366 stays as the
+                        // brand coral is only 3.55:1); brand coral stays as the
                         // rim border + glow halo for the "hot must-pick" identity.
                         'bg-accent-coral-strong text-text-on-accent border-priority-must',
                         'shadow-[var(--shadow-glow-coral),0_0_0_1px_var(--color-coral-a3)]',
@@ -421,7 +420,7 @@ function SetCard({
                   <span className={cn('text-xs font-semibold', !active && 'text-text-secondary')}>
                     {PRIORITY_SYMBOLS[p].short}
                   </span>
-                  {pending && <Clock className="w-3 h-3 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
+                  {pending && <Clock className="w-4 h-4 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
                 </button>
               );
             })}
@@ -442,7 +441,7 @@ function SetCard({
 
       {showPicks && pickSync?.state === 'failed' && (
         <div className="relative z-[2] mt-2 inline-flex items-center gap-2 text-xs font-medium text-accent-amber">
-          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+          <AlertTriangle className="w-4 h-4" aria-hidden="true" />
           <span>Pick not saved.</span>
           <button
             type="button"

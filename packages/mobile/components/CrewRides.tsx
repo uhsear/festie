@@ -231,7 +231,7 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
               accessibilityRole="button"
               accessibilityLabel="Cancel ride form"
             >
-              <Ionicons name="close" size={18} color={t.colors.text.secondary} />
+              <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
             </TouchableOpacity>
           </View>
           <TextInput
@@ -361,9 +361,9 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
           accessibilityRole="button"
           accessibilityLabel="Post a ride"
         >
-          <Ionicons name="car-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="car-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.toggleText}>Post a ride</Text>
-          <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         </TouchableOpacity>
       )}
 
@@ -391,7 +391,7 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
           return (
             <Animated.View key={offer.id} entering={entering} style={styles.itemRow}>
               <View style={styles.iconBadge}>
-                <Ionicons name="car" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="car" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               </View>
               <View style={styles.itemBody}>
                 <Text style={styles.itemLabel} numberOfLines={2}>
@@ -444,7 +444,7 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
                   accessibilityRole="button"
                   accessibilityLabel={`Edit ride: ${title}`}
                 >
-                  <Ionicons name="create-outline" size={16} color={t.colors.text.secondary} />
+                  <Ionicons name="create-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
                 </TouchableOpacity>
               ) : null}
               {canRemove ? (
@@ -455,7 +455,7 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ride: ${title}`}
                 >
-                  <Ionicons name="trash-outline" size={16} color={t.colors.accent.coral} />
+                  <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
                 </TouchableOpacity>
               ) : null}
             </Animated.View>

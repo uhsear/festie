@@ -221,7 +221,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
     <View style={styles.wrap}>
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <Ionicons name="navigate-circle-outline" size={20} color={t.colors.accent.aqua} />
+          <Ionicons name="navigate-circle-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{LIVE_SHARE_COPY.title}</Text>
@@ -450,7 +450,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.primary,
   },
   bannerSub: {
-    ...typeStyle('caption'),
+    ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.secondary,
   },
   notice: {

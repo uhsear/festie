@@ -547,7 +547,7 @@ export default function TimelineScreen() {
             <Text style={styles.earlierText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               Earlier today ({item.count})
             </Text>
-            <Ionicons name={earlierOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+            <Ionicons name={earlierOpen ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.text.secondary} />
           </TouchableOpacity>
         );
       }
@@ -586,6 +586,7 @@ export default function TimelineScreen() {
       earlierOpen,
       currentFestival?.b2bSeparator,
       t.colors.text.secondary,
+      t.iconSize.sm,
       t.colors.text.muted,
     ],
   );

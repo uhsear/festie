@@ -630,7 +630,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
           <p>{banner.text}</p>
           {banner.kind === 'stale' && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={reloadAfterNotice} className="px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua text-bg-primary text-sm font-medium">
+              <button type="button" onClick={reloadAfterNotice} className="px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-sm font-medium">
                 Reload
               </button>
               <button type="button" onClick={() => void showTheirVersion()} className="px-3 py-1.5 min-h-11 rounded-xl border border-glass-border text-sm text-text-primary">
@@ -640,7 +640,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
           )}
           {banner.kind === 'restore' && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={restoreEdits} className="px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua text-bg-primary text-sm font-medium">
+              <button type="button" onClick={restoreEdits} className="px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-sm font-medium">
                 Restore my edits
               </button>
               <button type="button" onClick={dropKeptEdits} className="px-3 py-1.5 min-h-11 rounded-xl border border-glass-border text-sm text-text-primary">
@@ -867,7 +867,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
           <button
             type="button"
             onClick={() => setAdminSearch({ tab: 'festivals', view: 'edit' })}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
             New festival

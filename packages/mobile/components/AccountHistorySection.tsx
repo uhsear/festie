@@ -100,7 +100,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   if (error && !data) {
     return (
       <View style={[styles.card, styles.centered]}>
-        <Ionicons name="cloud-offline-outline" size={28} color={t.colors.text.secondary} />
+        <Ionicons name="cloud-offline-outline" size={t.iconSize.lg} color={t.colors.text.secondary} />
         <Text style={styles.emptyText}>{error}</Text>
         <TouchableOpacity
           onPress={() => setReload((n) => n + 1)}
@@ -110,7 +110,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.retry}
         >
-          <Ionicons name="refresh" size={14} color={t.colors.accent.aqua} style={styles.retryIcon} />
+          <Ionicons name="refresh" size={t.iconSize.compact} color={t.colors.accent.aqua} style={styles.retryIcon} />
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -126,7 +126,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
     seenMost.length > 0 ? (
       <View style={styles.card}>
         <View style={styles.cardHead}>
-          <Ionicons name="repeat-outline" size={14} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
+          <Ionicons name="repeat-outline" size={t.iconSize.compact} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
           <Text style={styles.cardLabel} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Artists you&apos;ve seen most
           </Text>
@@ -146,7 +146,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
     const empty = (
       <View style={[styles.card, styles.centered]}>
         <View style={styles.emptyIcon}>
-          <Ionicons name="time-outline" size={26} color={t.colors.accent.aqua} />
+          <Ionicons name="time-outline" size={t.iconSize.lg} color={t.colors.accent.aqua} />
         </View>
         <Text style={styles.emptyTitle}>No history yet</Text>
         <Text style={styles.emptyText}>Rate sets at a festival and your year-over-year timeline builds here.</Text>
@@ -186,7 +186,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
       {byFestival.length > 0 ? (
         <View style={styles.card}>
           <View style={styles.cardHead}>
-            <Ionicons name="calendar-outline" size={14} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
+            <Ionicons name="calendar-outline" size={t.iconSize.compact} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
             <Text style={styles.cardLabel}>Your festival timeline</Text>
           </View>
           {byFestival.map((f, i) => {
@@ -223,7 +223,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
       {topArtists.length > 0 ? (
         <View style={styles.card}>
           <View style={styles.cardHead}>
-            <Ionicons name="trophy-outline" size={14} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
+            <Ionicons name="trophy-outline" size={t.iconSize.compact} color={t.colors.text.secondary} style={styles.cardHeadIcon} />
             <Text style={styles.cardLabel}>Your all-time top artists</Text>
           </View>
           {topArtists.map((a, i) => (
@@ -233,7 +233,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
               </View>
               <ArtistNameButton name={a.artist} textStyle={styles.artistName} numberOfLines={2} />
               <View style={styles.artistMetaWrap}>
-                <Ionicons name="flame" size={11} color={t.colors.accent.amber} />
+                <Ionicons name="flame" size={t.iconSize.xs} color={t.colors.accent.amber} />
                 <Text style={styles.artistMeta}>
                   {a.bestRating} · {a.timesRated}×
                 </Text>
@@ -266,7 +266,7 @@ function Stat({
       <View style={styles.statHead}>
         <Ionicons
           name={icon}
-          size={12}
+          size={t.iconSize.xs}
           color={accent ? t.colors.accent.aqua : t.colors.text.secondary}
           style={styles.statIcon}
         />
@@ -284,7 +284,7 @@ function MetaChip({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: 
   const styles = useStyles();
   return (
     <View style={styles.metaChip}>
-      <Ionicons name={icon} size={11} color={t.colors.text.secondary} style={styles.metaChipIcon} />
+      <Ionicons name={icon} size={t.iconSize.xs} color={t.colors.text.secondary} style={styles.metaChipIcon} />
       <Text style={styles.metaChipText} numberOfLines={1}>
         {text}
       </Text>

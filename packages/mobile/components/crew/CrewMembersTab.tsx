@@ -169,11 +169,11 @@ export default function CrewMembersTab({
                   accessibilityState={{ expanded: managing }}
                 >
                   <Text style={styles.manageButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Manage</Text>
-                  <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
+                  <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 </TouchableOpacity>
               ) : rowIsOwner ? (
                 <View accessible accessibilityLabel="Owner">
-                  <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
+                  <Ionicons name="star" size={t.iconSize.sm} color={t.colors.aquaAlpha[40]} />
                 </View>
               ) : null}
             </View>
@@ -191,7 +191,7 @@ export default function CrewMembersTab({
           {inviteCard ? <View style={styles.inviteCardSpacer}>{inviteCard}</View> : null}
           {crew.inviteCode ? (
             <View style={styles.inviteBar}>
-              <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
+              <Ionicons name="key-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               <Text style={styles.inviteLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Invite code</Text>
               <Text style={styles.inviteCode} testID="crew-invite-code" maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
                 {crew.inviteCode}
@@ -212,7 +212,7 @@ export default function CrewMembersTab({
                   accessibilityRole="button"
                   accessibilityLabel="Share invite link"
                 >
-                  <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+                  <Ionicons name="share-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                   <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Share</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -223,7 +223,7 @@ export default function CrewMembersTab({
                   accessibilityRole="button"
                   accessibilityLabel="Show QR code"
                 >
-                  <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
+                  <Ionicons name="qr-code-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                   <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>QR code</Text>
                 </TouchableOpacity>
                 {isOwner ? (
@@ -239,7 +239,7 @@ export default function CrewMembersTab({
                     {regenBusy ? (
                       <ActivityIndicator size="small" color={t.colors.accent.aqua} />
                     ) : (
-                      <Ionicons name="refresh" size={16} color={t.colors.accent.aqua} />
+                      <Ionicons name="refresh" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                     )}
                     <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>New code</Text>
                   </TouchableOpacity>
@@ -284,14 +284,14 @@ export default function CrewMembersTab({
             accessibilityRole="button"
             accessibilityLabel="Reform this crew for another festival"
           >
-            <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="calendar-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
             <Text style={styles.overlapToggleText}>
               {reformBusy ? 'Reforming…' : 'Reform for another festival'}
             </Text>
             {reformBusy ? (
               <ActivityIndicator size="small" color={t.colors.accent.aqua} />
             ) : (
-              <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+              <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
             )}
           </TouchableOpacity>
 
@@ -351,11 +351,11 @@ export default function CrewMembersTab({
                 accessibilityRole="button"
                 accessibilityLabel="Edit crew totem"
               >
-                <Ionicons name="flag-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="flag-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 <Text style={styles.overlapToggleText}>
                   {crew.totem_emoji || crew.totem_name ? 'Edit crew totem' : crewCopy.addTotem}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               </TouchableOpacity>
             )
           ) : null}
@@ -406,9 +406,9 @@ export default function CrewMembersTab({
                 accessibilityRole="button"
                 accessibilityLabel="Rename crew"
               >
-                <Ionicons name="pencil-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="pencil-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 <Text style={styles.overlapToggleText}>Rename crew</Text>
-                <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               </TouchableOpacity>
             )
           ) : null}
@@ -461,7 +461,7 @@ export default function CrewMembersTab({
                 accessibilityRole="button"
                 accessibilityLabel="Add member by username (admin)"
               >
-                <Ionicons name="person-add-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="person-add-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 <Text style={styles.overlapToggleText}>Add member by username (admin)</Text>
               </TouchableOpacity>
             )
@@ -478,7 +478,7 @@ export default function CrewMembersTab({
               accessibilityRole="button"
               accessibilityLabel="Leave crew"
             >
-              <Ionicons name="exit-outline" size={16} color={t.colors.text.danger} />
+              <Ionicons name="exit-outline" size={t.iconSize.sm} color={t.colors.text.danger} />
               <Text style={styles.dangerButtonText}>Leave crew</Text>
             </TouchableOpacity>
           </View>
@@ -492,7 +492,7 @@ export default function CrewMembersTab({
                 accessibilityRole="button"
                 accessibilityLabel="Delete crew"
               >
-                <Ionicons name="trash-outline" size={16} color={t.colors.text.danger} />
+                <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.text.danger} />
                 <Text style={styles.dangerButtonText}>Delete crew</Text>
               </TouchableOpacity>
               <Text style={styles.formHint}>Deletes the crew for everyone.</Text>

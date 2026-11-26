@@ -43,7 +43,7 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
   return (
     <span
       data-testid="schedule-status-line"
-      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium text-text-muted"
+      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted"
     >
       {updated && (
         <span data-testid="last-synced-badge" className={cn(offlineReady && 'text-accent-amber')}>
@@ -55,7 +55,7 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
       <span role="status" aria-live="polite" className="inline-flex items-center">
         {status && Icon && (
           <span data-testid="save-status-chip" className={cn('inline-flex items-center gap-1', amber && 'text-accent-amber')}>
-            <Icon className={cn('w-3 h-3', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
+            <Icon className={cn('w-4 h-4', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
             {status.label}
           </span>
         )}

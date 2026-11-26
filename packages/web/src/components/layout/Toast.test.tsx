@@ -24,6 +24,7 @@ function setupMockToast(
     message: string;
     type: 'success' | 'error' | 'warning' | 'info';
     onUndo?: () => void;
+    leaving?: boolean;
   }>,
 ) {
   mockUseToast.mockReturnValue({
@@ -112,6 +113,15 @@ describe('Toast', () => {
     expect(undoFn).toHaveBeenCalledOnce();
   });
 
+  it('does not run onUndo again while the toast is leaving', async () => {
+    const undoFn = vi.fn();
+    setupMockToast([{ id: '1', message: 'Removed', type: 'info', onUndo: undoFn, leaving: true }]);
+    const user = userEvent.setup();
+    render(<Toast />);
+    await user.click(screen.getByText('Undo'));
+    expect(undoFn).not.toHaveBeenCalled();
+  });
+
   it('styles Undo as a full-opacity 14px control', () => {
     setupMockToast([{ id: '1', message: 'Removed', type: 'info', onUndo: vi.fn() }]);
     render(<Toast />);
@@ -194,6 +204,33 @@ describe('toastError', () => {
     );
     await userEvent.setup().click(screen.getByText('go'));
     expect(screen.getByText('Too many tries. Wait 30 seconds and try again.', { selector: 'p' })).toBeInTheDocument();
+  });
+});
+
+describe('toast exit', () => {
+  it('plays the leave class, then unmounts after TOAST_EXIT_MS', async () => {
+    mockUseToast.mockImplementation(realUseToast);
+    function Caller() {
+      const { toast, removeToast, toasts } = realUseToast();
+      return (
+        <div>
+          <button onClick={() => toast('Gone soon', 'info', 0)}>add</button>
+          <button onClick={() => removeToast(toasts[0]?.id ?? '')}>remove</button>
+        </div>
+      );
+    }
+    render(
+      <ToastProvider>
+        <Caller />
+        <Toast />
+      </ToastProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByText('add'));
+    expect(screen.getByText('Gone soon', { selector: 'p' }).closest('.toast-enter')).not.toBeNull();
+    await user.click(screen.getByText('remove'));
+    expect(screen.getByText('Gone soon', { selector: 'p' }).closest('.toast-leave')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText('Gone soon', { selector: 'p' })).not.toBeInTheDocument());
   });
 });
 

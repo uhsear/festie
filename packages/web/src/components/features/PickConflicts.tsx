@@ -142,15 +142,15 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
         return (
           <article
             key={`${group.recommendedKeepId}-${gi}`}
-            className="rounded-lg border border-priority-must/40 bg-bg-card p-3"
+            className="rounded-lg border border-[var(--color-clash)] bg-bg-card p-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 shrink-0 text-priority-must" aria-hidden="true" />
+              <TriangleAlert className="h-4 w-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
               <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
               </h2>
               {planned && (
-                <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
+                <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 type-micro text-accent-aqua">
                   {COPY.clash.splitPlanned}
                 </span>
               )}
@@ -197,22 +197,22 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       </button>
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]',
+                          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 type-micro',
                           chip.className,
                         )}
                       >
-                        <PriorityIcon priority={pick.priority} className="h-3 w-3" filled />
+                        <PriorityIcon priority={pick.priority} className="h-4 w-4" filled />
                         {PRIORITY_SYMBOLS[pick.priority].short}
                       </span>
                       {isKeep && (
-                        <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
+                        <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 type-micro text-accent-aqua">
                           {COPY.clash.suggested}
                         </span>
                       )}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                      <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
                       <span className="tabular-nums whitespace-nowrap">{timeRange}</span>
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>

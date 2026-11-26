@@ -191,7 +191,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
                 className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold"
                 style={{ color: PRIORITY_COLOR[p.value] }}
               >
-                <PriorityIcon priority={p.value} className="w-3 h-3" filled />
+                <PriorityIcon priority={p.value} className="w-4 h-4" filled />
                 {PRIORITY_LABELS[p.value]}
               </span>
             ))}

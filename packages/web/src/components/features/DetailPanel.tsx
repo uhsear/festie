@@ -224,10 +224,10 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
       {...(isLg ? {} : { snapPoints: [0.5, 1], activeSnapPoint: snap, setActiveSnapPoint: setSnap })}
     >
       <Drawer.Portal>
-        {/* R4: scrim rgba(0,0,0,0.6) per spec (was bg-black/50 = 0.5) */}
+        {/* R4: scrim is black at 60% (was bg-black/50 = 50%) */}
         <Drawer.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60" />
-        {/* R4: opaque glass-edged surface — #1d1d1d fill + blur(20px) +
-            1px rgba(255,255,255,0.08) border + inset top highlight.
+        {/* R4: opaque glass-edged surface: dark fill, blur(20px),
+            1px light border and an inset top highlight.
             Radii: 24px top-corners on mobile sheet, 16px left-only on the lg side panel.
             detail-glass utility owns all four glass properties; rounded-* owns radii. */}
         <Drawer.Content

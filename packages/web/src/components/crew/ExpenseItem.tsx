@@ -70,7 +70,7 @@ export default function ExpenseItem({
         <div className="flex items-center gap-2">
           <div className="font-semibold text-text-primary line-clamp-2 break-words">{description}</div>
           {planned && (
-            <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-accent-aqua/15 text-accent-aqua border border-accent-aqua/40">
+            <span className="shrink-0 px-1.5 py-0.5 rounded-full type-micro bg-accent-aqua/15 text-accent-aqua border border-accent-aqua/40">
               Planned
             </span>
           )}

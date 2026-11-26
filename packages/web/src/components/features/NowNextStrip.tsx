@@ -59,11 +59,11 @@ export default function NowNextStrip() {
         <span
           className={
             isNow
-              ? 'inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.04em] text-accent-coral'
+              ? 'inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.04em] text-live-text'
               : 'text-xs font-semibold uppercase tracking-[0.04em] text-text-secondary'
           }
         >
-          {isNow && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-accent-coral" />}
+          {isNow && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-live-fill" />}
           {isNow ? 'NOW' : 'UP NEXT'}
         </span>
         <span className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ export default function NowNextStrip() {
           <span
             aria-hidden="true"
             data-testid="now-next-progress"
-            className="absolute bottom-0 left-0 h-0.5 bg-accent-coral"
+            className="absolute bottom-0 left-0 h-0.5 bg-live-fill"
             style={{ width: `${progress}%` }}
           />
         )}

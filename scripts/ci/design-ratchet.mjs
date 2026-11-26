@@ -3,12 +3,12 @@
 // entry, or when an entry has no reason. Later items lower the counts, then delete entries.
 // Hex and rgb entries are the exception: they end as a named exception list, not at zero.
 //
-//   node scripts/ci/design-ratchet.mjs <web|mobile|all>           check
-//   node scripts/ci/design-ratchet.mjs <web|mobile|all> --write   set every max to today's count
+//   node scripts/ci/design-ratchet.mjs <web|mobile|server|all>           check
+//   node scripts/ci/design-ratchet.mjs <web|mobile|server|all> --write   set every max to today's count
 //
 // ESLint (packages/*/eslint.config.js) gives instant feedback on files outside the allowlist.
 // This check is the count guard, so it also covers CSS and the allowlisted files.
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,6 +30,16 @@ export const TARGETS = {
       'text-px': { re: /\btext-\[\d/g, seed: 'Offender today. TK-19 removes it, then the entry is deleted.' },
       duration: { re: /\bduration-(\d|\[)/g, seed: 'Offender today. DP-47 moves it to a motion token, then the entry is deleted.' },
       ease: { re: /\bease-\[ease/g, seed: 'Offender today. DP-47 moves it to a motion token, then the entry is deleted.' },
+    },
+  },
+  // Server-rendered HTML that lives inside a route or mail module. Static pages are covered by tests/static-pages.test.ts.
+  server: {
+    dir: '.',
+    allowlist: 'scripts/ci/design-ratchet.server.allowlist.json',
+    files: ['routes/email-auth.ts', 'lib/email.ts'],
+    rules: {
+      hex: { re: HEX, seed: 'Offender today. Take the value from lib/design-css.ts instead.' },
+      rgb: { re: /\brgba?\(/g, seed: 'Offender today. Take the value from lib/design-css.ts instead.' },
     },
   },
   mobile: {
@@ -74,8 +84,11 @@ export function scan(name, repo = REPO) {
   const target = TARGETS[name];
   const pkg = join(repo, target.dir);
   const counts = new Map();
-  for (const root of target.roots ?? ['']) {
-    for (const abs of walk(join(pkg, root), target)) {
+  const paths = target.files
+    ? [target.files.map((f) => join(pkg, f)).filter(existsSync)]
+    : (target.roots ?? ['']).map((root) => walk(join(pkg, root), target));
+  for (const group of paths) {
+    for (const abs of group) {
       const file = relative(pkg, abs).split('\\').join('/');
       const text = readFileSync(abs, 'utf8');
       for (const [rule, { re }] of Object.entries(target.rules)) {
@@ -130,7 +143,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [which, flag] = process.argv.slice(2);
   const names = which === 'all' ? Object.keys(TARGETS) : [which];
   if (!names.every((n) => TARGETS[n])) {
-    console.error('Usage: node scripts/ci/design-ratchet.mjs <web|mobile|all> [--write]');
+    console.error('Usage: node scripts/ci/design-ratchet.mjs <web|mobile|server|all> [--write]');
     process.exit(2);
   }
   let failed = false;

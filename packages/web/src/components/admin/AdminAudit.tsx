@@ -170,7 +170,7 @@ export default function AdminAudit() {
           className="w-full px-3 py-2 min-h-11 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
         {parsed.errors.length > 0 && (
-          <div role="alert" className="text-sm text-accent-coral space-y-1">
+          <div role="alert" className="text-sm text-text-danger space-y-1">
             {parsed.errors.map((message) => (
               <p key={message}>{message}</p>
             ))}

@@ -96,7 +96,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPh
     return (
       <View style={styles.editBox}>
         <View style={styles.editHeader}>
-          <Ionicons name="images" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="images" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.editTitle}>Crew photos</Text>
           <TouchableOpacity
             onPress={cancel}
@@ -105,7 +105,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPh
             accessibilityRole="button"
             accessibilityLabel="Cancel editing crew photos"
           >
-            <Ionicons name="close" size={18} color={t.colors.text.secondary} />
+            <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         <Text style={styles.hint}>Paste a shared album link (Google Photos, Apple shared album, etc.).</Text>
@@ -163,7 +163,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPh
           accessibilityRole="button"
           accessibilityLabel="Add a shared photo album"
         >
-          <Ionicons name="images" size={16} color={t.colors.text.muted} />
+          <Ionicons name="images" size={t.iconSize.sm} color={t.colors.text.muted} />
           <View style={styles.cardInfo}>
             <Text style={styles.cardPlaceholder}>Add a shared photo album</Text>
           </View>
@@ -176,7 +176,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPh
   return (
     <>
       <View style={[styles.card, styles.cardSet]}>
-        <Ionicons name="images" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="images" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <View style={styles.cardInfo}>
           <Text style={styles.cardLabel} numberOfLines={1}>
             Crew photos
@@ -311,6 +311,6 @@ const useStyles = makeStyles((t) => ({
   },
   errorText: {
     ...typeStyle('caption'),
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
 }));

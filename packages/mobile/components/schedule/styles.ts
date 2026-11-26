@@ -1,3 +1,4 @@
+import { elevation } from '@festie/shared/tokens';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
 
 export const useStyles = makeStyles((t) => ({
@@ -132,11 +133,7 @@ export const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.accent.aqua,
     minHeight: 44,
     // Lift the pill above the surface so it reads as floating over the list.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    ...elevation.low,
   },
   scrollTopText: {
     ...typeStyle('label', 700),

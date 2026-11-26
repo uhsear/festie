@@ -58,7 +58,7 @@ export const Utility: Story = {
   args: {
     children: 'Install App',
     variant: 'utility',
-    icon: <Download className="w-3 h-3" />,
+    icon: <Download className="w-4 h-4" />,
   },
 };
 
@@ -138,7 +138,7 @@ export const WithIcon: Story = {
     children: 'Retry',
     variant: 'primary',
     size: 'sm',
-    icon: <RefreshCw className="w-3.5 h-3.5" />,
+    icon: <RefreshCw className="w-4 h-4" />,
   },
 };
 
@@ -146,7 +146,7 @@ export const GhostWithIcon: Story = {
   args: {
     children: 'Support Me',
     variant: 'ghost',
-    icon: <Heart className="w-3.5 h-3.5" />,
+    icon: <Heart className="w-4 h-4" />,
   },
 };
 
@@ -159,7 +159,7 @@ export const AllVariants: Story = {
       <Button variant="danger">Danger</Button>
       <Button variant="ghost">Ghost</Button>
       <Button variant="secondary">Secondary</Button>
-      <Button variant="utility" icon={<Download className="w-3 h-3" />}>Install</Button>
+      <Button variant="utility" icon={<Download className="w-4 h-4" />}>Install</Button>
       <Button variant="delete" aria-label="Delete" icon={<Trash2 className="w-4 h-4" />} />
     </div>
   ),

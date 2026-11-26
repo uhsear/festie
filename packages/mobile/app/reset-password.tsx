@@ -139,7 +139,7 @@ export default function ResetPasswordScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.inner}>
-          <Ionicons name="time-outline" size={56} color={t.colors.text.muted} style={styles.icon} />
+          <Ionicons name="time-outline" size={t.iconSize.hero} color={t.colors.text.muted} style={styles.icon} />
           <Text style={styles.title}>{AUTH_COPY.expiredTitle}</Text>
           <Text style={styles.subtitle}>{AUTH_COPY.expiredBody}</Text>
           <Button
@@ -164,7 +164,7 @@ export default function ResetPasswordScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.inner}>
-          <Ionicons name="checkmark-circle" size={56} color={t.colors.accent.aqua} style={styles.icon} />
+          <Ionicons name="checkmark-circle" size={t.iconSize.hero} color={t.colors.accent.aqua} style={styles.icon} />
           <Text style={styles.title}>Password reset</Text>
           <Text style={styles.subtitle}>Sign in with your new password.</Text>
           <Button
@@ -218,7 +218,7 @@ export default function ResetPasswordScreen() {
             accessibilityRole="button"
             accessibilityLabel={showPw ? 'Hide password' : 'Show password'}
           >
-            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.colors.text.secondary} />
+            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={t.iconSize.md} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         <PasswordStrengthMeter password={newPassword} />

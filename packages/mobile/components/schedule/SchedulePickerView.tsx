@@ -42,7 +42,7 @@ export default function SchedulePickerView({
             accessibilityRole="button"
             accessibilityLabel={`Back to ${currentFestival.name}`}
           >
-            <Ionicons name="close" size={20} color={t.colors.text.secondary} />
+            <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.secondary} />
           </TouchableOpacity>
         ) : undefined
       }

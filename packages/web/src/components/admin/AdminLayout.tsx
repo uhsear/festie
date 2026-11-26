@@ -30,7 +30,7 @@ export default function AdminLayout({ title, description, onTabChange, activeTab
   return (
     <div className="flex flex-col min-h-full bg-bg-primary">
       {envLabel && (
-        <div role="status" className="bg-accent-amber text-bg-primary text-sm font-semibold text-center py-1">
+        <div role="status" className="bg-accent-amber text-[var(--text-on-light-accent)] text-sm font-semibold text-center py-1">
           {envLabel} environment. Changes here do not reach festie.us.
         </div>
       )}
@@ -87,7 +87,7 @@ export default function AdminLayout({ title, description, onTabChange, activeTab
                   'flex w-full items-center gap-2 text-left px-3 py-2.5 min-h-11 rounded-xl transition-colors',
                   'font-medium text-sm [&_svg]:w-4 [&_svg]:h-4 [&_svg]:flex-shrink-0',
                   activeTab === tab.id
-                    ? 'bg-accent-aqua text-bg-primary'
+                    ? 'bg-accent-aqua text-[var(--text-on-light-accent)]'
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/20',
                 )}
               >

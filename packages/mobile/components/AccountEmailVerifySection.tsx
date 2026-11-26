@@ -94,7 +94,7 @@ export default function AccountEmailVerifySection() {
       <View style={styles.inner}>
         <View style={styles.row}>
           <View style={styles.rowIcon}>
-            <Ionicons name="mail-unread-outline" size={20} color={t.colors.accent.amber} />
+            <Ionicons name="mail-unread-outline" size={t.iconSize.md} color={t.colors.accent.amber} />
           </View>
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle}>Verify your email</Text>
@@ -125,7 +125,7 @@ export default function AccountEmailVerifySection() {
 
         {sent && !error ? (
           <View style={styles.notice} accessibilityLiveRegion="polite">
-            <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.noticeIcon} />
+            <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.noticeIcon} />
             <Text style={styles.noticeText}>Sent — check your inbox (and spam) for the link.</Text>
           </View>
         ) : (

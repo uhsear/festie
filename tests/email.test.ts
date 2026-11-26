@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { describe, it, mock } from 'node:test';
 import { NOTIFICATION_TYPE_ROWS } from '../packages/shared/src/utils/notificationSettings.js';
+import { emailColors } from '../lib/design-css.js';
 import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail, sendPublishDecisionEmail, verifyEmailUrl } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
@@ -281,7 +283,7 @@ describe('email: sendPasswordResetEmail', () => {
     assert.equal(capturedArgs.subject, 'Reset your Festie password');
     assert.ok(capturedArgs.html.includes('alice'), 'HTML should contain username');
     assert.ok(capturedArgs.html.includes('https://festie.us/reset/token123'), 'HTML should contain reset URL');
-    assert.ok(capturedArgs.html.includes('Reset Password'), 'HTML should contain button label');
+    assert.ok(capturedArgs.html.includes('Reset password'), 'HTML should contain button label');
     assert.ok(capturedArgs.html.includes('60 minutes'), 'HTML should mention expiry');
     assert.ok(capturedArgs.text.includes('alice'), 'Plain text should contain username');
     assert.ok(capturedArgs.text.includes('https://festie.us/reset/token123'), 'Plain text should contain reset URL');
@@ -355,7 +357,7 @@ describe('email: sendVerificationEmail', () => {
     assert.equal(capturedArgs.subject, 'Verify your Festie email');
     assert.ok(capturedArgs.html.includes('bob'), 'HTML should contain username');
     assert.ok(capturedArgs.html.includes('https://festie.us/verify/token456'), 'HTML should contain verify URL');
-    assert.ok(capturedArgs.html.includes('Verify Email'), 'HTML should contain button label');
+    assert.ok(capturedArgs.html.includes('Verify email'), 'HTML should contain button label');
     assert.ok(capturedArgs.html.includes('24 hours'), 'HTML should mention expiry');
     assert.ok(capturedArgs.text.includes('bob'), 'Plain text should contain username');
     assert.ok(capturedArgs.text.includes('https://festie.us/verify/token456'), 'Plain text should contain verify URL');
@@ -448,7 +450,7 @@ describe('email: layout and copy', () => {
     const { html } = (send.mock.calls as any[])[0].arguments[0];
     assert.doesNotMatch(html, /width="480"/);
     assert.match(html, /max-width:480px/);
-    assert.match(html, /<title>Festie: Verify Your Email<\/title>/);
+    assert.match(html, /<title>Festie: Verify your email<\/title>/);
   });
 
   it('the crew re-form fallback link lands on the crew screen', async () => {
@@ -676,13 +678,14 @@ describe('email: password reset names the username', () => {
       _client,
     });
     const msg = sent()[0];
-    assert.ok(msg.html.includes('Your username is <strong style="color:#e4e4e7">dana</strong>.'));
+    assert.ok(msg.html.includes(`Your username is <strong style="color:${emailColors.text}">dana</strong>.`));
+    assert.ok(!msg.html.includes('Hey '), 'the username appears once');
     assert.ok(msg.text.includes('Your username is dana.'));
   });
 });
 
 describe('email: readable footer and fallback text', () => {
-  it('uses #a1a1aa, not the faint rgba greys', async () => {
+  it('uses the muted token, not the faint rgba greys', async () => {
     const { _client, sent } = captureClient();
     await sendPasswordResetEmail({
       to: 'contrast@example.com',
@@ -693,8 +696,8 @@ describe('email: readable footer and fallback text', () => {
       _client,
     });
     const { html } = sent()[0];
-    assert.ok(html.includes('color:#a1a1aa;font-size:12px'), 'footer');
-    assert.ok(html.includes('color:#a1a1aa;font-size:13px'), 'link fallback line');
+    assert.ok(html.includes(`color:${emailColors.textMuted};font-size:12px`), 'footer');
+    assert.ok(html.includes(`color:${emailColors.textMuted};font-size:13px`), 'link fallback line');
     assert.ok(!html.includes('rgba(255,255,255,0.3)'));
     assert.ok(!html.includes('rgba(255,255,255,0.4)'));
   });
@@ -716,7 +719,7 @@ describe('email: sendSetTimesOutEmail', () => {
     assert.equal(ok, true);
     const msg = (send.mock.calls as any[])[0].arguments[0];
     assert.equal(msg.subject, 'EDC <Las Vegas> set times are out');
-    assert.ok(msg.html.includes('The set times for <strong style="color:#e4e4e7">EDC &lt;Las Vegas&gt;</strong> are out.'));
+    assert.ok(msg.html.includes(`The set times for <strong style="color:${emailColors.text}">EDC &lt;Las Vegas&gt;</strong> are out.`));
     assert.ok(msg.html.includes('Pick your sets and spot clashes before the weekend.'));
     assert.ok(msg.html.includes('See the schedule'));
     assert.ok(msg.html.includes('https://festie.test/?festival=edc%2027'));
@@ -740,7 +743,7 @@ describe('email: sendSetTimesOutEmail', () => {
     });
     const msg = (send.mock.calls as any[])[0].arguments[0];
     assert.equal(msg.subject, 'Wasteland: Friday and Saturday set times are out');
-    assert.ok(msg.html.includes('The Friday and Saturday set times for <strong style="color:#e4e4e7">Wasteland</strong> are out.'));
+    assert.ok(msg.html.includes(`The Friday and Saturday set times for <strong style="color:${emailColors.text}">Wasteland</strong> are out.`));
     assert.ok(msg.html.includes('Gates at &lt;noon&gt;.'));
     assert.ok(msg.text.includes('The Friday and Saturday set times for Wasteland are out.'));
     assert.ok(msg.text.includes('Gates at <noon>.'));
@@ -763,7 +766,7 @@ describe('email: sendDaysOutEmail', () => {
     assert.equal(ok, true);
     const msg = (send.mock.calls as any[])[0].arguments[0];
     assert.equal(msg.subject, 'Wasteland <2027> days are out');
-    assert.ok(msg.html.includes('The days for <strong style="color:#e4e4e7">Wasteland &lt;2027&gt;</strong> are out. See who plays which day. Set times come later.'));
+    assert.ok(msg.html.includes(`The days for <strong style="color:${emailColors.text}">Wasteland &lt;2027&gt;</strong> are out. See who plays which day. Set times come later.`));
     assert.ok(msg.html.includes('https://festie.test/?festival=wl%2027'));
     assert.ok(!msg.html.includes('<b>u</b>'));
     assert.ok(msg.text.includes('The days for Wasteland <2027> are out. See who plays which day. Set times come later.'));
@@ -789,5 +792,45 @@ describe('email: sendLineupDropEmail copy', () => {
     const msg = await send();
     assert.ok(msg.html.includes('Start picking your sets before tickets move.'));
     assert.equal(msg.subject, 'Fest lineup just dropped');
+  });
+});
+
+describe('email: brand shell', () => {
+  const config = createMockConfig();
+  const sendAll = async () => {
+    const { _client, sent } = captureClient();
+    const base = { to: 'brand@example.com', config, log: createMockLog(), _client };
+    await sendPasswordResetEmail({ ...base, username: 'u', resetUrl: 'https://festie.us/r?token=t' });
+    await sendVerificationEmail({ ...base, username: 'u', verifyUrl: 'https://festie.us/v?token=t' });
+    await sendEmailChangeConfirmEmail({ ...base, username: 'u', verifyUrl: 'https://festie.us/v?token=t' });
+    await sendEmailChangeNoticeEmail({ ...base, resetUrl: 'https://festie.us/r?token=t' });
+    await sendEmailChangedEmail(base);
+    await sendPublishDecisionEmail({ ...base, organizationName: 'Org', festivalName: 'Fest', decision: 'approved', note: '' });
+    return sent();
+  };
+
+  it('puts every template on solid token colours, the mark and the pill button', async () => {
+    const messages = await sendAll();
+    assert.equal(messages.length, 6);
+    for (const { html } of messages) {
+      assert.ok(html.includes(`bgcolor="${emailColors.ground}"`), 'bgcolor attribute for clients that drop CSS');
+      assert.ok(html.includes('<meta name="color-scheme" content="dark">'));
+      assert.ok(html.includes('<meta name="supported-color-schemes" content="dark">'));
+      assert.ok(/<img src="https:\/\/festie\.us\/icons\/email-mark\.png" width="40" height="40" alt="Festie"/.test(html));
+      if (html.includes('<a href')) assert.ok(html.includes('border-radius:999px'), 'pill button');
+      assert.ok(!/0a0a0f|e4e4e7|d4d4d8|a1a1aa|rgba\(/i.test(html), 'no legacy hex or rgba');
+      assert.ok(!html.includes('text-align:center'), 'left-aligned');
+    }
+  });
+
+  it('writes sentence-case button labels', async () => {
+    const html = (await sendAll()).map((m) => m.html).join(' ');
+    for (const label of ['Reset password', 'Verify email', 'Confirm new email', "This wasn't me"]) assert.ok(html.includes(`>${label}</a>`), label);
+  });
+
+  it('ships the hosted mark at 2x', async () => {
+    const { default: sharp } = await import('sharp');
+    const meta = await sharp(fileURLToPath(new URL('../public/icons/email-mark.png', import.meta.url))).metadata();
+    assert.deepEqual([meta.width, meta.height], [80, 80]);
   });
 });
