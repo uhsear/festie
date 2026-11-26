@@ -102,10 +102,10 @@ describe('Header', () => {
     expect(screen.getByText('FESTIE')).toBeInTheDocument();
   });
 
-  it('renders connection status indicator for signed-in users', () => {
+  it('hides the connection indicator while connected', () => {
     mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
     render(<Header />);
-    expect(screen.getByRole('status', { name: 'Connected' })).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByText('Offline')).not.toBeInTheDocument();
   });
 
@@ -279,11 +279,21 @@ describe('Header', () => {
     });
   });
 
-  it('renders Support Me link', () => {
+  it('has no Support Me link in the header (it lives in Account help)', () => {
     render(<Header />);
-    const link = screen.getByText(/Support Me/);
-    expect(link).toBeInTheDocument();
-    expect(link.closest('a')).toHaveAttribute('href', 'https://paypal.me/uhsear');
+    expect(screen.queryByText(/Support Me/)).not.toBeInTheDocument();
+    expect(document.querySelector('a[href*="paypal"]')).toBeNull();
+  });
+
+  it('keeps a constant header height: no shrink class after scrolling', () => {
+    const main = document.createElement('div');
+    main.id = 'main-content';
+    document.body.appendChild(main);
+    render(<Header />);
+    main.scrollTop = 400;
+    main.dispatchEvent(new Event('scroll'));
+    expect(document.querySelector('header')).not.toHaveClass('shrunk');
+    main.remove();
   });
 
   it('renders FestivalModeToggle', () => {
