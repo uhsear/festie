@@ -393,6 +393,9 @@ jobs:
       # Legal pages ship on every deploy, so a [TODO placeholder must never reach main.
       - name: Legal text has no placeholders
         run: npm run check:legal
+      # Launch-surface grounds must match the token, and the design ratchet's planted-offender tests must pass.
+      - name: Ground colour and design ratchet
+        run: npm run check:ground && npm run check:design
 
       # ── API schema drift gate ────────────────────────────────────────────────
       # Save the committed spec BEFORE regenerating so oasdiff can compare the
