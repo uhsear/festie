@@ -26,10 +26,8 @@ export default function PullRefreshIndicator({ progress, isRefreshing }: PullRef
         opacity: isRefreshing ? 1 : opacity,
         scale: isRefreshing ? 1 : scale,
       }}
-      transition={{
-        opacity: { duration: 0.2 },
-        scale: { duration: 0.2 },
-      }}
+      // The finger drives opacity and scale, so a tween would lag it; ease only on release.
+      transition={{ duration: isRefreshing ? 0.12 : 0 }}
     >
       <div className="relative w-10 h-10">
         {/* Glass background circle */}
@@ -55,65 +53,34 @@ export default function PullRefreshIndicator({ progress, isRefreshing }: PullRef
             className="text-border opacity-30"
           />
 
-          {/* Progress arc */}
+          {/* Progress arc: fills while pulling, then becomes the one spinner while refreshing. */}
           <m.circle
             cx="20"
             cy="20"
             r="16"
             fill="none"
+            stroke="currentColor"
             strokeWidth="2"
             className="text-accent-aqua"
+            style={{ transformOrigin: '20px 20px' }}
             strokeDasharray={100.5}
-            strokeDashoffset={100.5}
             animate={{
-              strokeDashoffset: isRefreshing
-                ? 100.5
-                : 100.5 - progress * 100.5,
+              strokeDashoffset: isRefreshing ? 75 : 100.5 - progress * 100.5,
+              rotate: isRefreshing && !prefersReducedMotion ? 360 : 0,
             }}
             transition={{
-              duration: isRefreshing ? 0 : 0.1,
+              strokeDashoffset: { duration: isRefreshing ? 0.12 : 0 },
+              rotate: isRefreshing && !prefersReducedMotion
+                ? { duration: 1, repeat: Infinity, ease: 'linear' }
+                : { duration: 0 },
             }}
             strokeLinecap="round"
           />
-
-          {isRefreshing && !prefersReducedMotion && (
-            <m.circle
-              cx="20"
-              cy="20"
-              r="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="text-accent-aqua origin-[20px_20px]"
-              animate={{
-                rotate: 360,
-              }}
-              transition={{
-                rotate: {
-                  duration: 1,
-                  repeat: Infinity,
-                  ease: 'linear',
-                },
-              }}
-            />
-          )}
         </svg>
 
         {/* Center icon */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <m.div
-            className="origin-center"
-            animate={{
-              rotate: isRefreshing && !prefersReducedMotion ? 360 : 0,
-            }}
-            transition={{
-              rotate: {
-                duration: isRefreshing && !prefersReducedMotion ? 1 : 0.2,
-                repeat: isRefreshing && !prefersReducedMotion ? Infinity : 0,
-                ease: 'linear',
-              },
-            }}
-          >
+          <div>
             {/* Refresh/arrow icon SVG */}
             <svg
               width="20"
@@ -141,7 +108,7 @@ export default function PullRefreshIndicator({ progress, isRefreshing }: PullRef
                 fill="none"
               />
             </svg>
-          </m.div>
+          </div>
         </div>
       </div>
     </m.div>
