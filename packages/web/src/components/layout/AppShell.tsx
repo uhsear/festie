@@ -91,6 +91,15 @@ export default function AppShell() {
     document.documentElement.toggleAttribute('data-low-power', lowPowerMode);
   }, [lowPowerMode]);
 
+  // Mirror tab visibility so CSS can pause the ambient loops while the tab is hidden.
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => root.toggleAttribute('data-tab-hidden', document.hidden);
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => document.removeEventListener('visibilitychange', sync);
+  }, []);
+
   // --- Side-effect hooks ---
   useScrollReset(location.pathname);
   // useRealtimeSync owns the single shared socket; expose it via context so the
