@@ -29,7 +29,7 @@ export default function ListenList({ sets, days, festivalName, separator }: Prop
   };
 
   return (
-    <details className="mb-4 rounded-xl border border-border bg-bg-card px-4">
+    <details className="mb-4 rounded-lg border border-border bg-bg-card px-4">
       <summary className="min-h-11 flex items-center text-sm font-semibold cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua">
         Listen before you go
       </summary>

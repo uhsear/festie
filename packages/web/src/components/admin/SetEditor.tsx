@@ -141,7 +141,7 @@ export default function SetEditor({
     <div
       data-issue-key={`set:${s.id}`}
       data-issue={issues.length > 0 ? 'true' : undefined}
-      className={`grid grid-cols-2 gap-2 rounded-lg border border-glass-border p-3 md:grid-cols-[auto_1fr_140px_7.5rem_7.5rem_auto] md:rounded-none md:border-0 md:p-0 ${
+      className={`grid grid-cols-2 gap-2 rounded-xl border border-glass-border p-3 md:grid-cols-[auto_1fr_140px_7.5rem_7.5rem_auto] md:rounded-none md:border-0 md:p-0 ${
         status ? 'border-l-2 border-l-accent-aqua md:pl-2' : ''
       } ${issues.length > 0 ? 'ring-1 ring-accent-coral md:p-1' : ''}`}
     >

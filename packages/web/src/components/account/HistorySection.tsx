@@ -15,7 +15,7 @@ import { ArtistNameButton } from '../features/ArtistName';
  * History surface for the account screen (M3 — cross-festival year-over-year
  * history). Fetches GET /ratings/lifetime and renders lifetime totals, a
  * per-festival timeline, and top artists across every festival. Reuses the
- * wrap stat-card styling (bg-bg-card + border + rounded-xl).
+ * wrap stat-card styling (bg-bg-card + border + rounded-lg).
  */
 export default function HistorySection() {
   const user = useAuthStore((s) => s.user);
@@ -122,7 +122,7 @@ export default function HistorySection() {
                   to="/wrap"
                   search={{ festival: f.festivalId }}
                   aria-label={`Open your ${f.festivalName || f.festivalId} wrap`}
-                  className="block p-4 rounded-xl bg-bg-card border border-border focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+                  className="block p-4 rounded-lg bg-bg-card border border-border focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
                 >
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="font-semibold text-text-primary truncate">{f.festivalName || f.festivalId}</div>
@@ -151,7 +151,7 @@ export default function HistorySection() {
             <span className="w-2 h-2 rounded-full bg-accent-aqua" aria-hidden="true" />
             Your all-time top artists
           </h3>
-          <div className="rounded-xl bg-bg-card border border-border p-4">
+          <div className="rounded-lg bg-bg-card border border-border p-4">
             {topArtists.map((a) => (
               <div
                 key={a.artist}
@@ -183,7 +183,7 @@ function SeenMost({ rows }: { rows: Array<{ artist: string; festivals: number }>
         <span className="w-2 h-2 rounded-full bg-accent-aqua" aria-hidden="true" />
         Artists you&apos;ve seen most
       </h3>
-      <ul className="rounded-xl bg-bg-card border border-border p-4">
+      <ul className="rounded-lg bg-bg-card border border-border p-4">
         {rows.map((r) => (
           <li
             key={r.artist}
@@ -203,7 +203,7 @@ function SeenMost({ rows }: { rows: Array<{ artist: string; festivals: number }>
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 p-4 rounded-xl bg-bg-card border border-border">
+    <div className="flex flex-col gap-1 p-4 rounded-lg bg-bg-card border border-border">
       <div className="flex items-center gap-1.5 text-xs text-text-muted uppercase tracking-wide">
         {icon}
         <span>{label}</span>

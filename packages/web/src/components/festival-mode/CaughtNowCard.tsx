@@ -59,7 +59,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
   };
 
   return (
-    <section aria-labelledby="caught-now-title" className="rounded-xl border border-border bg-bg-card p-4">
+    <section aria-labelledby="caught-now-title" className="rounded-lg border border-border bg-bg-card p-4">
       <h2 id="caught-now-title" className="type-heading text-text-primary">
         Did you catch it?
       </h2>

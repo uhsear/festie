@@ -25,7 +25,7 @@ export default function CardsSkeleton() {
       <span className="sr-only">Loading sets…</span>
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="card-enter" style={{ animationDelay: `${Math.min(i * 30, 240)}ms` }}>
-          <div className="flex h-[190px] flex-col gap-2.5 rounded-xl border border-[var(--color-aqua-a08)] bg-[var(--color-bg-card,rgba(20,20,38,0.65))] p-[18px] backdrop-blur-sm">
+          <div className="flex h-[190px] flex-col gap-2.5 rounded-lg border border-[var(--color-aqua-a08)] bg-[var(--color-bg-card,rgba(20,20,38,0.65))] p-[18px] backdrop-blur-sm">
             {/* Stage pill */}
             <div className="skeleton-shimmer h-[18px] w-[72px] rounded-md" />
             {/* Artist name */}

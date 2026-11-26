@@ -32,7 +32,7 @@ type Action =
   | null;
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
 
 const HELD_LINES_SHOWN = 5;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -124,7 +124,7 @@ export default function AdminReviewQueue({ section, queue }: Props) {
           ) : (
             <ul className="list-none space-y-3 p-0">
               {requests.map((r) => (
-                <li key={r.festivalId} className="space-y-2 rounded-lg border border-glass-border bg-bg-card/60 p-4">
+                <li key={r.festivalId} className="space-y-2 rounded-xl border border-glass-border bg-bg-card/60 p-4">
                   <p className="text-base font-semibold text-text-primary">{r.name}</p>
                   <p className="text-xs text-text-muted">
                     {r.organizationName ?? 'No organization'}
@@ -156,7 +156,7 @@ export default function AdminReviewQueue({ section, queue }: Props) {
           ) : (
             <ul className="list-none space-y-2 p-0">
               {recentEdits.map((edit) => (
-                <li key={edit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+                <li key={edit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="text-sm text-text-primary">
                       {edit.name}: {auditActionLabel(edit.action)}
@@ -186,7 +186,7 @@ export default function AdminReviewQueue({ section, queue }: Props) {
           ) : (
             <ul className="list-none space-y-3 p-0">
               {held.map((h) => (
-                <li key={h.festivalId} className="space-y-2 rounded-lg border border-glass-border bg-bg-card/60 p-4">
+                <li key={h.festivalId} className="space-y-2 rounded-xl border border-glass-border bg-bg-card/60 p-4">
                   <p className="text-base font-semibold text-text-primary">{h.name}</p>
                   <p className="text-xs text-text-muted">
                     {h.organizationName ?? 'No organization'}. {plural(h.changes, 'held change')}, {people(h.people)} would be told.

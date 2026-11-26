@@ -42,7 +42,7 @@ export default function MapZonesPanel({
   onRemove,
 }: MapZonesPanelProps) {
   return (
-  <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+  <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-3">
     <h3 className="type-label text-text-primary">Zones</h3>
     <p className="text-xs text-text-muted">
       Pick a color, name the area, then click the map to drop points. Finish with 3 or more. {zoneTotal}{' '}
@@ -56,7 +56,7 @@ export default function MapZonesPanel({
       placeholder="Zone name — e.g. Camping, VIP, No-go"
       value={zoneLabel}
       onChange={(e) => onZoneLabelChange(e.target.value)}
-      className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+      className="w-full px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
     />
     <div className="flex flex-wrap gap-2">
       {ZONE_PALETTE.map((preset) => {

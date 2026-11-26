@@ -58,7 +58,7 @@ export default function DiscoverRow() {
             .join(' · ');
           return (
             <li key={s.id} className="snap-start shrink-0">
-              <div className="relative block w-[200px] min-h-[44px] rounded-xl border border-border bg-bg-card px-3 py-2 text-left hover:bg-bg-input">
+              <div className="relative block w-[200px] min-h-[44px] rounded-lg border border-border bg-bg-card px-3 py-2 text-left hover:bg-bg-input">
                 <RowOpenButton label={`${artistDisplayName(s)}${when ? `, ${when}` : ''}`} onClick={() => setDetailSet(s)} />
                 <span className="block truncate text-sm font-semibold text-text-primary">
                   <ArtistName set={s} />

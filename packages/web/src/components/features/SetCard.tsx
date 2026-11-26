@@ -164,7 +164,7 @@ function SetCard({
         // Base styles — tonal card (DESIGN.md: glass is chrome only). Stage
         // identity is carried by the stage pill (not a left stripe, which reads
         // as an AI tell). Softer radius + density.
-        'relative bg-bg-card border border-glass-border rounded-xl',
+        'relative bg-bg-card border border-glass-border rounded-lg',
         'p-4 cursor-pointer overflow-hidden',
         // Transition + will-change — token-eased, reduce-motion safe.
         'transition-[background-color,box-shadow,transform] duration-200 ease-out will-change-transform',
@@ -250,7 +250,7 @@ function SetCard({
       <span
         className={cn(
           'card-stage',
-          'relative z-[2] inline-block max-w-full truncate align-top px-2 py-1 rounded-xl',
+          'relative z-[2] inline-block max-w-full truncate align-top px-2 py-1 rounded-lg',
           'type-micro font-bold uppercase tracking-[0.08em] mb-2.5',
           dimmed
             ? 'bg-[var(--color-overlay-3)] text-text-secondary'

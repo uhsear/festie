@@ -60,7 +60,7 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
             return (
               <div
                 key={set.id}
-                className="relative flex flex-col gap-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover"
+                className="relative flex flex-col gap-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-lg mb-2 hover:bg-bg-card-hover"
               >
                 <RowOpenButton label={`${name}, ${stageName ? `${time}, ${stageName}` : time}`} onClick={() => onOpenSet(set)} />
                 <span className="flex items-center gap-2">

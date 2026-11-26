@@ -363,7 +363,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
           </p>
         )}
         {updateBanner && (
-          <div role="status" className="flex flex-wrap items-center gap-3 bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-3 text-sm text-text-primary">
+          <div role="status" className="flex flex-wrap items-center gap-3 bg-accent-aqua/10 border border-accent-aqua/30 rounded-xl p-3 text-sm text-text-primary">
             <span>{updateBanner}</span>
             <button type="button" className={secondaryButton} disabled={loading} onClick={turnOnUpdate}>
               Turn on Update
@@ -415,7 +415,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
           </p>
         </div>
         {p.problems.length > 0 && (
-          <div role="alert" className="bg-accent-coral/20 border border-accent-coral/30 rounded-lg p-4">
+          <div role="alert" className="bg-accent-coral/20 border border-accent-coral/30 rounded-xl p-4">
             <ul className="space-y-1 text-sm text-accent-coral">
               {p.problems.map((m) => (
                 <li key={m}>{m}</li>
@@ -433,7 +433,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
             <option key={s} value={s} />
           ))}
         </datalist>
-        <div className="bg-bg-card/60 border border-glass-border rounded-lg overflow-x-auto">
+        <div className="bg-bg-card/60 border border-glass-border rounded-xl overflow-x-auto">
           <table className="w-full text-sm">
             <caption className="sr-only">Lineup import preview</caption>
             <thead>
@@ -476,7 +476,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
           </button>
         )}
         {(p.unmatchedActs ?? []).length > 0 && (
-          <details open={(p.unmatchedActs ?? []).length <= 5} className="text-sm text-accent-amber rounded-lg border border-accent-amber/40 p-3">
+          <details open={(p.unmatchedActs ?? []).length <= 5} className="text-sm text-accent-amber rounded-xl border border-accent-amber/40 p-3">
             <summary>
               {(p.unmatchedActs ?? []).length} announced {(p.unmatchedActs ?? []).length === 1 ? 'act matches' : 'acts match'} no set on the
               days this import fills. Fix the spelling in your file, or link the set by hand with Matches set… after the import.

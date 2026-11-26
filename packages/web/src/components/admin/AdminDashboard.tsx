@@ -47,7 +47,7 @@ export default function AdminDashboard() {
     return (
       <div className="space-y-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 bg-bg-card/30 rounded-lg animate-pulse" />
+          <div key={i} className="h-24 bg-bg-card/30 rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
         <button
           type="button"
           onClick={() => setAdminSearch({ tab: 'organizations' })}
-          className="w-full text-left rounded-lg border border-accent-amber p-4 min-h-11 text-sm text-accent-amber hover:bg-bg-card/80 transition-colors"
+          className="w-full text-left rounded-xl border border-accent-amber p-4 min-h-11 text-sm text-accent-amber hover:bg-bg-card/80 transition-colors"
         >
           {waiting === 1 ? '1 festival is waiting for review.' : `${waiting} festivals are waiting for review.`} Open Organizations.
         </button>
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
               type="button"
               aria-label={`${card.value} ${card.label}. Open ${card.target}.`}
               onClick={() => setAdminSearch({ tab: card.target })}
-              className="text-left bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 min-h-11 hover:bg-bg-card/80 transition-colors"
+              className="text-left bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 min-h-11 hover:bg-bg-card/80 transition-colors"
             >
               <div className={cn('mb-2 [&_svg]:w-6 [&_svg]:h-6 text-accent-aqua')} aria-hidden="true">
                 {STAT_ICONS[card.key]}
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
       {/* Health */}
       <div>
         <h2 className="type-heading text-text-primary mb-4">Health</h2>
-        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-4">
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3">
             {HEALTH_ICONS[healthLine.tone]}
             <p className="text-text-primary">{healthLine.text}</p>
@@ -140,7 +140,7 @@ export default function AdminDashboard() {
           <button
             type="button"
             onClick={() => setAdminSearch({ tab: 'audit' })}
-            className="px-4 py-2 min-h-11 rounded-lg text-sm font-medium text-accent-aqua hover:bg-accent-aqua/10 transition-colors"
+            className="px-4 py-2 min-h-11 rounded-xl text-sm font-medium text-accent-aqua hover:bg-accent-aqua/10 transition-colors"
           >
             See all
           </button>
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
         {recentActivity.length === 0 ? (
           <p className="text-text-muted text-sm">No recent activity</p>
         ) : (
-          <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-hidden">
+          <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-hidden">
             <div className="divide-y divide-glass-border">
               {recentActivity.slice(0, 10).map((activity) => (
                 <div key={activity.id} className="px-6 py-4 hover:bg-bg-primary/20 transition-colors">
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
         <button
           onClick={() => void refetch()}
           disabled={isFetching}
-          className="px-6 py-2 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30 disabled:opacity-60"
+          className="px-6 py-2 min-h-11 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium border border-accent-aqua/30 disabled:opacity-60"
         >
           Refresh Dashboard
         </button>

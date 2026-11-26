@@ -31,7 +31,7 @@ const CHIP_CLASS = {
 } as const;
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors';
 
 /** The festivals of the member's organizations, grouped by organization when there is more than one (plan-v3 5.1 step 6). */
 export default function ManageFestivalList({ query, organizations, onOpen, onNew, onDelete }: Props) {
@@ -56,7 +56,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
     // Only an owner deletes, and only a draft (plan-v3 5.5).
     const canDelete = org?.role === 'owner' && org.status !== 'suspended' && !festival.published;
     return (
-      <li key={festival.id} className="rounded-lg border border-glass-border bg-bg-card/60 p-4 space-y-2">
+      <li key={festival.id} className="rounded-xl border border-glass-border bg-bg-card/60 p-4 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -96,14 +96,14 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
   const banners = organizations.map((org) => {
     if (org.status === 'pending') {
       return (
-        <p key={org.id} role="status" className="rounded-lg border border-glass-border p-3 text-sm text-text-secondary">
+        <p key={org.id} role="status" className="rounded-xl border border-glass-border p-3 text-sm text-text-secondary">
           {organizations.length > 1 ? `${org.name}: ` : ''}Festie is checking your organization. You can build drafts now. Uploads and Submit unlock when we approve you.
         </p>
       );
     }
     if (org.status === 'suspended') {
       return (
-        <p key={org.id} role="alert" className="rounded-lg border border-accent-amber p-3 text-sm text-accent-amber">
+        <p key={org.id} role="alert" className="rounded-xl border border-accent-amber p-3 text-sm text-accent-amber">
           {organizations.length > 1 ? `${org.name}: ` : ''}Your organization&apos;s access is paused. Your live festivals stay visible to attendees.{' '}
           <a href="mailto:support@festie.us" className="underline">
             Contact Festie
@@ -163,7 +163,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
           <button
             type="button"
             onClick={onNew}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
             New festival

@@ -60,7 +60,7 @@ export default function ExpenseItem({
 }: ExpenseItemProps) {
   return (
     <div
-      className="stagger-item p-3 rounded-lg bg-bg-card border border-glass-border flex items-start gap-3 motion-reduce:!animate-none"
+      className="stagger-item p-3 rounded-xl bg-bg-card border border-glass-border flex items-start gap-3 motion-reduce:!animate-none"
       style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
     >
       <span className="text-text-secondary leading-none mt-0.5">

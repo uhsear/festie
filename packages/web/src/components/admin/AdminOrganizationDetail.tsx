@@ -37,7 +37,7 @@ const ROLES: ReadonlyArray<{ value: OrgRole; label: string }> = [
 ];
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
 
 /** One organization: status, verification, members by email, pending members and its festivals. */
 export default function AdminOrganizationDetail({ organizationId, onBack, reauth }: Props) {
@@ -194,7 +194,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
         </div>
       </div>
 
-      <form onSubmit={rename} aria-label="Rename organization" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
+      <form onSubmit={rename} aria-label="Rename organization" className="grid grid-cols-1 gap-3 rounded-xl border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
         <label className="flex flex-col gap-1 text-xs text-text-muted">
           New name
           <input required minLength={2} maxLength={80} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={data.name} className={INPUT_CLASS} />
@@ -220,7 +220,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
         ) : (
           <ul className="list-none space-y-2 p-0">
             {data.members.map((m) => (
-              <li key={m.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+              <li key={m.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                 <div className="min-w-0">
                   <p className="break-all text-sm text-text-primary">{m.email ?? m.username}</p>
                   <p className="text-xs text-text-muted">
@@ -255,7 +255,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
             <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.length})</h4>
             <ul className="list-none space-y-2 p-0">
               {data.pending.map((p) => (
-                <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+                <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
                     <p className="text-xs text-text-muted">
@@ -288,7 +288,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
           </>
         )}
 
-        <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+        <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-xl border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
           <label className="flex flex-col gap-1 text-xs text-text-muted">
             Member email
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={INPUT_CLASS} />
@@ -303,7 +303,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
               ))}
             </select>
           </label>
-          <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
+          <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
             Add member
           </button>
         </form>
@@ -315,7 +315,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
           {data.festivals
             .filter((f) => !f.deleted)
             .map((f) => (
-              <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+              <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                 <div className="min-w-0">
                   <p className="text-sm text-text-primary">{f.name}</p>
                   <p className="text-xs text-text-muted">{organizerFestivalStatus(f).chip}</p>
@@ -348,7 +348,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
         {data.status !== 'active' ? (
           <p className="text-sm text-text-muted">Activate the organization to move a festival into it.</p>
         ) : (
-        <div className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="grid grid-cols-1 gap-3 rounded-xl border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
           <label className="flex flex-col gap-1 text-xs text-text-muted">
             Move a festival here
             <select value={moveId} onChange={(e) => setMoveId(e.target.value)} className={INPUT_CLASS}>

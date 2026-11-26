@@ -76,9 +76,9 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
     (move ? `, ${move.a11y}` : '');
 
   return (
-    <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-xl mb-2">
+    <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-lg mb-2">
       {/* Phone: the name gets the full line, time and stage sit under it. sm+: time | name | stage in one row. */}
-      <div className="relative flex flex-1 flex-col gap-y-1 min-w-0 py-1 text-left rounded-lg sm:flex-row sm:items-center sm:gap-x-3">
+      <div className="relative flex flex-1 flex-col gap-y-1 min-w-0 py-1 text-left rounded-xl sm:flex-row sm:items-center sm:gap-x-3">
         <RowOpenButton label={label} onClick={() => setDetailSet(set)} />
         <div className="order-1 min-w-0 sm:order-2 sm:flex-1">
           <div className="text-sm font-bold break-words [overflow-wrap:anywhere] line-clamp-2">
@@ -129,7 +129,7 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
             aria-label={p.label}
             onClick={() => onPriority(p.value)}
             className={cn(
-              'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg cursor-pointer transition-colors',
+              'inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl cursor-pointer transition-colors',
               'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               current === p.value ? 'text-accent-aqua' : 'text-text-muted hover:bg-bg-card-hover',
             )}

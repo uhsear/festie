@@ -166,7 +166,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
   };
 
   return (
-    <section aria-label="Find Spotify links" className="space-y-3 rounded-lg border border-glass-border bg-bg-card/60 p-3">
+    <section aria-label="Find Spotify links" className="space-y-3 rounded-xl border border-glass-border bg-bg-card/60 p-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="type-label text-text-primary">Find Spotify links</h3>
         <Button size="sm" variant="secondary" onClick={onClose}>

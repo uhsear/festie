@@ -49,7 +49,7 @@ function readHash(): string {
 }
 
 const BUTTON =
-  'inline-flex items-center justify-center min-h-11 px-6 rounded-lg text-[length:var(--font-size-14)] font-semibold no-underline';
+  'inline-flex items-center justify-center min-h-11 px-6 rounded-xl text-[length:var(--font-size-14)] font-semibold no-underline';
 const PRIMARY = `${BUTTON} bg-accent-aqua text-[var(--text-on-light-accent)]`;
 
 /** Add-to-my-plan for a signed-in viewer, or a sign-in prompt that returns to this same link. Nothing is written until Add. */
@@ -324,7 +324,7 @@ function PlanSnapshotView({ hash }: { hash: string }) {
       <div className="flex flex-col gap-2 pt-2">
         <Link
           to="/"
-          className="inline-flex items-center justify-center min-h-11 px-6 rounded-lg bg-accent-aqua text-[var(--text-on-light-accent)] text-[length:var(--font-size-14)] font-semibold no-underline"
+          className="inline-flex items-center justify-center min-h-11 px-6 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-[length:var(--font-size-14)] font-semibold no-underline"
         >
           Plan your own picks
         </Link>

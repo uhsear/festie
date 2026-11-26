@@ -155,7 +155,7 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
             {imports.map((item) => (
               <li
                 key={item.id}
-                className="bg-bg-card/60 border border-glass-border rounded-lg p-3 flex items-center justify-between gap-3"
+                className="bg-bg-card/60 border border-glass-border rounded-xl p-3 flex items-center justify-between gap-3"
               >
                 <div className="text-sm">
                   <p className="text-text-primary">

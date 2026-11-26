@@ -91,7 +91,7 @@ export default function ActivityTab({ crewId }: Props) {
         return (
           <div
             key={it.id}
-            className="crew-activity-rail stagger-item p-3 rounded-lg bg-bg-card border border-border flex items-start gap-3 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
+            className="crew-activity-rail stagger-item p-3 rounded-xl bg-bg-card border border-border flex items-start gap-3 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
             style={{ '--i': Math.min(idx, 20) } as React.CSSProperties}
           >
             <Avatar name={it.username || 'User'} size="sm" />

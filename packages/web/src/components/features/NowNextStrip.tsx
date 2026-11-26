@@ -50,7 +50,7 @@ export default function NowNextStrip() {
     <section aria-label="Now and next" className="px-6 pt-3">
       <div
         data-testid="now-next-strip"
-        className="relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-lg border border-border-default bg-bg-secondary px-4 text-left"
+        className="relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-secondary px-4 text-left"
       >
         <RowOpenButton
           label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}

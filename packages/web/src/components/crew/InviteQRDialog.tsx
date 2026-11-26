@@ -17,7 +17,7 @@ export default function InviteQRDialog({ open, onOpenChange, crewName, code }: I
       <div className="flex flex-col items-center gap-3">
         {/* Dark on light in every theme so cameras lock on in dark mode. */}
         <div
-          className="rounded-xl bg-white p-4"
+          className="rounded-lg bg-white p-4"
           data-testid="invite-qr-code"
           role="img"
           aria-label={`QR code to join ${crewName}`}

@@ -63,9 +63,9 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 const FIELD =
-  'px-2 py-1.5 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua';
+  'px-2 py-1.5 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua';
 const SMALL_BUTTON =
-  'px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium';
+  'px-3 py-1.5 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium';
 
 const nameKey = (name: string) => name.trim().toLowerCase();
 /** The match route takes at most this many names per call. */
@@ -464,7 +464,7 @@ export default function AnnouncedNames<D extends FormDay>({
             <button
               type="button"
               onClick={() => requestRemoval(lineup.map((_, i) => i))}
-              className="px-3 py-1.5 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+              className="px-3 py-1.5 rounded-xl bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
             >
               Remove all
             </button>
@@ -473,13 +473,13 @@ export default function AnnouncedNames<D extends FormDay>({
       </div>
 
       {saveNotices.length > 0 && (
-        <ul className="mb-3 rounded-lg border border-accent-amber/40 p-3 text-xs text-accent-amber list-disc list-inside" aria-label="Lineup notices">
+        <ul className="mb-3 rounded-xl border border-accent-amber/40 p-3 text-xs text-accent-amber list-disc list-inside" aria-label="Lineup notices">
           {saveNotices.map((n) => <li key={n}>{n}</li>)}
         </ul>
       )}
 
       {matched.length > 0 && (
-        <div className="mb-3 rounded-lg border border-glass-border p-3 text-xs text-text-primary space-y-2" data-testid="artist-matches">
+        <div className="mb-3 rounded-xl border border-glass-border p-3 text-xs text-text-primary space-y-2" data-testid="artist-matches">
           <p className="flex flex-wrap items-center gap-2">
             <span>
               {matched.length} {matched.length === 1 ? 'name matches an artist' : 'names match artists'} already in Festie.
@@ -517,7 +517,7 @@ export default function AnnouncedNames<D extends FormDay>({
                 type="button"
                 aria-pressed={filter === f.key}
                 onClick={() => setFilter(f.key)}
-                className={`px-3 py-1 rounded-lg text-xs ${filter === f.key ? 'bg-accent-aqua/20 text-accent-aqua' : 'bg-bg-primary text-text-muted'}`}
+                className={`px-3 py-1 rounded-xl text-xs ${filter === f.key ? 'bg-accent-aqua/20 text-accent-aqua' : 'bg-bg-primary text-text-muted'}`}
               >
                 {f.label}
               </button>
@@ -528,7 +528,7 @@ export default function AnnouncedNames<D extends FormDay>({
               const dayGone = !!entry.dayDate && !datedDays.some((d) => d.date === entry.dayDate);
               const label = joinNames(entry, sep);
               return (
-                <div key={rowKey(entry, index)} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_5rem_9rem_auto_auto] gap-2 items-center rounded-lg border border-glass-border p-2">
+                <div key={rowKey(entry, index)} className="grid grid-cols-1 md:grid-cols-[2fr_2fr_5rem_9rem_auto_auto] gap-2 items-center rounded-xl border border-glass-border p-2">
                   <EditableText label={`Artists for ${label}`} value={label} onCommit={(v) => rename(index, v)} />
                   <EditableText
                     label={`Poster name for ${label}`}
@@ -570,7 +570,7 @@ export default function AnnouncedNames<D extends FormDay>({
                       type="button"
                       aria-label={`Remove ${label}`}
                       onClick={() => requestRemoval([index])}
-                      className="px-2 py-1 rounded-lg bg-accent-coral/20 text-accent-coral text-xs"
+                      className="px-2 py-1 rounded-xl bg-accent-coral/20 text-accent-coral text-xs"
                     >
                       Remove
                     </button>

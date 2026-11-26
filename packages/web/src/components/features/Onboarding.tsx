@@ -215,7 +215,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
                     aria-pressed={selected}
                     onClick={() => setPickedId(f.id)}
                     className={cn(
-                      'flex w-full items-center gap-3 rounded-xl border px-3 py-2 min-h-[52px] text-left cursor-pointer',
+                      'flex w-full items-center gap-3 rounded-lg border px-3 py-2 min-h-[52px] text-left cursor-pointer',
                       selected ? 'border-accent-aqua' : 'border-border',
                     )}
                   >

@@ -9,14 +9,14 @@ export default function ThemeSection() {
   const mode = themeModeOf({ theme, followSystemTheme });
 
   return (
-    <fieldset className="rounded-lg border border-border bg-bg-card p-3 space-y-2">
+    <fieldset className="rounded-xl border border-border bg-bg-card p-3 space-y-2">
       <legend className="px-1 text-sm font-semibold text-text-primary">Theme</legend>
       {THEME_MODE_OPTIONS.map((o) => (
         <label
           key={o.value}
           htmlFor={`theme-mode-${o.value}`}
           className={cn(
-            'flex items-center gap-3 rounded-lg border p-3 min-h-11 cursor-pointer has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent-aqua',
+            'flex items-center gap-3 rounded-xl border p-3 min-h-11 cursor-pointer has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-accent-aqua',
             mode === o.value ? 'border-accent-aqua' : 'border-border',
           )}
         >

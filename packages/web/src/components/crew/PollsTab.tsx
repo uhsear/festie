@@ -290,7 +290,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
           )}
         </div>
       ) : (
-        <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+        <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-text-primary">New poll</h3>
             <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />

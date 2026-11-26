@@ -219,7 +219,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
           <Plus className="w-4 h-4" aria-hidden="true" /> Post a ride
         </Button>
       ) : (
-        <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-glass-border space-y-3">
+        <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-glass-border space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-text-primary">{editingId ? 'Edit ride' : 'New ride'}</h3>
             <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
@@ -345,7 +345,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
             const seatsLine = rideSeatsLine(offer);
             const passengersLine = ridePassengersLine(offer, members, currentUserId);
             return (
-              <li key={offer.id} className="flex items-start gap-2 p-2.5 rounded-lg bg-bg-card border border-border">
+              <li key={offer.id} className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-card border border-border">
                 <div className="flex-shrink-0 w-6 h-6 rounded-md bg-accent-aqua/15 border border-accent-aqua/30 text-accent-aqua flex items-center justify-center">
                   <Car className="w-4 h-4" aria-hidden="true" />
                 </div>

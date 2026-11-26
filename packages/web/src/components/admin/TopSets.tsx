@@ -20,7 +20,7 @@ export default function TopSets({ sets, maxPicks }: TopSetsProps) {
   return (
     <div>
       <h2 className="type-heading text-text-primary mb-4">Most-picked sets (top 20)</h2>
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-3">
         {sets.map((s, i) => (
           <div key={`${s.artist}-${i}`} className="flex items-center gap-3">
             <div className="text-sm font-bold text-text-muted min-w-6">{i + 1}</div>

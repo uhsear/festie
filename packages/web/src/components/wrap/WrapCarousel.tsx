@@ -90,7 +90,7 @@ export default function WrapCarousel({ cards, festivalName, byline, sharing, onS
               aria-label={`Card ${i + 1} of ${cards.length}`}
               aria-current={i === index ? 'true' : undefined}
               onClick={() => goTo(i)}
-              className="min-h-11 min-w-11 flex items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+              className="min-h-11 min-w-11 flex items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
             >
               <span
                 className={`block h-2 w-2 rounded-full ${i === index ? 'bg-accent-aqua' : 'bg-border-light'}`}

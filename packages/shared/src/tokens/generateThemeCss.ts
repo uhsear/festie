@@ -282,7 +282,9 @@ export function themeDeclarations(): Decl[] {
   d.push(['--radius-sm', `${radii.sm}px`]);
   d.push(['--radius-md', `${radii.md}px`]);
   d.push(['--radius-DEFAULT', `${radii.default}px`]);
-  d.push(['--radius-lg', `${radii.lg}px`]);
+  // Tailwind names grow with size: rounded-lg is 12px, rounded-xl is 20px. radii.ts keys stay: mobile reads them.
+  d.push(['--radius-lg', `${radii.default}px`]);
+  d.push(['--radius-xl', `${radii.lg}px`]);
   d.push(['--radius-pill', `${radii.pill}px`]);
 
   // ── Z-index ladder ─────────────────────────────────────────────────────────

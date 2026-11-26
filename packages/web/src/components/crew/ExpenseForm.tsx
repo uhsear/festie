@@ -133,7 +133,7 @@ export default function ExpenseForm({
       : null;
 
   return (
-    <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+    <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-text-primary">{editing ? 'Edit expense' : 'New expense'}</h3>
         <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={onCancel} />
@@ -203,7 +203,7 @@ export default function ExpenseForm({
               onClick={() => setCategory(c.id)}
               aria-pressed={category === c.id}
               className={cn(
-                'min-h-11 px-2 py-2 rounded-lg border text-xs flex flex-col items-center gap-1',
+                'min-h-11 px-2 py-2 rounded-xl border text-xs flex flex-col items-center gap-1',
                 category === c.id
                   ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
                   : 'bg-bg-card border-border text-text-secondary hover:border-border-light',

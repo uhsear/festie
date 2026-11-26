@@ -24,7 +24,7 @@ export default function RateNightBanner() {
   if (count === 0) return null;
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-card p-4">
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-card p-4">
       <div className="min-w-0">
         <div className="text-sm font-semibold text-text-primary">
           {count} {count === 1 ? 'set' : 'sets'} to rate

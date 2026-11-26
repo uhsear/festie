@@ -45,7 +45,7 @@ export default function ManageActivity({ organizationId }: Props) {
       <p className="text-sm text-text-muted">The latest {entries.length} changes by your team and by Festie.</p>
       <ul className="list-none space-y-2 p-0">
         {entries.map((entry) => (
-          <li key={entry.id} className="rounded-lg border border-glass-border p-3">
+          <li key={entry.id} className="rounded-xl border border-glass-border p-3">
             <p className="text-sm text-text-primary">{targetName(entry) ? `${auditActionLabel(entry.action)}: ${targetName(entry)}` : auditActionLabel(entry.action)}</p>
             <p className="text-xs text-text-muted">
               {entry.actor} · {when(entry.createdAt)}

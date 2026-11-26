@@ -88,7 +88,8 @@
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-DEFAULT: 12px;
-  --radius-lg: 20px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
   --z-base: 0;
   --z-sticky: 10;

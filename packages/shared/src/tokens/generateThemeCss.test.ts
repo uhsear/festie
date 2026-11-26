@@ -93,6 +93,12 @@ describe('generateThemeCss — emits TS token literals', () => {
     expect(m.get('--radius-pill')).toBe('999px');
   });
 
+  it('Tailwind radius names grow with size (rounded-xl larger than rounded-lg)', () => {
+    expect(m.get('--radius-lg')).toBe(`${radii.default}px`);
+    expect(m.get('--radius-xl')).toBe(`${radii.lg}px`);
+    expect(radii.lg).toBeGreaterThan(radii.default);
+  });
+
   it('the off-ramp 11/13 sizes are NOT generated (stay hand-authored in theme.css)', () => {
     expect(m.has('--font-size-11')).toBe(false);
     expect(m.has('--font-size-13')).toBe(false);

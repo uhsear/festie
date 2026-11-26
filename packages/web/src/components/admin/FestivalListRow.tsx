@@ -32,7 +32,7 @@ export default function FestivalListRow({
 }: FestivalListRowProps) {
   return (
   <div
-      className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between hover:bg-bg-card/80 transition-colors"
+      className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between hover:bg-bg-card/80 transition-colors"
   >
     <input
       type="checkbox"

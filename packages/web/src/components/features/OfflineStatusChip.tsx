@@ -61,7 +61,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
   return (
     <div className={cn('flex flex-wrap items-center gap-2 text-xs', className)}>
       {showReminder ? (
-        <p className="basis-full rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
+        <p className="basis-full rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
           {offlineReminderText(hasMap)}
         </p>
       ) : null}

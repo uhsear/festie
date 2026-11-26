@@ -17,7 +17,7 @@ export default function PickDistribution({ must, want, maybe, total }: PickDistr
   return (
     <div>
       <h2 className="type-heading text-text-primary mb-4">Pick priority across all {total} picks</h2>
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6">
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
           <div>
             <div className="text-sm text-text-muted mb-2">Must See</div>
@@ -36,7 +36,7 @@ export default function PickDistribution({ must, want, maybe, total }: PickDistr
           </div>
         </div>
         {/* Bar chart */}
-        <div className="flex gap-1 h-8 rounded-lg overflow-hidden bg-bg-primary/20">
+        <div className="flex gap-1 h-8 rounded-xl overflow-hidden bg-bg-primary/20">
           {mustPercent > 0 && (
             <div
               style={{ flex: mustPercent }}

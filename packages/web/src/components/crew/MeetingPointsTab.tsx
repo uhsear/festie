@@ -403,7 +403,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         ]}
         value={view}
         onChange={setView}
-        className="inline-flex gap-1 rounded-lg bg-bg-card"
+        className="inline-flex gap-1 rounded-xl bg-bg-card"
         tabClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md"
       />
       <Link
@@ -467,7 +467,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         )}
         <Suspense
           fallback={
-            <div className="h-72 rounded-lg border border-border bg-bg-secondary flex items-center justify-center text-sm text-text-secondary">
+            <div className="h-72 rounded-xl border border-border bg-bg-secondary flex items-center justify-center text-sm text-text-secondary">
               Loading map…
             </div>
           }

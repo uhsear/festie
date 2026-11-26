@@ -16,14 +16,14 @@ export default function CrewPlanSkeleton() {
       </div>
 
       {/* Meet up card */}
-      <div className="space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+      <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         <div className="skeleton-shimmer h-4 w-24" />
         <div className="skeleton-shimmer h-3.5 w-[60%]" />
         <div className="skeleton-shimmer h-3 w-[40%]" />
       </div>
 
       {/* list card, 4 rows */}
-      <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
+      <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-card)] p-4">
         <div className="skeleton-shimmer h-4 w-24" />
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3" data-testid="crew-plan-row">

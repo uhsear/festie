@@ -84,7 +84,7 @@ export default function AdminLayout({ title, description, onTabChange, activeTab
                 onClick={() => onTabChange(tab.id)}
                 aria-current={activeTab === tab.id ? 'page' : undefined}
                 className={cn(
-                  'flex w-full items-center gap-2 text-left px-3 py-2.5 min-h-11 rounded-lg transition-colors',
+                  'flex w-full items-center gap-2 text-left px-3 py-2.5 min-h-11 rounded-xl transition-colors',
                   'font-medium text-sm [&_svg]:w-4 [&_svg]:h-4 [&_svg]:flex-shrink-0',
                   activeTab === tab.id
                     ? 'bg-accent-aqua text-bg-primary'

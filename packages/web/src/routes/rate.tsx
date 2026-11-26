@@ -195,7 +195,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {index + 1} of {queue.length}
       </p>
-      <div className="mt-4 rounded-xl border border-border bg-bg-card p-5 text-center">
+      <div className="mt-4 rounded-lg border border-border bg-bg-card p-5 text-center">
         <div className="text-2xl font-bold text-text-primary">
           <ArtistNameButton name={set.artist || 'Unknown artist'} />
         </div>

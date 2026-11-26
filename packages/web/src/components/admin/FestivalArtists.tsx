@@ -264,7 +264,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
           const rowStatus = status[artist.id];
           const links = Object.entries(artist.links);
           return (
-            <li key={artist.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-3 space-y-3">
+            <li key={artist.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-3 space-y-3">
               <button
                 type="button"
                 aria-expanded={open}

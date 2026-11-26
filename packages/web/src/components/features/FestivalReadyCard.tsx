@@ -23,7 +23,7 @@ export default function FestivalReadyCard({ ready }: Props) {
   return (
     <section
       aria-label="Festival ready checklist"
-      className="mb-3 w-full mx-auto max-w-[1440px] rounded-xl border border-border bg-bg-card p-4"
+      className="mb-3 w-full mx-auto max-w-[1440px] rounded-lg border border-border bg-bg-card p-4"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

@@ -84,7 +84,7 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
       {state.status === 'ready' && (
         <>
           <code
-            className="block truncate rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-primary"
+            className="block truncate rounded-xl bg-bg-elevated px-3 py-2 text-xs text-text-primary"
             data-testid="share-link-url"
           >
             {state.url}
@@ -149,7 +149,7 @@ function QrSection() {
           </p>
           {/* High-contrast dark-on-white tile so cameras lock fast in low festival light. */}
           <div
-            className="rounded-xl bg-white p-4"
+            className="rounded-lg bg-white p-4"
             data-testid="plan-qr-code"
             role="img"
             aria-label="QR code that opens your picks in a browser"
