@@ -6,6 +6,7 @@ import { formatDayChip, logicalDayIndexAt, resolveFestivalTimeZone, visibleDayIn
 import { makeStyles, typeStyle, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /** Day selector row. Hidden days drop out; a trailing "+N hidden" chip restores them. */
 export default function ScheduleDayChips({ hPad }: { hPad: number }) {
@@ -18,12 +19,13 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
   const hiddenDays = useFestivalStore((s) => s.hiddenDays);
   const setHiddenDays = useFestivalStore((s) => s.setHiddenDays);
   const nowMs = useNow(60_000);
+  const reduceMotion = useReduceMotion();
   // Three ~150pt chips overflow a 375pt phone, so bring the selected day into view
   // whenever it changes (cold-start restore, resume-to-today, "Show another day").
   const scrollRef = useRef<ScrollViewInstance>(null);
   const chipX = useRef(new Map<number, number>());
   const scrollToDay = (x: number | undefined) => {
-    if (x !== undefined) scrollRef.current?.scrollTo({ x: Math.max(0, x - hPad), animated: true });
+    if (x !== undefined) scrollRef.current?.scrollTo({ x: Math.max(0, x - hPad), animated: !reduceMotion });
   };
   useEffect(() => {
     scrollToDay(chipX.current.get(selectedDay));

@@ -53,6 +53,7 @@ import {
   scheduleEmptyReason,
   visibleDayIndexes,
   lineupReplacesEmptyState,
+  lineupFlyerModel,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
@@ -67,6 +68,7 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import ScreenHeader from '../../components/ScreenHeader';
 import TBASection from '../../components/TBASection';
 import type { ListRow } from '../../components/schedule/listRow';
@@ -159,7 +161,13 @@ export default function TimelineScreen() {
   const { getDays, getFilteredSets, getStageColor, getStageName } = useFestival();
   const { getMyPick, getOtherPicks, getMyNote, getMyReminder, savePick } = usePicks();
   const clearPick = usePickClear(undoNotifier);
-  const announced = useAnnouncedLineup(useNow(60_000));
+  const lineupNowMs = useNow(60_000);
+  const announced = useAnnouncedLineup(lineupNowMs);
+  // While no set has a time the lineup shows as a flyer, with no pick controls; the cards return when times publish.
+  const flyer = useMemo(
+    () => lineupFlyerModel(currentFestival, festivalDays, allSets, lineupNowMs),
+    [currentFestival, festivalDays, allSets, lineupNowMs],
+  );
 
   // DC1 — search bar and the stage/my-picks + phase-action setup chrome fold
   // behind a compact icon row so the timeline owns the viewport on small
@@ -315,9 +323,11 @@ export default function TimelineScreen() {
 
   // The person's remembered view for this festival wins; otherwise Timeline on a
   // live day with timed sets, Cards. A stored 'grid' never reaches here because
-  // Grid is a pushed route that is not remembered.
-  const viewMode: 'cards' | 'timeline' =
-    scheduleView === 'cards' || scheduleView === 'timeline'
+  // Grid is a pushed route that is not remembered. While the lineup flyer shows
+  // (no set has a time) only Cards can render it, whatever view was remembered.
+  const viewMode: 'cards' | 'timeline' = flyer
+    ? 'cards'
+    : scheduleView === 'cards' || scheduleView === 'timeline'
       ? scheduleView
       : defaultScheduleView({ hasTimedSets: festivalHasTimedSets, phase });
   const picks = myPicks ?? undefined;
@@ -644,8 +654,7 @@ export default function TimelineScreen() {
   const lineupStandsIn = lineupReplacesEmptyState(announced, searchQuery);
 
   const errorScheduleState = (
-    <EmptyState
-      icon="cloud-offline-outline"
+    <LoadErrorState
       title="Couldn’t load the schedule"
       message={scheduleLoadError ?? ''}
       action={{
@@ -924,6 +933,7 @@ export default function TimelineScreen() {
           cardsEmpty={cardsEmpty}
           cardsSeparator={cardsSeparator}
           controls={controls}
+          flyer={flyer}
           genreFilterActive={genreFilterActive}
           hPad={hPad}
           handleCardsScroll={handleCardsScroll}

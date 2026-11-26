@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,21 +6,6 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTo
 import DisplayWords from './DisplayWords';
 import AppPressable from './AppPressable';
 import InboxBell from './InboxBell';
-
-/**
- * Signals whether a full-width chrome banner (OfflineBanner) is currently
- * mounted IN FLOW above the navigator and is therefore already consuming the
- * top safe-area inset (it paints behind the status bar via `paddingTop:
- * insets.top`). When true, ScreenHeader must NOT add `insets.top` again — doing
- * so double-applies the notch inset and leaves a ~insets.top (≈47px) dead gap
- * between the banner and the title.
- *
- * Defaults to `false`, so a ScreenHeader rendered with no provider (the common
- * case, and every pre-existing call site) behaves exactly as before: it owns
- * the top inset itself. The provider lives in `app/_layout.tsx`, fed by the
- * banner's live visibility.
- */
-export const TopBannerContext = createContext(false);
 
 interface ScreenHeaderProps {
   /** Primary heading text. */
@@ -74,9 +59,6 @@ export default function ScreenHeader({
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
-  // When an in-flow chrome banner already cleared the notch above us, drop our
-  // own top inset so the title doesn't sit below a second insets.top dead gap.
-  const bannerActive = useContext(TopBannerContext);
   const titleText = (
     <Text
       style={styles.title}
@@ -93,7 +75,7 @@ export default function ScreenHeader({
     </Text>
   );
   return (
-    <View style={[styles.row, { paddingTop: (bannerActive ? 0 : insets.top) + t.spacing[4] }]}>
+    <View style={[styles.row, { paddingTop: insets.top + t.spacing[4] }]}>
       {icon ? (
         <Ionicons
           name={icon}

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import { POSTER } from '@festie/shared/tokens';
 
 const PIECES = 24;
@@ -26,7 +26,7 @@ export default function ConfettiBurst() {
   return (
     <div aria-hidden="true" data-testid="confetti" className="pointer-events-none absolute inset-0 overflow-hidden">
       {pieces.map((p, i) => (
-        <motion.span
+        <m.span
           key={i}
           className="absolute left-1/2 top-1/3 block h-2 w-2"
           style={{ backgroundColor: p.color }}

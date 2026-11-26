@@ -6,6 +6,9 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('lucide-react', () => ({
   Heart: () => <span />,
+  Music: () => <span />,
+  User: () => <span />,
+  Bell: () => <span />,
   Inbox: () => <span />,
   Users: () => <span />,
   WifiOff: () => <span />,

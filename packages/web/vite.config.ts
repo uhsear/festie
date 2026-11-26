@@ -19,7 +19,8 @@ function buildId(): string {
   }
 }
 
-const ADMIN_ONLY_SHARED = /[\\/]shared[\\/]src[\\/](utils[\\/]lineup(Import|Paste)|services[\\/](lineupImport|adminArtists))\.ts$/;
+const SHARED_SRC = /[\\/]packages[\\/]shared[\\/]src[\\/]/;
+const LAZY_ONLY_SHARED = /[\\/]shared[\\/]src[\\/](utils[\\/](lineup(Import|Paste)|lockscreen(Model|Poster)|scheduleImage|crewWrapPoster)|services[\\/](lineupImport|adminArtists))\.ts$/;
 
 export default defineConfig({
   define: {
@@ -34,6 +35,9 @@ export default defineConfig({
     // alone is not enough: it lives in a login shell that rollback and staging builds share.
     sourcemap: process.env.FESTIE_WEB_SOURCEMAPS === '1' && process.env.SENTRY_AUTH_TOKEN ? 'hidden' : false,
     rolldownOptions: {
+      // Pure modules used only by lazy routes. Without this, the shared barrel keeps them as
+      // side-effect imports of festie-shared, so they load on first paint despite living in their own chunks.
+      treeshake: { moduleSideEffects: [{ test: LAZY_ONLY_SHARED, sideEffects: false }] },
       output: {
         // Split the vendor bundle into logical chunks so the 697 KB index chunk
         // becomes a small shell + cacheable vendor groups. Parallel HTTP/2 load
@@ -48,11 +52,11 @@ export default defineConfig({
             // One chunk for @festie/shared instead of ~15 tiny shared chunks: the
             // entry needs nearly all of it, and each chunk was its own
             // modulepreload request (37 -> 12 on first load, FCP -0.5s in Lighthouse).
-            // The admin-only lineup tools stay out so only the lazy admin routes load them.
+            // The lineup tools and the lockscreen and poster builders stay out so only the lazy routes that use them load them.
             {
               name: 'festie-shared',
-              test: /[\\/]packages[\\/]shared[\\/]src[\\/]/,
-              exclude: ADMIN_ONLY_SHARED,
+              // A group has no `exclude` option (rolldown ignored it), so filter in `test`.
+              test: (id: string) => SHARED_SRC.test(id) && !LAZY_ONLY_SHARED.test(id),
               priority: 10,
             },
             { name: 'react-core', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 9 },

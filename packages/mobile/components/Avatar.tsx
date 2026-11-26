@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import { durationCelebration } from '@festie/shared/tokens';
 import { getAvatarColor, getInitials, normalizeIdentityName } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -79,8 +80,8 @@ export default function Avatar({
     if (!showStatus || !isOnline || wasOnline || reduceMotion) return;
     ringOpacity.value = 0.7;
     ringScale.value = 1;
-    ringScale.value = withTiming(2.8, { duration: 600, easing: Easing.out(Easing.cubic) });
-    ringOpacity.value = withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) });
+    ringScale.value = withTiming(2.8, { duration: durationCelebration.ring, easing: Easing.out(Easing.cubic) });
+    ringOpacity.value = withTiming(0, { duration: durationCelebration.ring, easing: Easing.out(Easing.cubic) });
   }, [isOnline, showStatus, reduceMotion, ringScale, ringOpacity]);
 
   const ringStyle = useAnimatedStyle(() => ({

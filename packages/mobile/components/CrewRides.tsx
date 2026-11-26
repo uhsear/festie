@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, AccessibilityInfo, Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { duration as motionDuration, staggerDelay } from '@festie/shared/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
@@ -386,8 +387,8 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
           const meta = [rideTimeLabel(offer, timeZone), rideSeatsLine(offer), offer.depart_from]
             .filter(Boolean)
             .join(' · ');
-          // R22 staggered reveal — cap the stagger; reduce-motion safe.
-          const entering = reduceMotion ? undefined : FadeInDown.delay(Math.min(idx, 9) * 40).duration(220);
+          // R22 staggered reveal — shared stagger step and cap; reduce-motion safe.
+          const entering = reduceMotion ? undefined : FadeInDown.delay(staggerDelay(idx)).duration(motionDuration.med);
           return (
             <Animated.View key={offer.id} entering={entering} style={styles.itemRow}>
               <View style={styles.iconBadge}>

@@ -85,11 +85,14 @@ describe('RouteErrorBoundary', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
   });
 
-  it('renders Retry and Reload buttons for generic errors', () => {
+  it('renders the mark, one heading, one sentence and one Retry button for generic errors', () => {
     const error = new Error('Crash');
-    render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
+    const { container } = render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
+    expect(container.querySelector('img[src$="favicon.svg"]')).not.toBeNull();
+    expect(screen.getAllByRole('heading')).toHaveLength(1);
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /reload page/i })).toBeInTheDocument();
   });
 
   it('calls reset when Retry is clicked', async () => {
@@ -99,19 +102,6 @@ describe('RouteErrorBoundary', () => {
     render(<RouteErrorBoundary error={error} reset={resetFn} />);
     await user.click(screen.getByRole('button', { name: /retry/i }));
     expect(resetFn).toHaveBeenCalledOnce();
-  });
-
-  it('calls window.location.reload when Reload page is clicked', async () => {
-    const user = userEvent.setup();
-    const reloadMock = vi.fn();
-    Object.defineProperty(window, 'location', {
-      writable: true,
-      value: { ...window.location, reload: reloadMock },
-    });
-    const error = new Error('Crash');
-    render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: /reload page/i }));
-    expect(reloadMock).toHaveBeenCalledOnce();
   });
 
   it('logs the error to console on mount', () => {
@@ -195,11 +185,10 @@ describe('RouteErrorBoundary', () => {
     expect(screen.getByText('Could not load your crew.')).toBeInTheDocument();
   });
 
-  it('does not render contextMessage paragraph when not provided', () => {
+  it('keeps contextMessage inside the one sentence block', () => {
     const error = new Error('Crash');
-    const { container } = render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
-    const italicParagraphs = container.querySelectorAll('p.italic');
-    expect(italicParagraphs).toHaveLength(0);
+    const { container } = render(<RouteErrorBoundary error={error} reset={vi.fn()} contextMessage="Could not load your crew." />);
+    expect(container.querySelectorAll('p')).toHaveLength(1);
   });
 });
 

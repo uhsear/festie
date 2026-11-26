@@ -5,7 +5,7 @@ import { inputBase } from '../../lib/styles';
 
 // Both eye icons stay mounted and cross-fade (scale/opacity/blur) so the reveal toggle animates.
 const EYE_ICON =
-  'absolute inset-0 w-5 h-5 transition-[opacity,filter,scale] duration-(--duration-slow) ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none';
+  'absolute inset-0 w-5 h-5 transition-[opacity,filter,scale] duration-(--duration-slow) ease-(--ease-standard) motion-reduce:transition-none';
 const EYE_HIDDEN = 'opacity-0 scale-[0.25] blur-[4px] motion-reduce:scale-100 motion-reduce:blur-none';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {

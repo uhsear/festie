@@ -60,7 +60,7 @@ export const TARGETS = {
         seed: 'Offender today. TK-21 moves it to an icon size token, then the entry is deleted.',
       },
       'duration-ms': {
-        re: /\bduration:\s*\d|\bwithDelay\(\s*\d|\.(delay|duration)\(\s*\d/g,
+        re: /\bduration:\s*[1-9]|\bwithDelay\(\s*\d|\.(delay|duration)\(\s*\d/g,
         seed: 'Offender today. DP-47 moves it to a motion token, then the entry is deleted.',
       },
       'animated-true': { re: /\banimated:\s*true/g, seed: 'Offender today. DP-49 honours reduced motion, then the entry is deleted.' },

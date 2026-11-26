@@ -29,7 +29,7 @@ import { fontFamily, fontSize, lineHeight, letterSpacing, wordSpacing } from './
 import { spacing, measureProse } from './spacing.js';
 import { radii } from './radii.js';
 import { zIndex } from './z-index.js';
-import { easing, duration, durationEffects, durationSpatial, pressScale } from './motion.js';
+import { easing, duration, durationEffects, durationSpatial, pressScale, stagger } from './motion.js';
 
 /** px → rem string (16px base), trimming trailing zeros (16 → "1rem"). */
 function rem(px: number): string {
@@ -232,6 +232,8 @@ export function themeDeclarations(): Decl[] {
   d.push(['--duration-slow', `${duration.slow}ms`]);
   d.push(['--duration-pulse', `${duration.pulse}ms`]);
   d.push(['--press-scale', String(pressScale)]);
+  d.push(['--stagger-step', `${stagger.stepMs}ms`]);
+  d.push(['--stagger-last', String(stagger.maxItems - 1)]);
   // Axis-named duration groups. `--duration-fast|med|slow` above is unchanged
   // and stays the general scale; these name what is moving. `spring` is NOT
   // emitted — CSS has no spring primitive, so it stays a React Native token.
