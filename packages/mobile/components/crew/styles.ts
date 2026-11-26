@@ -151,9 +151,6 @@ export const useStyles = makeStyles((t) => ({
   flexButton: {
     flex: 1,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
   inviteBar: {
     flexDirection: 'row',
     alignItems: 'center',

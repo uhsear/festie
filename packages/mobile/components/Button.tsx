@@ -68,7 +68,7 @@ export default function Button({
   const styles = useStyles();
 
   const isDisabled = disabled || loading;
-  const iconColor = ICON_COLOR[variant](t);
+  const iconColor = isDisabled ? t.colors.text.disabled : ICON_COLOR[variant](t);
   const primaryInkColor = primaryInk(t);
 
   return (
@@ -77,7 +77,7 @@ export default function Button({
         styles.base,
         size === 'sm' && styles.sizeSm,
         VARIANT_CONTAINER[variant](styles),
-        isDisabled && styles.disabled,
+        isDisabled && variant !== 'ghost' && styles.disabled,
         style,
       ]}
       onPress={onPress}
@@ -91,7 +91,13 @@ export default function Button({
       {loading ? <ActivityIndicator size="small" color={iconColor} /> : null}
       {!loading && icon ? <Ionicons name={icon} size={size === 'sm' ? t.iconSize.sm : t.iconSize.action} color={iconColor} style={styles.icon} /> : null}
       <Text
-        style={[styles.label, VARIANT_TEXT[variant](styles), variant === 'primary' && { color: primaryInkColor }, loading && styles.loadingLabel]}
+        style={[
+          styles.label,
+          VARIANT_TEXT[variant](styles),
+          variant === 'primary' && { color: primaryInkColor },
+          isDisabled && styles.labelDisabled,
+          loading && styles.loadingLabel,
+        ]}
         numberOfLines={numberOfLines}
         maxFontSizeMultiplier={maxFontSizeMultiplier}
       >
@@ -176,8 +182,14 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.input,
   },
+  // Disabled is a token pair (bg.disabled fill, text.disabled ink), never an opacity,
+  // so a dimmed primary does not mint a third teal.
   disabled: {
-    opacity: 0.6,
+    backgroundColor: t.colors.bg.disabled,
+    borderColor: t.colors.border.default,
+  },
+  labelDisabled: {
+    color: t.colors.text.disabled,
   },
   // Leading-glyph spacing (replaces the row gap — see `base`).
   icon: {
