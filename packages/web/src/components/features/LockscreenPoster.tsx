@@ -57,15 +57,7 @@ export default function LockscreenPoster({ model, page }: { model: LockscreenMod
         fontFamily: GROTESK,
       }}
     >
-      {bg.glow && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            backgroundImage: `radial-gradient(120% 40% at 50% ${bg.glow.cyU * U}px, ${bg.glow.color}${hexAlpha(bg.glow.alpha)}, transparent 70%)`,
-          }}
-        />
-      )}
+      <div style={{ ...abs(0, 0, 100, bg.band.heightU), backgroundColor: bg.band.color }} />
       {bg.sheet && (
         <div
           style={{

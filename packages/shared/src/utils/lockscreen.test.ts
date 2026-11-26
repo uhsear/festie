@@ -3,6 +3,8 @@ import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain'
 import { EDC_SETS, EDC_STAGES } from './lockscreen.fixture';
 import { LOCKSCREEN_ZONES, POSTER_TOP_U, type LockscreenGridPage, type LockscreenInput, type LockscreenListPage } from './lockscreen';
 import { artistDisplayName } from './format';
+import { posterBand } from './festivalTint';
+import { POSTER } from '../tokens/poster';
 import {
   balancedRanges,
   buildLockscreenModel,
@@ -258,9 +260,10 @@ describe('list modes', () => {
 });
 
 describe('theme and zones', () => {
-  it('dark has a glow, sunlight has a dark top and a white sheet', () => {
+  it('dark has the festival band and no glow, sunlight has a dark top and a white sheet', () => {
     const dark = build({ picks: pick(friday, 3) });
-    expect(dark.background.glow).not.toBeNull();
+    expect(dark.background).not.toHaveProperty('glow');
+    expect(dark.background.band).toEqual({ color: posterBand('EDC Orlando 2026').colour, heightU: (POSTER.band.height / POSTER.width) * 100 });
     expect(dark.pages[0]!.footer.showMark).toBe(true);
     const light = build({ picks: pick(friday, 3), theme: 'light' });
     expect(light.background.sheet).toMatchObject({ color: '#ffffff', radiusU: 3 });

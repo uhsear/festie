@@ -1,6 +1,6 @@
 import { View, Text } from 'react-native';
 import type { TextStyle } from 'react-native';
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { LOCKSCREEN_TAG_SCALE } from '@festie/shared/utils';
 import { posterFont } from '../hooks/useTokens';
 import type {
@@ -58,7 +58,7 @@ interface Props {
  * coordinate in the model is in u (1% of image width), so each box is positioned
  * absolutely at u * unit. Captured off-screen with react-native-view-shot at
  * device points (see pointScale). Fixed-pixel image: text ignores the OS font size.
- * Matches the web LockscreenPoster; the dark glow and Poster beams are SVG gradients.
+ * Matches the web LockscreenPoster; the Poster beams are SVG gradients.
  * shortcut: beams have no blur (web blurs them by 1.2u); add an SVG filter if the edges look hard on a device.
  */
 export default function LockscreenPoster({ model, page, pointScale = 1 }: Props) {
@@ -76,28 +76,22 @@ export default function LockscreenPoster({ model, page, pointScale = 1 }: Props)
 
   return (
     <View style={{ width: W, height: H, backgroundColor: bg.color, overflow: 'hidden' }}>
-      {bg.glow || art ? (
+      {art ? (
         <Svg width={W} height={H} style={{ position: 'absolute', left: 0, top: 0 }}>
           <Defs>
-            {bg.glow ? (
-              <RadialGradient id="glow" cx={W / 2} cy={bg.glow.cyU * u} rx={1.2 * W} ry={0.4 * H} gradientUnits="userSpaceOnUse">
-                <Stop offset="0" stopColor={bg.glow.color} stopOpacity={bg.glow.alpha} />
-                <Stop offset="0.7" stopColor={bg.glow.color} stopOpacity={0} />
-              </RadialGradient>
-            ) : null}
-            {art?.beams.map((b, i) => (
+            {art.beams.map((b, i) => (
               <LinearGradient key={b.x} id={`beam${i}`} x1="0" y1="0" x2="0" y2="1">
                 <Stop offset="0" stopColor={b.color} stopOpacity={0} />
                 <Stop offset="1" stopColor={b.color} stopOpacity={0.55} />
               </LinearGradient>
             ))}
           </Defs>
-          {bg.glow ? <Rect x={0} y={0} width={W} height={H} fill="url(#glow)" /> : null}
-          {art?.beams.map((b, i) => (
+          {art.beams.map((b, i) => (
             <Rect key={b.x} x={b.x * u} y={b.y * u} width={b.width * u} height={b.height * u} fill={`url(#beam${i})`} />
           ))}
         </Svg>
       ) : null}
+      <View style={{ position: 'absolute', left: 0, top: 0, width: W, height: bg.band.heightU * u, backgroundColor: bg.band.color }} />
       {bg.sheet ? (
         <View
           style={{

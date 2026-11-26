@@ -42,6 +42,14 @@ describe('web and mobile posters share one structure', () => {
     for (const src of [read(PAIRS[1][1]), read(PAIRS[1][2])]) expect(src).toContain('POSTER.dominantSize');
   });
 
+  it('both lock-screen posters draw the model band and no radial glow', () => {
+    for (const p of ['web/src/components/features/LockscreenPoster.tsx', 'mobile/components/LockscreenPoster.tsx']) {
+      const src = read(p);
+      expect(src).toContain('bg.band');
+      expect(src).not.toMatch(/radial-?gradient|glow/i);
+    }
+  });
+
   it('both schedule posters draw the band and the footer lockup', () => {
     for (const p of ['web/src/components/features/ScheduleImagePoster.tsx', 'mobile/components/ScheduleImagePoster.tsx']) {
       const src = read(p);
