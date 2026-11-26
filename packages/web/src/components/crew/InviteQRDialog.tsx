@@ -1,6 +1,7 @@
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { buildJoinUrl } from '@festie/shared/utils';
+import { colors } from '@festie/shared/tokens';
 import Dialog from '../ui/Dialog';
 
 interface InviteQRDialogProps {
@@ -26,7 +27,7 @@ export default function InviteQRDialog({ open, onOpenChange, crewName, code }: I
             value={buildJoinUrl(code, window.location.origin)}
             size={240}
             level="M"
-            fgColor="#080810"
+            fgColor={colors.bg.primary}
             bgColor="#FFFFFF"
             marginSize={0}
           />

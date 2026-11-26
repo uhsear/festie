@@ -135,7 +135,7 @@ function ratio(a: string, b: string): number {
 describe('stageTextColor', () => {
   for (const stage of ['#5b21b6', '#b91c1c', '#ffd400', '#00e8d0']) {
     it(`${stage} reaches 4.5:1 on the Stage ground`, () => {
-      expect(ratio(stageTextColor(stage, 'stage'), '#080810')).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(stageTextColor(stage, 'stage'), '#0a0a0a')).toBeGreaterThanOrEqual(4.5);
     });
     it(`${stage} reaches 4.5:1 on the Daylight ground`, () => {
       expect(ratio(stageTextColor(stage, 'daylight'), '#f4f4f7')).toBeGreaterThanOrEqual(4.5);
@@ -155,7 +155,7 @@ function tintOver(stage: string, ground: string): string {
 describe('inactiveChipTextColor', () => {
   for (const stage of ['#5b21b6', '#b91c1c', '#ffd400', '#00e8d0', '#1f8a63']) {
     it(`${stage} reaches 4.5:1 on its tinted pill in both themes`, () => {
-      expect(ratio(inactiveChipTextColor(stage, 'stage'), tintOver(stage, '#080810'))).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(inactiveChipTextColor(stage, 'stage'), tintOver(stage, '#0a0a0a'))).toBeGreaterThanOrEqual(4.5);
       expect(ratio(inactiveChipTextColor(stage, 'daylight'), tintOver(stage, '#f4f4f7'))).toBeGreaterThanOrEqual(4.5);
     });
   }

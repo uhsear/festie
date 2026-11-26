@@ -1,3 +1,4 @@
+import { POSTER } from '@festie/shared/tokens';
 import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import { buildFestivalPageUrl } from '@festie/shared/utils';
 import { saveBlob } from './downloadExport';
@@ -24,7 +25,7 @@ export async function sharePoster(
     width: 1080,
     height: 1920,
     pixelRatio: 2,
-    backgroundColor: '#080810',
+    backgroundColor: POSTER.colors.ground,
     cacheBust: true,
   });
   if (!blob) throw new Error('Capture failed');

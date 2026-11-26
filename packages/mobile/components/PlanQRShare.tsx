@@ -13,6 +13,7 @@ import {
   MAX_ENCODED_LENGTH,
 } from '@festie/shared/utils';
 import { COPY, planBLine } from '@festie/shared/constants';
+import { colors } from '@festie/shared/tokens';
 import type { CrewMeetingPoint, Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -125,7 +126,7 @@ export default function PlanQRShare() {
           value={buildPlanQrUrl(encoded)}
           size={240}
           // High-contrast on a light tile so cameras lock fast in low festival light.
-          color="#080810"
+          color={colors.bg.primary}
           backgroundColor="#FFFFFF"
           // L error correction keeps the code small/dense-free for our bounded payload.
           ecl="M"

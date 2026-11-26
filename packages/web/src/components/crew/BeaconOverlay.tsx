@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useAuthStore } from '@festie/shared/stores';
 import { BEACON_COPY } from '@festie/shared/constants';
+import { colors } from '@festie/shared/tokens';
 import { BEACON_FLASH_MS, beaconColors, displayInitials, identityLabel } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -80,7 +81,7 @@ function BeaconScreen() {
         {/* Fixed dark fill and white ring: the screen flashes through avatar colours, so a themed button can vanish. */}
         <button
           type="button"
-          style={{ backgroundColor: '#080810', borderColor: '#FFFFFF', color: '#FFFFFF' }}
+          style={{ backgroundColor: colors.bg.primary, borderColor: '#FFFFFF', color: '#FFFFFF' }}
           className="min-h-14 min-w-40 rounded-full border-2 px-8 text-lg font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           {BEACON_COPY.done}

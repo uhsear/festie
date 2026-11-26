@@ -9,6 +9,7 @@ import { useFestivalStore, useCrewStore, useAuthStore } from '@festie/shared/sto
 import { fetchShareLink } from '@festie/shared/services';
 import { encodePlanSnapshot, buildPlanSnapshotInput, buildPlanQrUrl, MAX_ENCODED_LENGTH } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
+import { colors } from '@festie/shared/tokens';
 import { useToast } from '../../lib/toastContext';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
@@ -158,7 +159,7 @@ function QrSection() {
               value={buildPlanQrUrl(qr.encoded, window.location.origin)}
               size={200}
               level="M"
-              fgColor="#080810"
+              fgColor={colors.bg.primary}
               bgColor="#FFFFFF"
               marginSize={0}
             />
