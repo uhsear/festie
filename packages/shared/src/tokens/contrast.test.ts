@@ -128,6 +128,20 @@ const pairs: Array<[string, string, string, number]> = [
   ['delivery.failed on bg.primary', colors.delivery.failed, colors.bg.primary, NORMAL],
   ['delivery.failed on bg.card', colors.delivery.failed, colors.bg.card, NORMAL],
   ['delivery.failed on bg.elevated', colors.delivery.failed, colors.bg.elevated, NORMAL],
+  // Tokens moved out of theme.css (DP-04). Text tokens are NORMAL, marks are LARGE (3:1).
+  ['tint.coralText on bg.primary', colors.tint.coralText, colors.bg.primary, NORMAL],
+  ['tint.coralTextHover on bg.primary', colors.tint.coralTextHover, colors.bg.primary, NORMAL],
+  ['tint.coralText on a coral/20 chip', colors.tint.coralText, over('rgba(255, 51, 102, 0.2)', colors.bg.primary), NORMAL],
+  ['live.text on bg.primary', colors.live.text, colors.bg.primary, NORMAL],
+  ['live.text on bg.card', colors.live.text, colors.bg.card, NORMAL],
+  ['ink (onLightAccent) on live.fill', colors.text.onLightAccent, colors.live.fill, NORMAL],
+  ['ink (onLightAccent) on hover.aqua fill', colors.text.onLightAccent, colors.hover.aqua, NORMAL],
+  ['white (onAccent) on hover.coralStrong fill', colors.text.onAccent, colors.hover.coralStrong, NORMAL],
+  ['text.disabled on bg.disabled', colors.text.disabled, over(colors.bg.disabled, colors.bg.primary), NORMAL],
+  ['map.self on bg.primary', colors.map.self, colors.bg.primary, LARGE],
+  ['text.primary on glass.detail', colors.text.primary, colors.glass.detail, NORMAL],
+  ['text.primary on glass.panel', colors.text.primary, over(colors.glass.panel, colors.bg.primary), NORMAL],
+  ['text.primary on bg.chrome', colors.text.primary, over(colors.bg.chrome, colors.bg.primary), NORMAL],
 ];
 
 describe('design token contrast (WCAG AA)', () => {
@@ -234,6 +248,35 @@ describe('Daylight palette contrast', () => {
     for (const fill of [D.accent.aqua, D.accent.coral, D.accent.amber, D.accent.green]) {
       expect(contrast(D.text.onLightAccent, fill)).toBeGreaterThanOrEqual(SUN);
     }
+  });
+});
+
+describe('DP-04 token aliases and Daylight parity', () => {
+  it('status.error is the same red as text.danger on both themes', () => {
+    expect(colors.status.error).toBe(colors.text.danger);
+    expect(colorsDaylight.status.error).toBe(colorsDaylight.text.danger);
+  });
+
+  it('live is green per OD-3: fill and text alias accent.green on both themes', () => {
+    for (const p of [colors, colorsDaylight]) {
+      expect(p.live.fill).toBe(p.accent.green);
+      expect(p.live.text).toBe(p.accent.green);
+    }
+  });
+
+  const D = colorsDaylight;
+  const SUN = 7;
+  it('Daylight text and ink tokens reach 7:1 on the grounds they sit on', () => {
+    for (const ground of [D.bg.primary, D.bg.card]) {
+      expect(contrast(D.tint.coralText, ground)).toBeGreaterThanOrEqual(SUN);
+      expect(contrast(D.tint.coralTextHover, ground)).toBeGreaterThanOrEqual(SUN);
+      expect(contrast(D.live.text, ground)).toBeGreaterThanOrEqual(SUN);
+      expect(contrast(D.map.self, ground)).toBeGreaterThanOrEqual(LARGE);
+    }
+    expect(contrast(D.text.onLightAccent, D.live.fill)).toBeGreaterThanOrEqual(SUN);
+    expect(contrast(D.text.onAccent, D.hover.aqua)).toBeGreaterThanOrEqual(SUN);
+    expect(contrast(D.text.onAccent, D.hover.coralStrong)).toBeGreaterThanOrEqual(SUN);
+    expect(contrast(D.text.primary, D.glass.detail)).toBeGreaterThanOrEqual(SUN);
   });
 });
 

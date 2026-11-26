@@ -41,10 +41,10 @@ export default function PickBulkActions() {
   if (!hasGroups) return null;
 
   return (
-    <div className="mb-3 rounded-xl border border-border bg-bg-card">
+    <div className="mb-3 rounded-lg border border-border bg-bg-card">
       <button
         type="button"
-        className="flex items-center gap-2 w-full px-4 py-3 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
+        className="flex items-center gap-2 w-full px-4 py-3 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-lg"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >

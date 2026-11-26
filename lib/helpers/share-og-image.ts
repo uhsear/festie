@@ -7,6 +7,7 @@
  */
 
 import { escapeHtml } from './sanitize.js';
+import { colors } from '../../packages/shared/src/tokens/colors';
 import { festivalStartMinutes } from '../time-zone.js';
 
 const OG_WIDTH = 1200;
@@ -38,7 +39,7 @@ const svgDocument = (lines: string[]) =>
 /** Returns the preview SVG. Every text value is escaped; escapeHtml's entities are valid XML. */
 export function buildShareOgSvg(input: ShareOgInput): string {
   const lines = [
-    `<rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="#080810"/>`,
+    `<rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${colors.bg.primary}"/>`,
     text(64, 88, 28, '#ff3366', 'FESTIE', 800),
     text(64, 170, 60, '#eaeaf2', truncate(input.festivalName, 32), 700),
     text(64, 226, 34, '#9999bb', `${input.username}'s picks`),
@@ -66,7 +67,7 @@ export interface FestivalOgInput {
 export function buildFestivalOgSvg(input: FestivalOgInput): string {
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   const lines = [
-    `<rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="#080810"/>`,
+    `<rect width="${OG_WIDTH}" height="${OG_HEIGHT}" fill="${colors.bg.primary}"/>`,
     text(64, 88, 28, '#ff3366', 'FESTIE', 800),
     text(64, 170, 60, '#eaeaf2', truncate(input.festivalName, 32), 700),
   ];

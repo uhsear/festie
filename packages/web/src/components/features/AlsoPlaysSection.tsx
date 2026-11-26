@@ -56,7 +56,7 @@ export default function AlsoPlaysSection({ set }: { set: FestivalSet }) {
                 type="button"
                 onClick={() => setDetailSet(slot.set)}
                 aria-label={`${line}${stage ? `, ${stage}` : ''}. Open this set.`}
-                className="min-h-[44px] flex-1 rounded-xl px-3 py-2 text-left cursor-pointer hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+                className="min-h-[44px] flex-1 rounded-lg px-3 py-2 text-left cursor-pointer hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               >
                 <span className="block text-sm font-semibold text-text-primary">{line}</span>
                 {stage && <span className="block text-xs text-text-muted">{stage}</span>}

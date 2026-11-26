@@ -160,7 +160,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
 
   return (
     <section
-      className={cn('rounded-xl border border-border bg-bg-card px-4', className)}
+      className={cn('rounded-lg border border-border bg-bg-card px-4', className)}
       aria-label="Download festival for offline"
     >
       <div className="flex items-center gap-2 min-h-11 py-1">
@@ -189,7 +189,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           disabled={isDownloading || offlineMode}
           aria-busy={isDownloading || undefined}
           className={cn(
-            'inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold min-h-11',
+            'inline-flex flex-shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold min-h-11',
             'transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)]',
             'bg-accent-aqua text-bg-primary hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:transform-none',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
@@ -203,7 +203,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           aria-label="Show offline download details"
-          className="inline-flex flex-shrink-0 items-center justify-center w-11 h-11 rounded-xl text-text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          className="inline-flex flex-shrink-0 items-center justify-center w-11 h-11 rounded-lg text-text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         >
           <ChevronDown className={cn('w-4 h-4 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
         </button>

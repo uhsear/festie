@@ -469,7 +469,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         <p className="text-sm text-text-secondary">Couldn’t load this festival.</p>
         <button
           onClick={() => void load()}
-          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium"
+          className="px-4 py-2 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium"
         >
           Try again
         </button>
@@ -527,7 +527,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
       </div>
 
       {/* Venue: the festival point the map camera and weather use */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-3">
         <h3 className="type-label text-text-primary">Venue</h3>
         <p className="text-xs text-text-muted">
           {venue
@@ -547,7 +547,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
             onKeyDown={(e) => {
               if (e.key === 'Enter') applyVenueText();
             }}
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           <Button size="sm" onClick={applyVenueText}>
             Use
@@ -561,7 +561,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
       </div>
 
       {/* Stage locations */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4">
         <h3 className="type-label text-text-primary mb-3">{scope === 'manage' ? 'Drop a pin where each stage is' : 'Stage locations'}</h3>
         {stages.length === 0 ? (
           <div className="flex flex-wrap items-center gap-3">
@@ -681,14 +681,14 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         <button
           onClick={() => confirmLeave(onClose)}
           disabled={saving}
-          className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium disabled:opacity-60"
+          className="px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium disabled:opacity-60"
         >
           Cancel
         </button>
         <button
           onClick={() => void handleSave()}
           disabled={saving || basemapInvalid}
-          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-60"
+          className="px-4 py-2 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'Save map'}
         </button>

@@ -265,7 +265,7 @@ export function renderFestivalPage({
   <title>${escapeHtml(`${name} lineup and set times · Festie`)}</title>
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#080810">
+  <meta name="theme-color" content="#0a0a0a">
   <meta property="og:site_name" content="Festie">
   <meta property="og:title" content="${escapeHtml(`${name} lineup and set times`)}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -309,7 +309,7 @@ export function renderFestivalNotFoundPage(origin: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Festival not found</title>
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#080810">
+  <meta name="theme-color" content="#0a0a0a">
   <style>${PAGE_STYLE}
     body { background: #0a0a0a; }
   </style>

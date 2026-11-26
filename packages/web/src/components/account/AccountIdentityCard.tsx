@@ -59,7 +59,7 @@ export default function AccountIdentityCard() {
   const status = busy === 'upload' ? AVATAR_COPY.uploading : busy === 'remove' ? AVATAR_COPY.removing : AVATAR_COPY.rules;
 
   return (
-    <section className="flex items-center gap-4 p-4 rounded-xl bg-bg-card border border-border">
+    <section className="flex items-center gap-4 p-4 rounded-lg bg-bg-card border border-border">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}

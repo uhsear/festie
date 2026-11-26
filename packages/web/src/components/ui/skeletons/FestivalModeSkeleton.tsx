@@ -26,7 +26,7 @@ export default function FestivalModeSkeleton() {
           {[0, 1].slice(0, label === 'NOW' ? 1 : 2).map((i) => (
             <div
               key={i}
-              className="fm-card-enter block w-full text-left py-3.5 px-4 bg-glass rounded-xl border border-[var(--color-aqua-a08)] mb-2 flex flex-col gap-2"
+              className="fm-card-enter block w-full text-left py-3.5 px-4 bg-glass rounded-lg border border-[var(--color-aqua-a08)] mb-2 flex flex-col gap-2"
             >
               <div className="skeleton-shimmer h-[22px] w-[65%]" />
               <div className="skeleton-shimmer h-3.5 w-2/5" />

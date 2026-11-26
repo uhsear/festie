@@ -11,7 +11,7 @@ export default function GuestPicksBanner() {
     <div
       role="region"
       aria-label="Save your picks"
-      className="w-full mb-3 rounded-xl border border-border-light bg-bg-card p-4 text-left"
+      className="w-full mb-3 rounded-lg border border-border-light bg-bg-card p-4 text-left"
     >
       <p className="font-display text-lg font-bold text-text-primary">{COPY.title}</p>
       <p className="mt-1 text-[length:var(--font-size-14)] text-text-secondary">{COPY.body}</p>

@@ -35,7 +35,7 @@ export default function AlsoPickedSection({ set }: { set: FestivalSet }) {
             .join(' · ');
           return (
             <li key={s.id}>
-              <div className="relative w-full min-h-[44px] rounded-xl px-3 py-2 text-left hover:bg-bg-input">
+              <div className="relative w-full min-h-[44px] rounded-lg px-3 py-2 text-left hover:bg-bg-input">
                 <RowOpenButton label={detail ? `${artistDisplayName(s)}, ${detail}` : artistDisplayName(s)} onClick={() => setDetailSet(s)} />
                 <span className="block truncate text-sm font-semibold text-text-primary">
                   <ArtistName set={s} />

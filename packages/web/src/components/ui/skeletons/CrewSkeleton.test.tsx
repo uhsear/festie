@@ -16,7 +16,7 @@ describe('CrewSkeleton', () => {
 
   it('renders a crew selector placeholder', () => {
     const { container } = render(<CrewSkeleton />);
-    const selectorSkeleton = container.querySelector('.skeleton-shimmer.h-10.w-full.rounded-lg');
+    const selectorSkeleton = container.querySelector('.skeleton-shimmer.h-10.w-full.rounded-xl');
     expect(selectorSkeleton).toBeInTheDocument();
   });
 

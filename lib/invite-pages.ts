@@ -67,7 +67,7 @@ const PAGE_STYLE = `
     .invite-link:hover { text-decoration: underline; }
     .invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }`;
 
-// Values copied from the Daylight palette (packages/shared/src/tokens/colorsDaylight.ts); the backend cannot import @festie/shared.
+// Values copied by hand from the Daylight palette (packages/shared/src/tokens/colorsDaylight.ts). The backend can import the shared tokens by relative path, as lib/design-css.ts does; the pages move onto that module in DP-14.
 // Must follow the festival tint rules so it wins at equal specificity.
 const LIGHT_STYLE = `
     @media (prefers-color-scheme: light) {

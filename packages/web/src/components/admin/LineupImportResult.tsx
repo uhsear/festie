@@ -12,7 +12,7 @@ interface LineupImportResultProps {
 export default function LineupImportResult({ result: r, festivalName, onReset, onDone }: LineupImportResultProps) {
   return (
   <div className="space-y-4">
-    <p role="status" className="bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-4 text-sm text-text-primary">
+    <p role="status" className="bg-accent-aqua/10 border border-accent-aqua/30 rounded-xl p-4 text-sm text-text-primary">
       Import done. Added {pluralize(r.created, 'set')}, updated {r.updated}, created {pluralize(r.newStages, 'stage')} and {pluralize(r.newDays, 'day')}.
       {r.announced || r.announcedUpdated
         ? ` Announced lineup: ${r.announced ?? 0} added, ${r.announcedUpdated ?? 0} updated.`

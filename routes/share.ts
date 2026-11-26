@@ -368,7 +368,7 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
   <meta property="og:description" content="${shareDescription({ mustCount, wantCount, maybeCount, totalPicks })}">
   <meta property="og:url" content="${shareUrl}">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#080810">
+  <meta name="theme-color" content="#0a0a0a">
   <meta property="og:site_name" content="Festie">
   <meta property="og:image" content="${ogUrl}">
   <meta property="og:image:width" content="1200">

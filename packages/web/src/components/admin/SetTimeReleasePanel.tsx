@@ -131,7 +131,7 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0, onLoad
             return (
               <li
                 key={row.date}
-                className="bg-bg-card/60 border border-glass-border rounded-lg p-3 flex items-center justify-between gap-3"
+                className="bg-bg-card/60 border border-glass-border rounded-xl p-3 flex items-center justify-between gap-3"
               >
                 <span className="text-sm text-text-primary">{timeReleaseRowText(row, nowMs)}</span>
                 {canPress && (
@@ -180,7 +180,7 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0, onLoad
               value={note}
               placeholder={panel.defaultBody}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-1 w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+              className="mt-1 w-full px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
             />
           </label>
         )}

@@ -116,7 +116,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName, scope 
   };
 
   return (
-    <section className="bg-bg-card/60 border border-glass-border rounded-lg p-4 space-y-4">
+    <section className="bg-bg-card/60 border border-glass-border rounded-xl p-4 space-y-4">
       <h3 className="type-heading text-text-primary">{COPY.heading}</h3>
       <p className="text-sm text-text-muted">{organizer ? COPY.organizer.intro(festivalName) : COPY.intro(festivalName)}</p>
       <p className="text-sm text-text-muted">
@@ -235,7 +235,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName, scope 
             return (
               <li
                 key={a.id}
-                className="bg-bg-card/60 border border-glass-border rounded-lg p-3 flex items-center justify-between gap-3"
+                className="bg-bg-card/60 border border-glass-border rounded-xl p-3 flex items-center justify-between gap-3"
               >
                 <div className="text-sm min-w-0">
                   <p className="text-text-primary break-words">

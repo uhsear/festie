@@ -315,7 +315,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       </p>
 
       {showPresets && (
-        <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+        <div className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-sm text-text-primary">Share my status</span>
             <button
@@ -336,7 +336,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                   type="button"
                   disabled={busy}
                   onClick={() => sendPreset(p.key)}
-                  className="px-2 py-2 rounded-lg border border-border bg-bg-card text-text-secondary hover:border-border-light text-xs font-medium min-h-11 flex items-center gap-2 text-left transition-colors"
+                  className="px-2 py-2 rounded-xl border border-border bg-bg-card text-text-secondary hover:border-border-light text-xs font-medium min-h-11 flex items-center gap-2 text-left transition-colors"
                 >
                   <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
                   <span>{p.key === 'at-stage' ? `At ${stageName}` : p.label}</span>
@@ -348,7 +348,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
       )}
 
       {showForm && (
-        <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+        <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-sm text-text-primary">On my way</span>
             <button
@@ -466,7 +466,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
               const isMe = s.user_id === currentUserId;
               const targetLabel = labelFor(s.target_meeting_point_id);
               return (
-                <li key={s.user_id} className="p-2.5 rounded-lg bg-bg-card border border-border">
+                <li key={s.user_id} className="p-2.5 rounded-xl bg-bg-card border border-border">
                   <div className="flex items-start gap-2">
                     {meta ? (
                       <meta.Icon className="w-5 h-5 text-text-secondary shrink-0" aria-hidden="true" />

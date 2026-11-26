@@ -180,7 +180,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="What do you want to remember?"
                 aria-label="Memory"
-                className="w-full min-h-11 rounded-lg border border-border-input bg-bg-card px-3 text-sm"
+                className="w-full min-h-11 rounded-xl border border-border-input bg-bg-card px-3 text-sm"
               />
               <div className="flex justify-center gap-2">
                 <button

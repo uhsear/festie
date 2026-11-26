@@ -30,7 +30,7 @@ export default function PaymentsList({
     {payments.map((p) => (
       <div
         key={p.id}
-        className="p-3 rounded-lg bg-bg-card border border-glass-border flex items-center justify-between gap-3"
+        className="p-3 rounded-xl bg-bg-card border border-glass-border flex items-center justify-between gap-3"
       >
         <div className="min-w-0">
           <div className="text-sm text-text-primary">{describePayment(p, currentUserId, nameOf, currency)}</div>

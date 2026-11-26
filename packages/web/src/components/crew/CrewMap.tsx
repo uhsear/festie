@@ -796,14 +796,14 @@ export default function CrewMap({
         </p>
       )}
       <div
-        className={`relative rounded-lg overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
+        className={`relative rounded-xl overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
       >
         {/* Markers sit inside the canvas, so Tab crosses every one before the controls below it. */}
         {interactive && status === 'ready' && (
           <button
             type="button"
             onClick={() => locateButtonRef.current?.focus()}
-            className="sr-only focus:not-sr-only focus:absolute focus:left-14 focus:top-2 focus:z-20 focus:rounded-lg focus:border focus:border-border focus:bg-bg-elevated focus:px-3 focus:py-2 focus:text-xs focus:text-text-primary"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-14 focus:top-2 focus:z-20 focus:rounded-xl focus:border focus:border-border focus:bg-bg-elevated focus:px-3 focus:py-2 focus:text-xs focus:text-text-primary"
           >
             Skip map markers
           </button>
@@ -837,7 +837,7 @@ export default function CrewMap({
                 setStatus('pending');
                 setInitAttempt((n) => n + 1);
               }}
-              className="min-h-11 rounded-lg border border-border bg-bg-elevated px-4 text-sm text-text-primary hover:border-accent-aqua"
+              className="min-h-11 rounded-xl border border-border bg-bg-elevated px-4 text-sm text-text-primary hover:border-accent-aqua"
             >
               {MAP_COPY.tryAgain}
             </button>
@@ -866,7 +866,7 @@ export default function CrewMap({
         {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && !wayBarSaysLocation && (
           <div
             role="status"
-            className="absolute left-14 right-14 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
+            className="absolute left-14 right-14 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
           >
             {awaitingFix ? (
               geoState === 'denied' || geoState === 'unavailable' ? (
@@ -930,7 +930,7 @@ export default function CrewMap({
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-9 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-9 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (

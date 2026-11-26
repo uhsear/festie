@@ -256,7 +256,7 @@ function CardsViewInner() {
           {earlier.length > 0 && !earlierForced && (
             <button
               type="button"
-              className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-xl border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+              className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-lg border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               aria-expanded={showEarlier}
               aria-label={showEarlier ? undefined : `Earlier today (${earlier.length}), show sets that ended earlier`}
               onClick={() => setShowEarlier((v) => !v)}

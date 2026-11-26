@@ -76,7 +76,7 @@ export default function DayEditor({
   const allShownSelected = shown.length > 0 && shown.every((s) => selected?.has(s.id));
 
   return (
-    <div className="rounded-lg bg-bg-primary/40 border border-glass-border">
+    <div className="rounded-xl bg-bg-primary/40 border border-glass-border">
       {/* Day header row */}
       <div className="flex flex-wrap gap-2 items-center p-3">
         <button
@@ -99,7 +99,7 @@ export default function DayEditor({
           aria-label={`Day label for ${day.label || 'this day'}`}
           value={day.label}
           onChange={(e) => onLabelChange(e.target.value)}
-          className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
         <div className="basis-full md:basis-auto flex flex-wrap items-center gap-2">
           <input
@@ -107,7 +107,7 @@ export default function DayEditor({
             aria-label={`Day date for ${day.label || 'this day'}`}
             value={day.date}
             onChange={(e) => onDateChange(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           <span className="text-xs text-text-muted whitespace-nowrap">
             {setCount} {setCount === 1 ? 'artist' : 'artists'}
@@ -115,7 +115,7 @@ export default function DayEditor({
           <button
             onClick={onRemoveDay}
             aria-label={`Remove ${day.label || 'day'}`}
-            className="px-2 py-2 min-h-11 shrink-0 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+            className="px-2 py-2 min-h-11 shrink-0 rounded-xl bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
           >
             Remove
           </button>
@@ -185,7 +185,7 @@ export default function DayEditor({
           <button
             type="button"
             onClick={onAddSet}
-            className="mt-2 px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+            className="mt-2 px-3 py-1.5 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
           >
             + Add Artist
           </button>

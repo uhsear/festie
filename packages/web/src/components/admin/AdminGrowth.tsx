@@ -7,7 +7,7 @@ import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
 
 function TotalsList({ title, rows, empty }: { title: string; rows: GrowthTotal[]; empty: string }) {
   return (
-    <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
+    <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4">
       <h3 className="type-label text-text-muted mb-2">{title}</h3>
       {rows.length === 0 ? (
         <p className="text-sm text-text-muted">{empty}</p>

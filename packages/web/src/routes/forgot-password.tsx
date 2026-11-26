@@ -66,7 +66,7 @@ function ForgotPasswordPageInner() {
         {expired && !submitted && (
           <div
             role="status"
-            className="mb-4 p-3 bg-bg-card border border-border rounded-lg text-sm text-text-primary text-left"
+            className="mb-4 p-3 bg-bg-card border border-border rounded-xl text-sm text-text-primary text-left"
           >
             {AUTH_COPY.resetLinkExpired}
           </div>
@@ -74,7 +74,7 @@ function ForgotPasswordPageInner() {
 
         {!submitted ? (
           // Form
-          <form noValidate onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left">
+          <form noValidate onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-xl p-6 space-y-4 text-left">
             <Input
               id="forgot-email"
               label={AUTH_COPY.emailLabel}
@@ -90,7 +90,7 @@ function ForgotPasswordPageInner() {
             <p className="text-xs text-text-muted">{AUTH_COPY.forgotUsernameHint}</p>
 
             {serverError && !emailError && (
-              <div role="alert" className="p-3 bg-accent-coral/10 border border-accent-coral/30 rounded-lg text-sm text-[var(--color-text-danger)]">
+              <div role="alert" className="p-3 bg-accent-coral/10 border border-accent-coral/30 rounded-xl text-sm text-[var(--color-text-danger)]">
                 {serverError}
               </div>
             )}
@@ -102,7 +102,7 @@ function ForgotPasswordPageInner() {
         ) : (
           // Success message
           <div
-            className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-300"
+            className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-300"
             role="status"
             aria-live="polite"
           >

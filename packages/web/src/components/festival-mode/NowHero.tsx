@@ -47,11 +47,11 @@ function startsInWords(startsAt: number, nowMs: number, timeZone: string | undef
 }
 
 const card =
-  'relative block w-full text-left rounded-xl border bg-bg-card p-4 transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100';
+  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100';
 
 function Quiet({ icon, title, body, action }: { icon: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-now-empty">
+    <div className="rounded-lg border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-now-empty">
       <div className="flex items-start gap-3">
         <span className="text-text-muted shrink-0 mt-0.5 [&_svg]:w-6 [&_svg]:h-6">{icon}</span>
         <div className="min-w-0">

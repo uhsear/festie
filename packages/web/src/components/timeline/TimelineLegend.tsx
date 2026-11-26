@@ -19,7 +19,7 @@ export default function TimelineLegend() {
       <summary
         className={cn(
           'cursor-pointer inline-flex items-center gap-1',
-          'min-h-11 px-3 rounded-lg',
+          'min-h-11 px-3 rounded-xl',
           'bg-[var(--color-glass,rgba(26,26,26,0.4))]',
           'font-semibold tracking-[0.04em] uppercase type-caption',
           'select-none',

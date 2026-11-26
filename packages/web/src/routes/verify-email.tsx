@@ -10,7 +10,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 type Outcome = { kind: 'done'; moved: boolean } | { kind: 'dead'; message?: string } | null;
 
 const linkClass =
-  'inline-flex w-full min-h-11 items-center justify-center rounded-lg bg-accent-aqua px-4 py-2 font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+  'inline-flex w-full min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 py-2 font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 export default function VerifyEmailPage() {
   return (
@@ -48,7 +48,7 @@ function VerifyEmailPageInner() {
   let card: React.ReactNode;
   if (!token || outcome?.kind === 'dead') {
     card = (
-      <div className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4" role="status">
+      <div className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4" role="status">
         <h2 className="text-lg font-semibold text-text-primary">
           {outcome?.kind === 'dead' && outcome.message ? AUTH_COPY.verifyEmailTakenTitle : AUTH_COPY.verifyEmailExpiredTitle}
         </h2>
@@ -60,7 +60,7 @@ function VerifyEmailPageInner() {
     );
   } else if (outcome?.kind === 'done') {
     card = (
-      <div className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4" role="status">
+      <div className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4" role="status">
         <h2 className="text-lg font-semibold text-text-primary">
           {outcome.moved ? AUTH_COPY.verifyEmailMovedTitle : AUTH_COPY.verifyEmailDone}
         </h2>
@@ -74,7 +74,7 @@ function VerifyEmailPageInner() {
     );
   } else {
     card = (
-      <div className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4">
+      <div className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4">
         <h2 className="text-lg font-semibold text-text-primary">{AUTH_COPY.verifyEmailTitle}</h2>
         <p className="text-text-muted text-sm">{AUTH_COPY.verifyEmailBody}</p>
         {error && (

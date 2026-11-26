@@ -128,7 +128,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
 
   if (slots.length === 0) {
     return (
-      <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+      <div className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
             <CalendarClock className="w-4 h-4" aria-hidden="true" /> Schedule poll
@@ -143,7 +143,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
   }
 
   return (
-    <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+    <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-text-primary flex items-center gap-2">
           <CalendarClock className="w-4 h-4" aria-hidden="true" /> Schedule poll
@@ -159,7 +159,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
           id="slot-picker"
           value={slotKey}
           onChange={(e) => selectSlot(e.target.value)}
-          className="w-full min-h-11 rounded-lg bg-bg-input border border-border-input px-3 text-text-primary"
+          className="w-full min-h-11 rounded-xl bg-bg-input border border-border-input px-3 text-text-primary"
         >
           <option value="">Pick a timeslot…</option>
           {slots.map((slot) => {
@@ -191,7 +191,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
                 return (
                   <label
                     key={set.id}
-                    className="flex items-center gap-2 p-2 rounded-lg border border-border min-h-11 cursor-pointer"
+                    className="flex items-center gap-2 p-2 rounded-xl border border-border min-h-11 cursor-pointer"
                   >
                     <input
                       type="checkbox"

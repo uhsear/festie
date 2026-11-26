@@ -4,6 +4,7 @@
 import { Platform, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { buildJoinUrl } from '@festie/shared/utils';
+import { colors } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Button from './Button';
 import SheetShell from './SheetShell';
@@ -25,7 +26,7 @@ export default function InviteQRSheet({ visible, crewName, code, onClose }: Invi
       </Text>
       <View style={styles.qrCard}>
         {/* Dark on white so cameras lock fast in low festival light. */}
-        <QRCode value={buildJoinUrl(code)} size={220} color="#080810" backgroundColor="#FFFFFF" ecl="M" />
+        <QRCode value={buildJoinUrl(code)} size={220} color={colors.bg.primary} backgroundColor="#FFFFFF" ecl="M" />
       </View>
       <Text style={styles.caption} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         Point a phone camera at the code.

@@ -83,7 +83,7 @@ describe('map document theme', () => {
     const stage = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage');
     const day = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'daylight');
     expect(buildMapHtml(CENTER, RASTER_STYLE, null, false, null)).toBe(stage);
-    expect(stage).toContain('background: #080810; }');
+    expect(stage).toContain('background: #0a0a0a; }');
     expect(stage).toContain('rgba(8,8,16,0.9)');
     expect(day).toContain(`background: ${colorsDaylight.bg.primary}; }`);
     expect(day).toContain('rgba(244,244,247,0.9)');

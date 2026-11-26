@@ -10,7 +10,7 @@ interface ArchivedFestivalRowProps {
 export default function ArchivedFestivalRow({ item, onRestore }: ArchivedFestivalRowProps) {
   return (
   <div
-      className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between"
+      className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 flex items-center justify-between"
   >
     <div className="flex-1">
       <h2 className="text-base font-semibold text-text-primary">{item.name}</h2>

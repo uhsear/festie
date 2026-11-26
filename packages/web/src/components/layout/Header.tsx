@@ -176,7 +176,7 @@ export default function Header() {
 
             {/* Support link */}
             <a
-              className="inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-[background-color,color,border-color] duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 bg-[var(--color-overlay-2)] text-text-secondary border border-border-light text-[length:var(--font-size-12)] tracking-wide hover:border-accent-coral hover:text-accent-coral hover:bg-[var(--color-overlay-4)] focus-visible:outline-accent-aqua [&_svg]:w-[11px] [&_svg]:h-[11px] px-2.5 py-1.5 min-h-11 min-w-11 no-underline whitespace-nowrap"
+              className="inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-[background-color,color,border-color] duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 bg-[var(--color-overlay-2)] text-text-secondary border border-border-light text-[length:var(--font-size-12)] tracking-wide hover:border-accent-coral hover:text-accent-coral hover:bg-[var(--color-overlay-4)] focus-visible:outline-accent-aqua [&_svg]:w-[11px] [&_svg]:h-[11px] px-2.5 py-1.5 min-h-11 min-w-11 no-underline whitespace-nowrap"
               href="https://paypal.me/uhsear"
               target="_blank"
               rel="noopener noreferrer"
@@ -209,7 +209,7 @@ export default function Header() {
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
-                    active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-lg',
+                    active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-xl',
                   )}
                 >
                   {tab.label}
@@ -247,7 +247,7 @@ export default function Header() {
             aria-label={unread > 0 ? INBOX_COPY.bellLabelUnread(unread) : INBOX_COPY.bellLabel}
             aria-current={location.pathname === '/inbox' ? 'page' : undefined}
             className={cn(
-              'inline-flex items-center justify-center relative min-h-11 min-w-11 rounded-lg text-text-secondary hover:text-text-primary',
+              'inline-flex items-center justify-center relative min-h-11 min-w-11 rounded-xl text-text-secondary hover:text-text-primary',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}
           >
@@ -276,7 +276,7 @@ export default function Header() {
             to="/login"
             search={{ next: location.pathname === '/p' ? '/p' : location.href }}
             className={cn(
-              'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-lg no-underline whitespace-nowrap',
+              'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-xl no-underline whitespace-nowrap',
               'text-accent-aqua text-[length:var(--font-size-14)] font-semibold tracking-[0.3px]',
               'border border-accent-aqua/40 transition-colors duration-200',
               'hover:bg-aqua-a12 hover:border-accent-aqua/70',

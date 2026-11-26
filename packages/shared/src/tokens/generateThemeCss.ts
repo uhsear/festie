@@ -9,9 +9,8 @@
  * `packages/web/src/styles/theme.generated.css`, which theme.css `@import`s.
  *
  * SCOPE: this emits ONLY the tokens that have a TS source. CSS-only tokens
- * (the 11px/13px off-ramp font sizes, focus rings, glass blur, accent hover
- * tones, timeline NOW tokens, bg-chrome/bg-disabled, the var()-referencing and
- * rgb-channel one-offs) remain hand-authored in theme.css — they are not
+ * (the 11px/13px off-ramp font sizes, focus rings, glass blur, timeline NOW
+ * tokens, the var()-referencing and rgb-channel one-offs) remain hand-authored in theme.css — they are not
  * design tokens shared with React Native.
  *
  * CRITICAL: the emitted values must EQUAL the current theme.css literals — this
@@ -30,7 +29,7 @@ import { fontFamily, fontSize, lineHeight, letterSpacing, wordSpacing } from './
 import { spacing, measureProse } from './spacing.js';
 import { radii } from './radii.js';
 import { zIndex } from './z-index.js';
-import { easing, duration, durationEffects, durationSpatial } from './motion.js';
+import { easing, duration, durationEffects, durationSpatial, pressScale } from './motion.js';
 
 /** px → rem string (16px base), trimming trailing zeros (16 → "1rem"). */
 function rem(px: number): string {
@@ -160,6 +159,29 @@ function paletteGroups(c: Palette) {
   rest.push(['--color-bg-sticky', c.bg.sticky]);
   rest.push(['--color-day-tab-active', c.dayTab.active]);
 
+  // ── Theme-only surfaces, hover tones, skeleton, live, map ──────────────────
+  // `--text-on-light-accent` is the ink on an accent FILL: dark on Stage, white on Daylight.
+  rest.push(['--text-on-light-accent', c.text.onLightAccent]);
+  rest.push(['--color-bg-chrome', c.bg.chrome]);
+  rest.push(['--color-bg-disabled', c.bg.disabled]);
+  rest.push(['--shadow-sticky', c.shadow.sticky]);
+  rest.push(['--color-accent-aqua-hover', c.hover.aqua]);
+  rest.push(['--color-accent-coral-hover', c.hover.coral]);
+  rest.push(['--color-accent-coral-strong-hover', c.hover.coralStrong]);
+  rest.push(['--color-coral-tint-text', c.tint.coralText]);
+  rest.push(['--color-coral-tint-text-hover', c.tint.coralTextHover]);
+  rest.push(['--detail-glass-bg', c.glass.detail]);
+  rest.push(['--menu-panel-bg', c.glass.panel]);
+  rest.push(['--glass-hover-border', c.glass.hoverBorder]);
+  rest.push(['--skeleton-base', c.skeleton.base]);
+  rest.push(['--skeleton-hi', c.skeleton.hi]);
+  rest.push(['--scrollbar-thumb-hover', c.control.scrollbarThumbHover]);
+  rest.push(['--color-live-fill', c.live.fill]);
+  rest.push(['--color-live-text', c.live.text]);
+  rest.push(['--color-live-ring', c.live.ring]);
+  rest.push(['--color-map-self', c.map.self]);
+  rest.push(['--color-outline-image', c.outline.image]);
+
   // ── Confidence (fact age) and delivery (did it leave the phone) ────────────
   // Aliases of existing hues; see the rule in c.ts — never used alone,
   // always paired with a numeral (the `type-numeral` utility) and a shape.
@@ -208,6 +230,8 @@ export function themeDeclarations(): Decl[] {
   d.push(['--duration-fast', `${duration.fast}ms`]);
   d.push(['--duration-med', `${duration.med}ms`]);
   d.push(['--duration-slow', `${duration.slow}ms`]);
+  d.push(['--duration-pulse', `${duration.pulse}ms`]);
+  d.push(['--press-scale', String(pressScale)]);
   // Axis-named duration groups. `--duration-fast|med|slow` above is unchanged
   // and stays the general scale; these name what is moving. `spring` is NOT
   // emitted — CSS has no spring primitive, so it stays a React Native token.
@@ -258,7 +282,9 @@ export function themeDeclarations(): Decl[] {
   d.push(['--radius-sm', `${radii.sm}px`]);
   d.push(['--radius-md', `${radii.md}px`]);
   d.push(['--radius-DEFAULT', `${radii.default}px`]);
-  d.push(['--radius-lg', `${radii.lg}px`]);
+  // Tailwind names grow with size: rounded-lg is 12px, rounded-xl is 20px. radii.ts keys stay: mobile reads them.
+  d.push(['--radius-lg', `${radii.default}px`]);
+  d.push(['--radius-xl', `${radii.lg}px`]);
   d.push(['--radius-pill', `${radii.pill}px`]);
 
   // ── Z-index ladder ─────────────────────────────────────────────────────────
@@ -307,7 +333,7 @@ export function generateThemeCss(): string {
  *
  * These are the design tokens shared with React Native (colors/type/spacing/
  * motion/radii/z-index/breakpoints). CSS-only tokens (11px/13px font sizes,
- * focus rings, glass blur, accent hover tones, timeline NOW, bg-chrome, the
+ * focus rings, glass blur, timeline NOW, the
  * rgb-channel + var()-referencing one-offs) stay hand-authored in theme.css.
  */
 @theme {

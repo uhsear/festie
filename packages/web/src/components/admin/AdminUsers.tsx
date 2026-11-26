@@ -222,7 +222,7 @@ function AdminUsersList() {
           setText(e.target.value);
           setSearch(e.target.value);
         }}
-        className="w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        className="w-full px-4 py-2 rounded-xl bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       />
 
       {error && users.length === 0 ? (
@@ -239,7 +239,7 @@ function AdminUsersList() {
           description={`No users match "${search}". Search covers every user.`}
         />
       ) : (
-        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-hidden">
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-hidden">
           {/* Table on lg+, stacked label/value cards below 1024px (§6 admin). */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm block lg:table">
@@ -264,7 +264,7 @@ function AdminUsersList() {
                   return (
                     <tr
                       key={user.id}
-                      className="block lg:table-row mb-3 rounded-lg border border-glass-border bg-bg-card/40 p-2 last:mb-0 transition-colors hover:bg-bg-primary/20 lg:mb-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0"
+                      className="block lg:table-row mb-3 rounded-xl border border-glass-border bg-bg-card/40 p-2 last:mb-0 transition-colors hover:bg-bg-primary/20 lg:mb-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0"
                     >
                       <td data-label="Select" className={cellBase}>
                         <input

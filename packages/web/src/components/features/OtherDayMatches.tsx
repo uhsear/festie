@@ -28,7 +28,7 @@ export default function OtherDayMatches({ groups, dayLabels, stages, b2bSeparato
                 const time = set.startTime ? formatTime(set.startTime) : 'TBA';
                 return (
                   <li key={set.id}>
-                    <div className="relative min-h-[44px] w-full text-left px-4 py-2 rounded-lg bg-bg-card border border-border-light text-sm text-text-primary">
+                    <div className="relative min-h-[44px] w-full text-left px-4 py-2 rounded-xl bg-bg-card border border-border-light text-sm text-text-primary">
                       <RowOpenButton label={`Show ${artist} on ${dayLabel}`} onClick={() => onSelectDay(dayIndex)} />
                       <ArtistName set={set} separator={b2bSeparator} />
                       {` · ${stageName} · ${time}`}

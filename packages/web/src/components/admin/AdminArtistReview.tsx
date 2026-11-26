@@ -24,7 +24,7 @@ const PAGE_SIZE = 25;
 const MAX_BATCH_BYTES = 200_000;
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 const linkClass = 'underline break-all text-accent-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 const BADGE: Record<ArtistReviewCandidate['confidence'], string> = {
@@ -271,7 +271,7 @@ export default function AdminArtistReview() {
   };
 
   const importSection = (
-    <section aria-label="Import a batch" className="space-y-2 rounded-lg border border-glass-border p-4">
+    <section aria-label="Import a batch" className="space-y-2 rounded-xl border border-glass-border p-4">
       <h2 className="type-heading text-text-primary">Import a batch</h2>
       <p className="text-sm text-text-muted">Upload or paste the research JSON. An item that is already in the queue is skipped.</p>
       <input

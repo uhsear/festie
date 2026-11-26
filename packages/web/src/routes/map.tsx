@@ -117,7 +117,7 @@ function MapViewInner() {
       )}
       <Suspense
         fallback={
-          <div className="h-72 rounded-lg border border-border bg-bg-secondary flex items-center justify-center text-sm text-text-secondary">
+          <div className="h-72 rounded-xl border border-border bg-bg-secondary flex items-center justify-center text-sm text-text-secondary">
             Loading map…
           </div>
         }

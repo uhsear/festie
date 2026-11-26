@@ -84,12 +84,20 @@ for (const { file, size } of iconTargets) {
 const manifest = {
   name:             'Festie — Festival Planner',
   short_name:       'Festie',
-  description:      'Real-time festival crew coordination.',
+  description:      'Plan your festival schedule with your crew',
+  id:               '/',
+  categories:       ['entertainment', 'music', 'social'],
   start_url:        '/',
+  shortcuts: [
+    { name: 'Picks',      url: '/picks' },
+    { name: 'Now & Next', url: '/festival-mode' },
+    { name: 'Crew',       url: '/crew' },
+  ],
   display:          'standalone',
-  orientation:      'portrait',
-  theme_color:      '#080810',
-  background_color: '#080810',
+  // Same value as colors.bg.primary. This plain-node script cannot import the TS tokens on every
+  // supported Node (engines >=22.0.0), so scripts/check-ground.mjs (run in CI) fails if they drift.
+  theme_color:      '#0a0a0a',
+  background_color: '#0a0a0a',
   icons: [
     {
       src:     'icons/icon-192.png',
@@ -137,7 +145,7 @@ if (!html.includes('rel="manifest"') && !html.includes("rel='manifest'")) {
 if (!html.includes('name="theme-color"') && !html.includes("name='theme-color'")) {
   html = html.replace(
     '</head>',
-    '  <meta name="theme-color" content="#080810">\n</head>',
+    '  <meta name="theme-color" content="#0a0a0a">\n</head>',
   );
   patched = true;
 }

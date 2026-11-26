@@ -1,0 +1,838 @@
+{
+  "entries": [
+    {
+      "file": "app/_layout.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "app/_layout.tsx",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/(auth)/complete-signup.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(auth)/forgot-password.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(auth)/login.tsx",
+      "rule": "duration-ms",
+      "max": 6,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "app/(auth)/login.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(auth)/register.tsx",
+      "rule": "duration-ms",
+      "max": 6,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "app/(auth)/register.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/_layout.tsx",
+      "rule": "hex",
+      "max": 2,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/(tabs)/_layout.web.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/account.tsx",
+      "rule": "ionicons-size",
+      "max": 6,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/map.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/map.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/(tabs)/map.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/(tabs)/picks.tsx",
+      "rule": "animated-true",
+      "max": 1,
+      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
+    },
+    {
+      "file": "app/+not-found.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/admin/festival-edit.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/admin/festival-map.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/admin/users.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/crew-compare.tsx",
+      "rule": "fontFamily",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "app/festival-mode.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/friend-picks.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/grid.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/picks-image.tsx",
+      "rule": "animated-true",
+      "max": 1,
+      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
+    },
+    {
+      "file": "app/picks-image.tsx",
+      "rule": "hex",
+      "max": 2,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "app/plan-share.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/privacy.tsx",
+      "rule": "ionicons-size",
+      "max": 6,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/reset-password.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/set/[setId].tsx",
+      "rule": "ionicons-size",
+      "max": 8,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "app/wrap.tsx",
+      "rule": "fontFamily",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "app/wrap.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "app/wrap.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountDangerSection.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountDataSection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountDevicesSection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountDisplayNameSection.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountEmailSection.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountEmailVerifySection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountHistorySection.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountHistorySection.tsx",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/AccountHistorySection.tsx",
+      "rule": "ionicons-size",
+      "max": 9,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountIdentityCard.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountIdentityCard.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountNotificationPrefsSection.tsx",
+      "rule": "ionicons-size",
+      "max": 9,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountNotificationsSection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountPasswordSection.tsx",
+      "rule": "ionicons-size",
+      "max": 8,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountPaymentHandlesSection.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountPrivacySection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountPublicScheduleSection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/AccountSignInMethodsSection.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/admin/AdminFields.tsx",
+      "rule": "hex",
+      "max": 13,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/admin/festival-map/MapAuthoringPane.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/admin/festival-map/styles.ts",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/admin/festival-map/styles.ts",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/Avatar.tsx",
+      "rule": "duration-ms",
+      "max": 2,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/Avatar.tsx",
+      "rule": "fontFamily",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/Avatar.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/CaughtNowCard.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/ClashPrompt.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/crew/CrewFindTab.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/crew/CrewMembersTab.tsx",
+      "rule": "ionicons-size",
+      "max": 15,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/crew/CrewPlanTab.tsx",
+      "rule": "ionicons-size",
+      "max": 11,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewActivity.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewActivity.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewExpenses.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewExpenses.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewHomeBase.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewLiveLocation.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewLockRow.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewMeetingPoints.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewPacking.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewPhotoLink.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewPollCard.tsx",
+      "rule": "duration-ms",
+      "max": 2,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewPollCard.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewPolls.tsx",
+      "rule": "ionicons-size",
+      "max": 9,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewRides.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewRides.tsx",
+      "rule": "ionicons-size",
+      "max": 6,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewSos.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/CrewSos.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewStatus.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewSwitcherSheet.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/CrewSyncMarker.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/CrewTabBar.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/EmptyState.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/FestivalList.tsx",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/FestivalList.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/FestivalReadyCard.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/FirstRunIntro.tsx",
+      "rule": "hex",
+      "max": 2,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/FirstRunIntro.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/HeaderTitle.tsx",
+      "rule": "fontFamily",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/HeaderTitle.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/InboxBell.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/InviteQRSheet.tsx",
+      "rule": "fontFamily",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/InviteQRSheet.tsx",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/LockscreenOverlay.tsx",
+      "rule": "fontSize",
+      "max": 2,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/MapPlaceCard.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/MapPlaceCard.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/MeetingPointCompass.tsx",
+      "rule": "ionicons-size",
+      "max": 5,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/NowNextStrip.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineBanner.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineMap.tsx",
+      "rule": "fontSize",
+      "max": 1,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineMap.tsx",
+      "rule": "hex",
+      "max": 5,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/OfflineMap.tsx",
+      "rule": "ionicons-size",
+      "max": 8,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineReadinessCard.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineReadinessCard.tsx",
+      "rule": "ionicons-size",
+      "max": 6,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/OfflineStatusChip.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/PhaseHomeActions.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/PicksBulkPanel.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/PicksCalendarButton.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/PicksHeader.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/PicksListenSection.tsx",
+      "rule": "ionicons-size",
+      "max": 3,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/PicksSearchField.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/picks/styles.ts",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/PlanQRScan.tsx",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/PlanQRScan.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/PlanQRShare.tsx",
+      "rule": "hex",
+      "max": 3,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/RatingButtons.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/SaveStatusChip.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/ScheduleCardsView.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/ScheduleControls.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/ScheduleHeaderActions.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/SchedulePickerView.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/ScheduleViewSwitcher.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/schedule/styles.ts",
+      "rule": "hex",
+      "max": 2,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "components/ScheduleDayChips.tsx",
+      "rule": "animated-true",
+      "max": 1,
+      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
+    },
+    {
+      "file": "components/ScheduleDayChips.tsx",
+      "rule": "fontFamily",
+      "max": 2,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/ScreenHeader.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/SetCardMobile.tsx",
+      "rule": "ionicons-size",
+      "max": 7,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/SmsHandoff.tsx",
+      "rule": "ionicons-size",
+      "max": 1,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/TBASection.tsx",
+      "rule": "ionicons-size",
+      "max": 2,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/TimelineView.tsx",
+      "rule": "ionicons-size",
+      "max": 4,
+      "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
+    },
+    {
+      "file": "components/wrap/ConfettiBurst.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "components/wrap/PosterFrame.tsx",
+      "rule": "fontFamily",
+      "max": 5,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "components/wrap/PosterFrame.tsx",
+      "rule": "fontSize",
+      "max": 5,
+      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+    },
+    {
+      "file": "lib/backgroundShare.ts",
+      "rule": "hex",
+      "max": 1,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "lib/mapDocument.ts",
+      "rule": "duration-ms",
+      "max": 4,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
+    },
+    {
+      "file": "lib/mapDocument.ts",
+      "rule": "hex",
+      "max": 23,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    },
+    {
+      "file": "widgets/NowNextActivity.ios.tsx",
+      "rule": "hex",
+      "max": 2,
+      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+    }
+  ]
+}

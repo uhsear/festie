@@ -524,7 +524,7 @@ function AuthGate() {
   useOtaUpdatePrompt();
 
   // Dismiss the native splash as soon as loading resolves. The overlay below
-  // stays as a fallback (same #080810 bg) so any frame gap is invisible. The
+  // stays as a fallback (same #0a0a0a bg) so any frame gap is invisible. The
   // 4s bootTimedOut ceiling already triggers `loading = false`, so hideAsync
   // is always called eventually even if fonts or rehydration hang.
   useEffect(() => {

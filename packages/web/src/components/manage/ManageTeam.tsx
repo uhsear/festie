@@ -39,7 +39,7 @@ const ROLE_TEXT: Record<OrgRole, string> = {
 };
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
 
 /** The team screen of /manage: profile, members, invitations and storage of one organization (plan-v3 5.7). */
 export default function ManageTeam({ organization }: Props) {
@@ -143,7 +143,7 @@ export default function ManageTeam({ organization }: Props) {
             const label = m.name ?? m.email ?? 'A teammate';
             const editable = canManage && m.role !== 'owner';
             return (
-              <li key={m.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+              <li key={m.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                 <div className="min-w-0">
                   <p className="break-all text-sm text-text-primary">{label}</p>
                   {m.name && m.email && <p className="break-all text-xs text-text-muted">{m.email}</p>}
@@ -197,7 +197,7 @@ export default function ManageTeam({ organization }: Props) {
             <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.filter((p) => !p.expired).length})</h4>
             <ul className="list-none space-y-2 p-0">
               {data.pending.map((p) => (
-                <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+                <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
                     <p className="text-xs text-text-muted">
@@ -232,7 +232,7 @@ export default function ManageTeam({ organization }: Props) {
         )}
 
         {canManage && (
-          <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-xl border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
             <label className="flex flex-col gap-1 text-xs text-text-muted">
               Email
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={`${INPUT_CLASS} min-h-11`} />
@@ -247,7 +247,7 @@ export default function ManageTeam({ organization }: Props) {
                 ))}
               </select>
             </label>
-            <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
+            <button type="submit" disabled={busy || !email.trim()} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">
               Add member
             </button>
           </form>

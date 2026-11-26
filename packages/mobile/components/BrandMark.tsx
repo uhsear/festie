@@ -1,4 +1,5 @@
 import { Image } from 'react-native';
+import { useUIStore } from '@festie/shared/stores';
 import { makeStyles, useLargeText } from '../hooks/useTokens';
 
 const useStyles = makeStyles((t) => ({
@@ -10,14 +11,18 @@ const useStyles = makeStyles((t) => ({
   },
 }));
 
-/** Transparent brand mark (same art as web favicon.svg); decorative, the wordmark beside it names the app. */
+const MARK_STAGE = require('../assets/splash-icon.png');
+const MARK_DAYLIGHT = require('../assets/splash-icon-daylight.png');
+
+/** Transparent brand mark (same art as web favicon.svg, Daylight pin and tent on the light theme); decorative, the wordmark beside it names the app. */
 export default function BrandMark() {
   const styles = useStyles();
   const largeText = useLargeText();
+  const theme = useUIStore((s) => s.theme);
   if (largeText) return null;
   return (
     <Image
-      source={require('../assets/splash-icon.png')}
+      source={theme === 'daylight' ? MARK_DAYLIGHT : MARK_STAGE}
       style={styles.mark}
       accessible={false}
       importantForAccessibility="no"

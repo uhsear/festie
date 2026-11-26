@@ -31,7 +31,7 @@ export default function LineupImportSource({
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
         rows={8}
-        className="mt-2 w-full px-4 py-3 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        className="mt-2 w-full px-4 py-3 rounded-xl bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       />
     </label>
     <div className="flex flex-wrap items-center gap-3">
@@ -61,7 +61,7 @@ export default function LineupImportSource({
       </button>
       <span className="text-sm text-text-muted">Up to 500 rows and 200 KB.</span>
     </div>
-    <ul className="bg-bg-card/60 border border-glass-border rounded-lg p-4 text-sm text-text-muted space-y-1 list-disc list-inside">
+    <ul className="bg-bg-card/60 border border-glass-border rounded-xl p-4 text-sm text-text-muted space-y-1 list-disc list-inside">
       <li>Export, fill in stages and times in a sheet, then import. The preview shows every change before you save.</li>
       <li>The export also lists announced acts that have no set yet, with no stage or times. Fill those in, or delete rows you are not ready to place. A new set keeps the act&apos;s poster name.</li>
       <li>A column you don&apos;t map is left alone. An empty cell in a mapped column clears that value, so an empty time becomes TBA.</li>

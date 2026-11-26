@@ -160,7 +160,7 @@ export default function ArtistMerge({ artist, suggested = [], onMerged, onStale,
   const loserUse = uses && (survivor === 'this' ? uses.other : uses.this);
 
   return (
-    <div className="space-y-3 rounded-lg border border-glass-border p-3" aria-label={`Merge ${artist.name}`} role="group">
+    <div className="space-y-3 rounded-xl border border-glass-border p-3" aria-label={`Merge ${artist.name}`} role="group">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm text-text-primary">Merge {artistTitle(artist)} with…</h3>
         <Button size="sm" variant="secondary" onClick={onClose}>

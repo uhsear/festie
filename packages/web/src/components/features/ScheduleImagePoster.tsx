@@ -2,12 +2,13 @@ import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M } from '@festie/sha
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
+import { POSTER } from '@festie/shared/tokens';
 
 /**
  * Literal hex only: the poster is captured to a PNG by html-to-image, where CSS custom
  * properties do not resolve reliably (same reason as WrapPoster).
  */
-const COLORS = { bg: '#080810', text: '#eaeaf2', muted: '#9999bb' } as const;
+const COLORS = { bg: POSTER.colors.ground, text: '#eaeaf2', muted: '#9999bb' } as const;
 const PRIORITY_COLOR: Record<Priority, string> = { must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#9999bb' };
 const GLOW = 0.3;
 const BG_IMAGE =

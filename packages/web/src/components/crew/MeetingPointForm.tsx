@@ -63,7 +63,7 @@ export default function MeetingPointForm({
 }: MeetingPointFormProps) {
   const festivalTimeId = useId();
   return (
-  <form ref={formRef} onSubmit={onSubmit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+  <form ref={formRef} onSubmit={onSubmit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
     <div className="flex items-center justify-between">
       <h3 className="font-semibold text-text-primary">
         {editing ? COPY.meetingPoint.edit : COPY.meetingPoint.add}
@@ -81,7 +81,7 @@ export default function MeetingPointForm({
             role="radio"
             aria-checked={type === k.type}
             onClick={() => onTypeChange(k.type)}
-            className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
+            className={`px-2 py-2 rounded-xl border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
               type === k.type
                 ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
                 : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
@@ -152,7 +152,7 @@ export default function MeetingPointForm({
         role="switch"
         aria-checked={recursDaily}
         onClick={() => onRecursDailyChange((v) => !v)}
-        className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium min-h-11 transition-colors ${
+        className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium min-h-11 transition-colors ${
           recursDaily
             ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
             : 'bg-bg-card border-border text-text-secondary hover:border-border-light'

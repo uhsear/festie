@@ -76,7 +76,7 @@ function LoginPageInner() {
       {reset && (
         <div
           role="status"
-          className="w-full max-w-[360px] mb-4 p-3 rounded-lg border border-accent-green/30 bg-accent-green/10 text-sm text-text-primary relative z-[1]"
+          className="w-full max-w-[360px] mb-4 p-3 rounded-xl border border-accent-green/30 bg-accent-green/10 text-sm text-text-primary relative z-[1]"
         >
           {AUTH_COPY.passwordChanged}
         </div>

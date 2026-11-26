@@ -36,7 +36,7 @@
 // are a separate problem — a festival still needs a cached PMTiles archive
 // (lib/basemapCache.ts) to draw anything without a network.
 
-import { colorsDaylight } from '@festie/shared/tokens';
+import { colors, colorsDaylight } from '@festie/shared/tokens';
 import type { ThemePreference } from '@festie/shared/stores';
 import { OPENFREEMAP_HOST } from '@festie/shared/utils';
 import { safeJsonForScript } from './webviewBridge';
@@ -71,7 +71,7 @@ import {
  * map throws while initializing — RN uses those to decide map vs fallback.
  */
 const DARK_CHROME = {
-  bg: '#080810',
+  bg: colors.bg.primary,
   text: '#eaeaf2',
   chipText: '#cfcfe0',
   chipBorder: 'rgba(255,255,255,0.14)',
@@ -208,7 +208,7 @@ export function buildMapHtml(
        visually distinct from the coral meeting-point pins. */
     .festie-peer {
       width: 26px; height: 26px; border-radius: 50%;
-      background: #00e8d0; color: #080810; border: 2px solid #fff;
+      background: #00e8d0; color: ${DARK_CHROME.bg}; border: 2px solid #fff;
       font: 700 11px -apple-system, system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 0 0 4px rgba(0,232,208,0.25);

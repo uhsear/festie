@@ -1,3 +1,4 @@
+import { POSTER } from '@festie/shared/tokens';
 import { saveBlob } from './downloadExport';
 
 interface ShareImageOptions {
@@ -24,7 +25,7 @@ export async function captureAndShareImage(
     width: opts.width,
     height: opts.height,
     pixelRatio: opts.pixelRatio ?? 1,
-    backgroundColor: opts.backgroundColor ?? '#080810',
+    backgroundColor: opts.backgroundColor ?? POSTER.colors.ground,
     cacheBust: true,
   });
   if (!blob) throw new Error('Capture failed');
@@ -64,7 +65,7 @@ export async function captureAndShareImages(
       width: opts.width,
       height: opts.height,
       pixelRatio: opts.pixelRatio ?? 1,
-      backgroundColor: opts.backgroundColor ?? '#080810',
+      backgroundColor: opts.backgroundColor ?? POSTER.colors.ground,
       cacheBust: true,
       fontEmbedCSS,
     });

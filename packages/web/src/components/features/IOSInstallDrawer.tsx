@@ -21,7 +21,7 @@ export default function IOSInstallDrawer({
       title="Add Festie to Home Screen"
       description="Launch faster. Works offline. Full-screen."
       icon={<img src="/icons/icon-192.png" width={48} height={48} alt=""
-        className="rounded-xl flex-shrink-0" aria-hidden="true" />}
+        className="rounded-lg flex-shrink-0" aria-hidden="true" />}
       onCloseClick={() => onClose('close')}
       className="lg:bottom-auto lg:inset-x-auto lg:top-1/2 lg:left-1/2
                  lg:-translate-x-1/2 lg:-translate-y-1/2
@@ -51,14 +51,14 @@ export default function IOSInstallDrawer({
         <button
           type="button"
           onClick={() => onClose('later')}
-          className="flex-1 min-h-11 px-4 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-border-light text-sm font-medium"
+          className="flex-1 min-h-11 px-4 rounded-xl border border-border text-text-secondary hover:text-text-primary hover:border-border-light text-sm font-medium"
         >
           Maybe later
         </button>
         <button
           type="button"
           onClick={() => onClose('got-it')}
-          className="flex-1 min-h-11 px-4 rounded-lg bg-accent-aqua text-bg-primary text-sm font-bold hover:bg-accent-aqua/90"
+          className="flex-1 min-h-11 px-4 rounded-xl bg-accent-aqua text-bg-primary text-sm font-bold hover:bg-accent-aqua/90"
         >
           Got it
         </button>

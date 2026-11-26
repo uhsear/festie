@@ -364,7 +364,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             setDayChoice(e.target.value === 'all' ? 'all' : Number(e.target.value));
             setPageIndex(0);
           }}
-          className="min-h-11 rounded-lg border border-border-input bg-bg-card px-2 text-sm text-text-primary"
+          className="min-h-11 rounded-xl border border-border-input bg-bg-card px-2 text-sm text-text-primary"
         >
           {Array.from({ length: dayCount }, (_, i) => (
             <option key={i} value={i} disabled={!dayHasSets.has(i)}>
@@ -442,7 +442,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         <select
           value={presetId}
           onChange={(e) => setPresetId(e.target.value)}
-          className="min-h-11 min-w-0 rounded-lg border border-border-input bg-bg-card px-2 text-sm text-text-primary"
+          className="min-h-11 min-w-0 rounded-xl border border-border-input bg-bg-card px-2 text-sm text-text-primary"
         >
           <option value="auto">{`This phone${deviceEstimated ? ' (estimated)' : ''} (${device.width} × ${device.height})`}</option>
           {LOCKSCREEN_PRESETS.map((p) => (
@@ -455,7 +455,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         <>
           <div
             aria-hidden="true"
-            className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
+            className="mx-auto overflow-hidden rounded-lg border border-border pointer-events-none"
             style={{ width: PREVIEW_WIDTH, height: model.height * scale }}
           >
             <div style={{ width: model.width, height: model.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}>

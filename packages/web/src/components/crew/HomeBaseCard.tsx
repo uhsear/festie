@@ -72,7 +72,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
 
   if (editing) {
     return (
-      <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
+      <div className="p-3 rounded-xl bg-bg-card border border-accent-aqua/40 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
             <HomeIcon className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
@@ -168,7 +168,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
 
   if (!isOwner) {
     return (
-      <div className="w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border border-accent-aqua/40 text-left">
+      <div className="w-full py-1.5 px-2 min-h-11 rounded-xl bg-bg-card border border-accent-aqua/40 text-left">
         <span className="sr-only">Home base: </span>
         {body}
       </div>
@@ -179,7 +179,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className={`w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border text-left transition-colors cursor-pointer ${
+      className={`w-full py-1.5 px-2 min-h-11 rounded-xl bg-bg-card border text-left transition-colors cursor-pointer ${
         hasHomeBase ? 'border-accent-aqua/40' : 'border-dashed border-border hover:border-border-light'
       }`}
     >

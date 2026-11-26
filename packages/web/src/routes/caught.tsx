@@ -160,7 +160,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       {checklist.days.map((day) => (
         <section key={day.dayIndex ?? 'tba'} className="mt-5">
           <h2 className="text-sm font-bold text-text-primary mb-2">{day.label}</h2>
-          <ul className="rounded-xl border border-border bg-bg-card divide-y divide-border">
+          <ul className="rounded-lg border border-border bg-bg-card divide-y divide-border">
             {day.rows.map((row) => {
               const name = row.artist || 'Unknown artist';
               const meta = [row.stageName, row.startTime ? formatTime(row.startTime) : null]
@@ -335,7 +335,7 @@ function AddSet({
             value={query}
             placeholder="Search the lineup"
             onChange={(e) => setQuery(e.target.value)}
-            className="min-h-11 w-full rounded-lg border border-border bg-bg-card px-3 text-sm text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+            className="min-h-11 w-full rounded-xl border border-border bg-bg-card px-3 text-sm text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
           />
           <p className="mt-1 text-xs text-text-secondary">Your picks are already in the list.</p>
           {detail.isError && (
@@ -350,7 +350,7 @@ function AddSet({
             <p className="mt-3 text-sm text-text-secondary">No sets match &quot;{query.trim()}&quot;.</p>
           )}
           {results.length > 0 && (
-            <ul className="mt-3 rounded-xl border border-border bg-bg-card divide-y divide-border">
+            <ul className="mt-3 rounded-lg border border-border bg-bg-card divide-y divide-border">
               {results.map((set) => {
                 const label = caughtSetFromLineup(set, stageName(set), source?.b2b);
                 const name = label.artist || 'Unknown artist';

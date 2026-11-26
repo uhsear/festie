@@ -517,7 +517,7 @@ function PicksViewInner() {
               aria-expanded={!row.collapsed}
               aria-label={`${row.label}, ${row.count} ${row.count === 1 ? 'pick' : 'picks'}`}
               onClick={() => toggleCollapsed(row.groupId)}
-              className="flex items-center gap-2 w-full min-h-11 mt-2 mb-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-lg"
+              className="flex items-center gap-2 w-full min-h-11 mt-2 mb-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
             >
               {dot}
               <span className="text-sm font-bold text-text-primary">{row.label}</span>

@@ -99,7 +99,7 @@ export default function DangerZone() {
       {/* Delete account section */}
       <section
         className={cn(
-          'p-4 rounded-lg border space-y-3',
+          'p-4 rounded-xl border space-y-3',
           'bg-accent-coral/5 border-accent-coral/30',
         )}
       >
@@ -138,7 +138,7 @@ export default function DangerZone() {
                   <label key={h.crew.id} className="block text-sm text-text-secondary">
                     {crewCopy.newOwnerFor(h.crew.name)}
                     <select
-                      className="mt-1 block w-full min-h-11 rounded-lg bg-bg-card border border-border-input px-2 text-text-primary"
+                      className="mt-1 block w-full min-h-11 rounded-xl bg-bg-card border border-border-input px-2 text-text-primary"
                       value={newOwners[h.crew.id] ?? h.defaultOwnerId}
                       onChange={(e) => setNewOwners((prev) => ({ ...prev, [h.crew.id]: e.target.value }))}
                     >

@@ -10,8 +10,10 @@ try {
   if (daylight) {
     document.documentElement.dataset.theme = 'daylight';
     document.documentElement.style.colorScheme = 'light';
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f4f4f7');
   }
+  // Both media-scoped metas follow the chosen theme, not the OS scheme.
+  var metas = document.querySelectorAll('meta[name="theme-color"]');
+  for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', daylight ? '#f4f4f7' : '#0a0a0a');
 } catch (e) {
   /* storage unavailable or malformed: keep the default stage theme */
 }

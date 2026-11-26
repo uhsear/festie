@@ -5,7 +5,7 @@ import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M } from '@festie/sha
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 
 const POSTER = {
-  bg: colors.bg.primary, // #080810
+  bg: colors.bg.primary,
   text: colors.text.primary, // #eaeaf2
   muted: colors.text.secondary, // #9999bb
   priority: { must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#9999bb' },

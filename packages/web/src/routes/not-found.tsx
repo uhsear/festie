@@ -12,7 +12,7 @@ export default function NotFoundPage() {
       </p>
       <Link
         to="/"
-        className="inline-flex items-center justify-center min-h-11 min-w-11 px-6 rounded-lg bg-accent-aqua text-[var(--text-on-light-accent)] text-[length:var(--font-size-14)] font-semibold no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        className="inline-flex items-center justify-center min-h-11 min-w-11 px-6 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-[length:var(--font-size-14)] font-semibold no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
       >
         Back to the schedule
       </Link>

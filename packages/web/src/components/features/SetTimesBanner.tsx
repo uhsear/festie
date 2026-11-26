@@ -18,7 +18,7 @@ export default function SetTimesBanner() {
   return (
     <section
       aria-labelledby="set-times-banner-heading"
-      className="mx-auto mb-[var(--space-3)] flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg-card px-4 py-3"
+      className="mx-auto mb-[var(--space-3)] flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-bg-card px-4 py-3"
     >
       <div className="min-w-0">
         <h2 id="set-times-banner-heading" className="text-sm font-semibold text-text-primary">

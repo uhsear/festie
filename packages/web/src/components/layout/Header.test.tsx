@@ -203,7 +203,7 @@ describe('Header', () => {
   describe('theme preference', () => {
     beforeEach(() => {
       act(() => useRealUIStore.getState().setTheme('stage'));
-      document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#080810" />');
+      document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#0a0a0a" />');
     });
 
     it('renders the Daylight toggle, unpressed by default', () => {

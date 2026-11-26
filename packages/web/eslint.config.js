@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
+import { readFileSync } from 'node:fs';
 
 // Enforce the global z-index ladder: no raw high z-index in className.
 // Local micro-stacking (z-[1]..z-[9], two-digit) is allowed; anything
@@ -38,6 +39,23 @@ const RAW_COLOUR_RESTRICTED = [
     message: 'Raw hex colour class. Use a theme token from theme.generated.css.',
   },
 ];
+
+// DP-12 drift ratchet: hex, rgb( and text-[Npx] in component code. Files in
+// design-ratchet.allowlist.json are exempt here and counted by scripts/ci/design-ratchet.mjs.
+const RATCHET_MESSAGE = "Use a theme token (see DESIGN.md). Today's offenders sit in design-ratchet.allowlist.json and may not grow.";
+const RATCHET_RESTRICTED = [
+  { selector: 'Literal[value=/(^|[^&\\w])#[0-9a-fA-F]{3,8}([^\\w]|$)/]', message: `Hex colour literal. ${RATCHET_MESSAGE}` },
+  { selector: 'TemplateElement[value.raw=/(^|[^&\\w])#[0-9a-fA-F]{3,8}([^\\w]|$)/]', message: `Hex colour literal. ${RATCHET_MESSAGE}` },
+  { selector: 'Literal[value=/(^|[^\\w])rgba?\\(/]', message: `rgb() colour literal. ${RATCHET_MESSAGE}` },
+  { selector: 'TemplateElement[value.raw=/(^|[^\\w])rgba?\\(/]', message: `rgb() colour literal. ${RATCHET_MESSAGE}` },
+  { selector: 'Literal[value=/(^|[^\\w])text-\\[[0-9]/]', message: `Arbitrary text size. ${RATCHET_MESSAGE}` },
+  { selector: 'TemplateElement[value.raw=/(^|[^\\w])text-\\[[0-9]/]', message: `Arbitrary text size. ${RATCHET_MESSAGE}` },
+];
+const RATCHET_ALLOWLIST = JSON.parse(readFileSync(new URL('./design-ratchet.allowlist.json', import.meta.url), 'utf8'))
+  .entries.map((e) => e.file);
+
+const SWITCH_FILES = ['src/components/ui/Switch.tsx', 'src/components/crew/MeetingPointsTab.tsx', 'src/components/crew/MeetingPointForm.tsx'];
+const POSTER_FILES = ['src/components/features/ScheduleImagePoster.tsx'];
 
 const SWITCH_RESTRICTED = {
   selector: "JSXAttribute[name.name='role'][value.value='switch']",
@@ -97,18 +115,34 @@ export default tseslint.config(
       'require-atomic-updates': 'warn',
       // Match root config: pre-existing empty blocks as warnings, not blockers
       'no-empty': 'warn',
-      'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, SWITCH_RESTRICTED],
+      'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, ...RATCHET_RESTRICTED, SWITCH_RESTRICTED],
     },
   },
   {
     // A later flat-config block replaces the rule options, so the base rules repeat here.
-    files: ['src/components/ui/Switch.tsx', 'src/components/crew/MeetingPointsTab.tsx', 'src/components/crew/MeetingPointForm.tsx'],
-    rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] },
+    files: SWITCH_FILES,
+    rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, ...RATCHET_RESTRICTED] },
   },
   {
     // Share posters are fixed artwork that renders the same in both themes.
-    files: ['src/components/features/ScheduleImagePoster.tsx'],
+    files: POSTER_FILES,
     rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, SWITCH_RESTRICTED] },
+  },
+  {
+    // Allowlisted offenders (see design-ratchet.allowlist.json). Later blocks win, so this
+    // repeats the base rules without the ratchet selectors.
+    files: [
+      ...new Set(RATCHET_ALLOWLIST.filter((f) => /\.tsx?$/.test(f)).map((f) => f.replace(/[[\]{}()*?!]/g, '\\$&'))),
+      'src/**/*.{test,spec,stories}.{ts,tsx}',
+      'src/**/__tests__/**',
+    ],
+    ignores: [...SWITCH_FILES, ...POSTER_FILES],
+    rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, SWITCH_RESTRICTED] },
+  },
+  {
+    // Only the allowlisted switch files lose the ratchet; the others keep the block above.
+    files: SWITCH_FILES.filter((f) => RATCHET_ALLOWLIST.includes(f)),
+    rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] },
   },
   storybook.configs['flat/recommended'],
 );

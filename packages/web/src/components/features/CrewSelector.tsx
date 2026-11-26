@@ -126,7 +126,7 @@ export default function CrewSelector({
           }
         }}
         className={cn(
-          'w-full px-3 py-1.5 min-h-11 rounded-lg font-semibold text-sm transition-colors',
+          'w-full px-3 py-1.5 min-h-11 rounded-xl font-semibold text-sm transition-colors',
           'bg-bg-card border border-border text-text-primary',
           'hover:border-border-light flex items-center justify-between',
         )}
@@ -150,7 +150,7 @@ export default function CrewSelector({
           onKeyDown={handlePanelKeyDown}
           className={cn(
             'absolute top-full mt-1 left-0 right-0 z-[var(--z-modal)]',
-            'bg-bg-secondary border border-border rounded-lg overflow-hidden',
+            'bg-bg-secondary border border-border rounded-xl overflow-hidden',
             'shadow-lg',
             'animate-[card-in_180ms_var(--ease-out,ease-out)_both] origin-top motion-reduce:!animate-none',
           )}

@@ -71,7 +71,7 @@ export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
         <Users className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         <span className="truncate">{crewName}</span>
       </h2>
-      <div className="rounded-xl border border-border bg-bg-card">
+      <div className="rounded-lg border border-border bg-bg-card">
         {shown.length === 0 ? (
           <p className="type-label text-text-secondary p-4">Nobody else in your crew yet.</p>
         ) : (
@@ -140,7 +140,7 @@ export function MeetNowCard({ meet, nowMs, timeZone, onOpenMeet }: MeetProps) {
         type="button"
         onClick={onOpenMeet}
         className={cn(
-          'flex items-center gap-3 w-full text-left rounded-xl border border-border bg-bg-card p-4 min-h-[64px]',
+          'flex items-center gap-3 w-full text-left rounded-lg border border-border bg-bg-card p-4 min-h-[64px]',
           'transition-colors duration-[var(--duration-med)] hover:bg-bg-card-hover motion-reduce:transition-none',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
         )}
@@ -187,7 +187,7 @@ interface WrapUpProps {
 /** Replaces the crew list once the festival is over: settle up, or start again. */
 export function CrewWrapUpCard({ crewName, balance, onSettle, crewId, festivalId }: WrapUpProps) {
   return (
-    <section aria-labelledby="fm-crew-wrapup" className="rounded-xl border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-crew-wrapup">
+    <section aria-labelledby="fm-crew-wrapup" className="rounded-lg border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-crew-wrapup">
       <div className="flex items-start gap-3">
         <Users className="w-6 h-6 shrink-0 text-accent-aqua mt-0.5" aria-hidden="true" />
         <div className="min-w-0">
@@ -208,7 +208,7 @@ export function CrewWrapUpCard({ crewName, balance, onSettle, crewId, festivalId
 /** Crew slot for a guest, or a user without a crew. */
 export function CrewPrompt({ title, body, cta, onAction }: PromptProps) {
   return (
-    <section aria-labelledby="fm-crew-prompt" className="rounded-xl border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-crew-prompt">
+    <section aria-labelledby="fm-crew-prompt" className="rounded-lg border border-border bg-bg-card p-4 flex flex-col gap-3" data-testid="fm-crew-prompt">
       <div className="flex items-start gap-3">
         <Users className="w-6 h-6 shrink-0 text-accent-aqua mt-0.5" aria-hidden="true" />
         <div className="min-w-0">

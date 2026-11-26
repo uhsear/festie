@@ -35,7 +35,7 @@ export default function FestivalPickInsight({ festivalId }: { festivalId: string
           <button
             type="button"
             onClick={() => void refetch()}
-            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent-aqua"
+            className="px-4 py-2 min-h-11 rounded-xl bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent-aqua"
           >
             Retry
           </button>
@@ -48,7 +48,7 @@ export default function FestivalPickInsight({ festivalId }: { festivalId: string
               No clash was picked by {data.minPairPeople} or more people yet.
             </p>
           ) : (
-            <ul className="list-none bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+            <ul className="list-none bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-3">
               {rows.map((row) => (
                 <li key={row.key} aria-label={row.a11y}>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-1">
@@ -76,7 +76,7 @@ export default function FestivalPickInsight({ festivalId }: { festivalId: string
           disabled={!data}
           aria-describedby={EXPORT_HINT_ID}
           onClick={() => data && downloadCsv(picksPerSetCsv(data), picksCsvFileName(festivalId))}
-          className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent-aqua"
+          className="px-4 py-2 min-h-11 rounded-xl bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent-aqua"
         >
           Export picks per set
         </button>

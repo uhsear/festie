@@ -12,7 +12,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  * Press-squish primitive for SMALL controls — chips, tab pills, priority/rating
  * buttons. Extracted from SegmentedControl's Segment so every small control
  * shares one tokenized scale animation (in: duration.fast/easing.out,
- * out: duration.med/easing.spring). When OS Reduce Motion is on we never touch
+ * out: duration.med/easing.out). When OS Reduce Motion is on we never touch
  * the shared value, so the control stays at scale 1 with no motion.
  *
  * RULE: squish-for-small-controls (PressableScale), fade/ripple-for-large-surfaces

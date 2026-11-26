@@ -41,7 +41,7 @@ export default function ManageInterest({ festivalId, days }: Props) {
   const { available, minJoined, minCount, sets } = interest.data;
   const rows = Object.entries(sets);
   return (
-    <section aria-label="Interest" className="space-y-3 rounded-lg border border-glass-border bg-bg-card/60 p-4">
+    <section aria-label="Interest" className="space-y-3 rounded-xl border border-glass-border bg-bg-card/60 p-4">
       <h3 className="type-heading text-text-primary">Interest</h3>
       {!available ? (
         <p className="text-sm text-text-muted">

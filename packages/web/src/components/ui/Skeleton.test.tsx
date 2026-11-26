@@ -24,7 +24,7 @@ describe('Skeleton', () => {
     render(<Skeleton variant="card" />);
     const el = screen.getByLabelText('Loading');
     expect(el.className).toContain('h-32');
-    expect(el.className).toContain('rounded-lg');
+    expect(el.className).toContain('rounded-xl');
   });
 
   it('renders with header variant', () => {

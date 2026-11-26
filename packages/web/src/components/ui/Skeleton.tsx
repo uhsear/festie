@@ -29,7 +29,7 @@ export default function Skeleton({
   const variantStyles = {
     text: 'h-4 w-full rounded',
     circle: 'w-10 h-10 rounded-full',
-    card: 'h-32 w-full rounded-lg',
+    card: 'h-32 w-full rounded-xl',
     header: 'h-8 w-1/3 rounded mb-4',
   };
 

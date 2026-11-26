@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { AUTH_COPY } from '@festie/shared/constants';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../../lib/utils';
 
 /**
@@ -7,6 +8,7 @@ import { cn } from '../../lib/utils';
  * the mark (a link home), the FESTIE wordmark and a one-line subtitle.
  */
 export default function AuthBrand({ subtitle }: { subtitle?: string }) {
+  const theme = useUIStore((s) => s.theme);
   return (
     <div className="flex flex-col items-center text-center mb-8 relative z-[1]">
       <Link
@@ -14,7 +16,7 @@ export default function AuthBrand({ subtitle }: { subtitle?: string }) {
         aria-label="Festie home"
         className="mb-4 inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
       >
-        <img src="/favicon.svg" width={64} height={64} alt="" />
+        <img src={theme === 'daylight' ? '/favicon-daylight.svg' : '/favicon.svg'} width={64} height={64} alt="" />
       </Link>
       <h1
         className={cn(

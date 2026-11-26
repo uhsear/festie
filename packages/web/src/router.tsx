@@ -71,7 +71,7 @@ const MinimalFallback = () => (
     aria-live="polite"
   >
     <span className="sr-only">Loading…</span>
-    <div className="skeleton-shimmer h-[200px] m-6 rounded-xl" />
+    <div className="skeleton-shimmer h-[200px] m-6 rounded-lg" />
   </div>
 );
 
