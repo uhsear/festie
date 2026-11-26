@@ -12,6 +12,8 @@ import { useRouter } from 'expo-router';
 import SpotifyAttribution from '../SpotifyAttribution';
 import { COPY, DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
+  SCHEDULE_GROUP_BYS,
+  type ScheduleGroupBy,
   toggleStageFilter,
   toggleGenreFilter,
   toggleHiddenDay,
@@ -27,12 +29,18 @@ import { useHaptics } from '../../hooks/useHaptics';
 import NowNextStrip from '../NowNextStrip';
 import PhaseHomeActions from '../PhaseHomeActions';
 import FestivalReadyCard from '../FestivalReadyCard';
+import SegmentedControl from '../SegmentedControl';
 import ScheduleDayChips from '../ScheduleDayChips';
 import ScheduleResultsRow from '../ScheduleResultsRow';
 import ScheduleStatusLine from '../ScheduleStatusLine';
 import OfflineStatusChip from '../OfflineStatusChip';
 import { useStyles } from './styles';
 import type { UseViewAsReturn } from '@festie/shared/hooks';
+
+const GROUP_BY_OPTIONS: readonly { value: ScheduleGroupBy; label: string }[] = SCHEDULE_GROUP_BYS.map((g) => ({
+  value: g.key,
+  label: g.label,
+}));
 
 interface ScheduleControlsProps {
   activeGenres: string[];
@@ -50,6 +58,7 @@ interface ScheduleControlsProps {
   genreAttribution: { href: string } | null;
   genreChips: string[];
   genreFilterActive: boolean;
+  groupBy: ScheduleGroupBy;
   hPad: number;
   handleRefresh: () => void;
   hiddenDays: number[];
@@ -66,6 +75,7 @@ interface ScheduleControlsProps {
   setActiveStages: (stageIds: string[]) => void;
   setHiddenDays: (days: number[]) => void;
   setOnlyMine: (onlyMine: boolean) => void;
+  setScheduleGroupBy: (groupBy: ScheduleGroupBy | null) => void;
   setSearchQuery: (query: string) => void;
   showSearch: boolean;
   stageFilterActive: boolean;
@@ -95,6 +105,7 @@ export default function ScheduleControls({
   genreAttribution,
   genreChips,
   genreFilterActive,
+  groupBy,
   hPad,
   handleRefresh,
   hiddenDays,
@@ -111,6 +122,7 @@ export default function ScheduleControls({
   setActiveStages,
   setHiddenDays,
   setOnlyMine,
+  setScheduleGroupBy,
   setSearchQuery,
   showSearch,
   stageFilterActive,
@@ -127,24 +139,20 @@ export default function ScheduleControls({
   const t = useTokens();
   const router = useRouter();
   const haptics = useHaptics();
+  // Group by only applies to the Cards list, and only when there is something to group.
+  const showGroupBy = viewMode === 'cards' && filteredSets.length > 0;
+  const showPhaseActions = !ready.visible && homeActions.length > 0 && !!phase && dismissedPhase !== phase;
   return (
 <>
   {/* Before the festival the Festival ready checklist takes the band's place
       until it is done or hidden. It covers the band's pre-festival rows
       (first pick, crew), so the two are never shown together. It is
       first-run guidance, so it is not gated on the filters.
-      Otherwise: next-step band from shared getHomeActions (picks and crew
-      before the festival, find the crew during it, wrap and settle-up
-      after). It is empty, and so hidden, when there is nothing left to do. It
-      rides in the controls so it scrolls with the Cards list. The close
-      button hides it for this festival and phase. */}
+      Otherwise the next-step shortcuts from shared getHomeActions ride in the
+      status line below (see PhaseHomeActions). */}
   {ready.visible ? (
     <View style={{ paddingHorizontal: hPad }}>
       <FestivalReadyCard ready={ready} />
-    </View>
-  ) : homeActions.length > 0 && phase && dismissedPhase !== phase ? (
-    <View style={{ paddingHorizontal: hPad }}>
-      <PhaseHomeActions actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
     </View>
   ) : null}
 
@@ -160,6 +168,11 @@ export default function ScheduleControls({
       _festivalCachedAt; renders nothing until the schedule is cached once. */}
   <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
     <ScheduleStatusLine showSave={!!currentProfile} />
+    {/* The phase shortcuts share this line with the freshness label instead of
+        taking a band of their own. */}
+    {showPhaseActions && phase ? (
+      <PhaseHomeActions compact actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
+    ) : null}
     {/* Cards and fallback views support pull-to-refresh. Timeline owns both
         scroll axes, so narrow phones need this compact manual action after
         the header sheds secondary icons to preserve the festival title. */}
@@ -230,7 +243,7 @@ export default function ScheduleControls({
 
   {/* Stage + my-picks filters, then the days the person attends — folded
       behind the filter toggle (DC1). */}
-  {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1 || genreChips.length > 0) ? (
+  {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1 || genreChips.length > 0 || showGroupBy) ? (
     <View style={styles.filterRow}>
       {currentProfile || stages.length > 1 || genreChips.length > 0 ? (
         <ScrollView
@@ -418,6 +431,21 @@ export default function ScheduleControls({
             })}
           </ScrollView>
         </>
+      ) : null}
+      {showGroupBy ? (
+        <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
+          <Text style={styles.groupByLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Group by
+          </Text>
+          <View style={styles.switcherFlex}>
+            <SegmentedControl
+              options={GROUP_BY_OPTIONS}
+              value={groupBy}
+              onChange={setScheduleGroupBy}
+              accessibilityLabel="Group sets by"
+            />
+          </View>
+        </View>
       ) : null}
     </View>
   ) : null}

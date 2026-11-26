@@ -842,6 +842,7 @@ export default function TimelineScreen() {
       genreAttribution={genreAttribution}
       genreChips={genreChips}
       genreFilterActive={genreFilterActive}
+      groupBy={groupBy}
       hPad={hPad}
       handleRefresh={handleRefresh}
       hiddenDays={hiddenDays}
@@ -858,6 +859,7 @@ export default function TimelineScreen() {
       setActiveStages={setActiveStages}
       setHiddenDays={setHiddenDays}
       setOnlyMine={setOnlyMine}
+      setScheduleGroupBy={setScheduleGroupBy}
       setSearchQuery={setSearchQuery}
       showSearch={showSearch}
       stageFilterActive={stageFilterActive}
@@ -922,9 +924,7 @@ export default function TimelineScreen() {
           cardsEmpty={cardsEmpty}
           cardsSeparator={cardsSeparator}
           controls={controls}
-          filteredSets={filteredSets}
           genreFilterActive={genreFilterActive}
-          groupBy={groupBy}
           hPad={hPad}
           handleCardsScroll={handleCardsScroll}
           keyExtractor={keyExtractor}
@@ -938,7 +938,6 @@ export default function TimelineScreen() {
           scheduleViewportBottomInset={scheduleViewportBottomInset}
           scrollCardsToTop={scrollCardsToTop}
           searchQuery={searchQuery}
-          setScheduleGroupBy={setScheduleGroupBy}
           showScrollTop={showScrollTop}
           stageFilterActive={stageFilterActive}
         />

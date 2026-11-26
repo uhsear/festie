@@ -1,0 +1,51 @@
+# DP-34: the Lineup tab reaches the pushed Grid route through the "Full grid" action, since
+# Grid is no longer a segment of the Cards/Timeline switcher. Guest flow, no sign-in.
+# Pick a festival with timed sets: the action is hidden for a festival without them.
+appId: us.festie.app
+tags:
+  - smoke
+env:
+  FESTIVAL_ID: ${FESTIVAL_ID || 'fk-2026'}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan.your.weekend|Choose.a.festival"
+    timeout: 120000
+- runFlow:
+    when:
+      visible: "Plan.your.weekend"
+    commands:
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "festival-card-${FESTIVAL_ID}"
+    timeout: 30000
+- tapOn:
+    id: "festival-card-${FESTIVAL_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "full-grid-action"
+    timeout: 150000
+- assertNotVisible:
+    id: "segment-grid"
+- takeScreenshot: full-grid-01-lineup
+- tapOn:
+    id: "full-grid-action"
+- extendedWaitUntil:
+    notVisible:
+      id: "full-grid-action"
+    timeout: 30000
+- assertNotVisible:
+    id: "segment-cards"
+- takeScreenshot: full-grid-02-grid
+- back
+- extendedWaitUntil:
+    visible:
+      id: "full-grid-action"
+    timeout: 30000
