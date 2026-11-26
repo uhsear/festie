@@ -25,7 +25,7 @@ describe('crewPosterContent', () => {
     const c = crewPosterContent(wrap(), { showMoney: true });
     expect(c.spotlight).toEqual({ label: 'Biggest spender', value: 'Sam', sub: 'fronted €99.50' });
     expect(c.stats.find((s) => s.label === 'Split')?.value).toBe('€123.45');
-    expect(c.seenTogether).toHaveLength(5);
+    expect(c.seenTogether).toHaveLength(3);
     expect(c.dominant).toEqual({ value: '8', label: 'sets loved together' });
     expect(crewPosterContent(wrap({ biggestSpender: null }), { showMoney: true }).spotlight.value).toBe(
       'No expenses yet',
@@ -38,7 +38,7 @@ describe('crewPosterContent', () => {
     expect(strings).not.toMatch(/[$€£]|\d\.\d/);
     expect(c.spotlight).toEqual({ label: 'Crew favourite', value: 'Artist 0', sub: '3 of you loved it' });
     expect(c.stats.map((s) => s.label)).toEqual(['Crew', 'Seen together']);
-    expect(c.seenTogether.map((s) => s.setId)).toEqual(['s1', 's2', 's3', 's4', 's5']);
+    expect(c.seenTogether.map((s) => s.setId)).toEqual(['s1', 's2', 's3']);
   });
 
   it('handles an unnamed favourite and no seen-together sets', () => {

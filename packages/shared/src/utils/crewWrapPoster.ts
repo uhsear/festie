@@ -13,6 +13,12 @@ export interface CrewPosterContent {
   seenTogether: CrewWrapSeenTogether[];
 }
 
+/**
+ * The poster body below the 520 px dominant block is 846 px tall. Two superlatives, the stat tiles and
+ * three rows of 80 px fit with about 55 px to spare; five rows ran 100 px into the footer.
+ */
+const SEEN_TOGETHER_ROWS = 3;
+
 export function crewPosterContent(wrap: CrewWrapData, { showMoney }: { showMoney: boolean }): CrewPosterContent {
   const stats = [
     { label: 'Crew', value: String(wrap.memberCount) },
@@ -31,7 +37,7 @@ export function crewPosterContent(wrap: CrewWrapData, { showMoney }: { showMoney
         ...(spender ? { sub: `fronted ${formatAmount(spender.amount, currency)}` } : {}),
       },
       stats: [...stats, { label: 'Split', value: formatAmount(wrap.totalSplit, currency) }],
-      seenTogether: wrap.setsSeenTogether.slice(0, 5),
+      seenTogether: wrap.setsSeenTogether.slice(0, SEEN_TOGETHER_ROWS),
     };
   }
   const favourite = wrap.setsSeenTogether[0];
@@ -45,6 +51,6 @@ export function crewPosterContent(wrap: CrewWrapData, { showMoney }: { showMoney
         }
       : { label: 'Crew favourite', value: 'Rate sets together to find yours' },
     stats,
-    seenTogether: wrap.setsSeenTogether.slice(1, 6),
+    seenTogether: wrap.setsSeenTogether.slice(1, 1 + SEEN_TOGETHER_ROWS),
   };
 }
