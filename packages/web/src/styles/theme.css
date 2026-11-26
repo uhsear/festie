@@ -30,9 +30,9 @@
 }
 
 /* R4 (design-inspiration-deep-2026-06-10): Glass-edged set-detail surface (opaque fill: a translucent one let the tab bar ghost through).
-   rgba(29,29,29,0.82) + blur(20px) + 1px rgba(255,255,255,0.08) border +
+   dark fill + blur(20px) + 1px light border +
    inset 1px top highlight (the glass edge). Used on DetailPanel Drawer.Content.
-   The scrim (Drawer.Overlay) uses rgba(0,0,0,0.6) — set at the call site.
+   The scrim (Drawer.Overlay) is black at 60% — set at the call site.
    Border-radius: 24px top corners on mobile (default), 16px on lg (dialog). */
 @utility detail-glass {
   background-color: var(--detail-glass-bg);
@@ -217,8 +217,8 @@
   }
 }
 
-/* R7 (design-inspiration-deep-2026-06-10): surface-palette shimmer — #1a1a1a
-   base with #2a2a2a highlight matches the 5-step neutral scale. 1.4s linear. */
+/* R7 (design-inspiration-deep-2026-06-10): surface-palette shimmer — the base and
+   highlight match the 5-step neutral scale. 1.4s linear. */
 @utility skeleton-shimmer {
   background: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-hi) 40%, var(--skeleton-base) 100%);
   background-size: 200% 100%;
@@ -237,7 +237,7 @@
    LIVE/featured cards. Uses CSS @property for --border-angle and conic-gradient.
    Applied only to .set-card.live (single featured card on screen per R3).
    Static fallback (1px aqua) when @property unsupported or prefers-reduced-motion. */
-@supports (background: conic-gradient(from 0deg, #00e8d0)) {
+@supports (background: conic-gradient(from 0deg, currentColor, currentColor)) {
   @property --border-angle {
     syntax: '<angle>';
     initial-value: 0deg;
@@ -320,7 +320,7 @@
    and crew cards. Radial gradient spotlight follows mousemove via CSS vars
    --mx and --my. Desktop-only via @media (hover: hover). Applied to ::after
    pseudo-element; set opacity via JavaScript state on hover. Box-shadow glow
-   is 0 0 12px rgba(0,232,208,0.25), 0 0 1px rgba(0,232,208,0.4) with 200ms
+   is a 12px aqua glow plus a 1px aqua edge, with 200ms
    ease-out transition. */
 .set-card::after {
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--color-aqua-a08) 0%, transparent 60%);
@@ -444,7 +444,7 @@
 /* Values that cannot live in @theme: var() references, rgb channels,
    and composite values. */
 :root {
-  /* RGB channel tokens (used in inline rgba() expressions) */
+  /* RGB channel tokens (used inside the rgba function) */
   --accent-coral-rgb: 255, 51, 102;
   --spotify-brand-rgb: 29, 185, 84;
 }

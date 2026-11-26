@@ -20,11 +20,11 @@ export default function TimelineLegend() {
         className={cn(
           'cursor-pointer inline-flex items-center gap-1',
           'min-h-11 px-3 rounded-xl',
-          'bg-[var(--color-glass,rgba(26,26,26,0.4))]',
+          'bg-[var(--color-glass)]',
           'font-semibold tracking-[0.04em] uppercase type-caption',
           'select-none',
           'transition-colors duration-[120ms] ease-out',
-          'hover:bg-[var(--color-bg-elevated,rgba(32,32,32,0.9))]',
+          'hover:bg-[var(--color-bg-elevated)]',
         )}
       >
         Legend
@@ -34,8 +34,8 @@ export default function TimelineLegend() {
           'timeline-legend-list',
           'list-none p-[8px_10px] mt-1.5 mb-0',
           'grid gap-1.5',
-          'bg-[var(--color-glass,rgba(26,26,26,0.4))]',
-          'border border-[var(--color-border,rgba(255,255,255,0.08))]',
+          'bg-[var(--color-glass)]',
+          'border border-[var(--color-border)]',
           'rounded-[10px]',
         )}
       >

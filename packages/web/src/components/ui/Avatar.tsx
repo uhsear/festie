@@ -105,7 +105,7 @@ export default function Avatar({
           className={cn(
             'absolute bottom-0 right-0 rounded-full border-2 border-bg-primary overflow-visible',
             dotSizeMap[size],
-            // R6: ONLINE -> aqua dot (#00e8d0); OFFLINE -> muted neutral.
+            // R6: ONLINE -> aqua dot; OFFLINE -> muted neutral.
             // No greens -- accent rule: aqua = primary/positive, green retired.
             isOnline ? 'bg-accent-aqua' : 'bg-text-muted',
           )}

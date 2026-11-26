@@ -96,7 +96,7 @@
   background: radial-gradient(
     circle,
     rgba(var(--accent-coral-rgb), 0.06) 0%,
-    rgba(0, 232, 208, 0.03) 50%,
+    color-mix(in srgb, var(--color-accent-aqua) 3%, transparent) 50%,
     transparent 70%
   );
   pointer-events: none;
@@ -332,7 +332,7 @@ button[aria-label='Back to app'] {
   inline-size: 18px;
   block-size: 18px;
   border-radius: 50%;
-  background: var(--color-accent-coral, #ff3366);
+  background: var(--color-accent-coral);
   border: 2px solid #fff;
   box-shadow: 0 0 8px rgba(var(--accent-coral-rgb), 0.6);
   cursor: pointer;
@@ -352,14 +352,14 @@ button[aria-label='Back to app'] {
 }
 .festie-map-canvas .maplibregl-popup-content {
   background: var(--color-bg-elevated);
-  color: var(--color-text-primary, #eaeaf2);
-  border: 1px solid var(--color-border-light, rgba(255, 255, 255, 0.1));
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   font-size: var(--font-size-14);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 .festie-map-canvas .festie-map-sub {
-  color: var(--color-text-secondary, #9999bb);
+  color: var(--color-text-secondary);
 }
 .festie-map-canvas .maplibregl-popup-tip {
   border-top-color: var(--color-bg-elevated);
@@ -368,12 +368,12 @@ button[aria-label='Back to app'] {
 /* Opaque: a translucent fill let the bright tiles through and dropped the text under 4.5:1. */
 .festie-map-canvas .maplibregl-ctrl-attrib {
   background: var(--color-bg-primary);
-  color: var(--color-text-muted, #8787a8);
+  color: var(--color-text-muted);
 }
 .festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact,
 .festie-map-canvas .maplibregl-ctrl-attrib.maplibregl-compact-show {
   background: var(--color-bg-primary);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
 }
 /* Zoom buttons: 44px touch targets (maplibre ships 29px). */
 .festie-map-canvas .maplibregl-ctrl-group button {
@@ -385,7 +385,7 @@ button[aria-label='Back to app'] {
   filter: invert(1);
 }
 .festie-map-canvas .maplibregl-ctrl-attrib a {
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   display: inline-block;
   min-block-size: 24px;
   line-height: 24px;
@@ -429,9 +429,9 @@ button[aria-label='Back to app'] {
    and a "last seen N ago" chip hangs below so an out-of-date dot can't be read as
    live. The honesty lives in both the marker treatment and the popup copy. */
 .festie-peer-marker--stale {
-  background: var(--color-text-muted, #8787a8);
+  background: var(--color-text-muted);
   color: var(--color-bg-primary);
-  border-color: var(--color-border-light, rgba(255, 255, 255, 0.4));
+  border-color: var(--color-border-light);
   box-shadow: none;
   filter: grayscale(1);
   opacity: 0.9;
@@ -446,13 +446,13 @@ button[aria-label='Back to app'] {
   transform: translateX(-50%);
   white-space: nowrap;
   background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
-  color: var(--color-text-secondary, #9999bb);
+  color: var(--color-text-secondary);
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 8px;
-  border: 1px solid var(--color-border-light, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--color-border-light);
   pointer-events: none;
 }
 /* Phase 4C: direction-of-travel pointer for a live peer. A small caret pinned
@@ -480,7 +480,7 @@ button[aria-label='Back to app'] {
   inline-size: 34px;
   block-size: 34px;
   border-radius: 50%;
-  background: var(--color-accent-coral, #ff3366);
+  background: var(--color-accent-coral);
   color: #fff;
   border: 3px solid #fff;
   font-size: 20px;
@@ -495,7 +495,7 @@ button[aria-label='Back to app'] {
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  border: 3px solid var(--color-accent-coral, #ff3366);
+  border: 3px solid var(--color-accent-coral);
   animation: festie-live-pulse 1.4s ease-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -504,7 +504,7 @@ button[aria-label='Back to app'] {
   }
 }
 .festie-map-canvas .festie-sos-title {
-  color: var(--color-accent-coral, #ff3366);
+  color: var(--color-accent-coral);
 }
 .festie-map-canvas .festie-sos-link {
   display: inline-block;
@@ -544,13 +544,13 @@ button[aria-label='Back to app'] {
   overflow: hidden;
   text-overflow: ellipsis;
   background: color-mix(in srgb, var(--color-bg-primary) 88%, transparent);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
   padding: 1px 6px;
   border-radius: 8px;
-  border: 1px solid var(--stage-color, var(--color-border-light, rgba(255, 255, 255, 0.18)));
+  border: 1px solid var(--stage-color, var(--color-border-light));
   pointer-events: none;
 }
 .festie-amenity-marker {
@@ -560,7 +560,7 @@ button[aria-label='Back to app'] {
   inline-size: 24px;
   block-size: 24px;
   border-radius: 50%;
-  background: var(--amenity-color, var(--color-text-muted, #8787a8));
+  background: var(--amenity-color, var(--color-text-muted));
   border: 2px solid #fff;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   font-size: var(--font-size-12);
@@ -576,7 +576,7 @@ button[aria-label='Back to app'] {
   overflow: hidden;
   text-overflow: ellipsis;
   background: color-mix(in srgb, var(--color-bg-primary) 75%, transparent);
-  color: var(--color-text-primary, #eaeaf2);
+  color: var(--color-text-primary);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;

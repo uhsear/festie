@@ -33,7 +33,7 @@ export default function Button({
     primary:
       'bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-accent-aqua',
     // DANGER/SOS only. Filled with the deepened coral so WHITE label text clears
-    // WCAG AA (white on brand #ff3366 fails). Primary actions use aqua, not coral.
+    // WCAG AA (white on brand coral fails). Primary actions use aqua, not coral.
     danger:
       'bg-accent-coral-strong text-text-on-accent hover:bg-[var(--color-accent-coral-strong-hover)] focus-visible:outline-accent-coral',
     ghost:

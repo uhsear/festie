@@ -45,7 +45,7 @@ export default function LiveBadge({ status, label, className }: LiveBadgeProps) 
     );
   }
 
-  // R6 NOW PLAYING (soon): aqua fill + dark ink (#0a0a0a). Highest contrast (AA).
+  // R6 NOW PLAYING (soon): aqua fill + dark ink. Highest contrast (AA).
   if (status === 'soon') {
     return (
       <div className={cn(PILL_BASE, 'gap-1.5 bg-accent-aqua text-[var(--text-on-light-accent)]', className)} aria-label="Starting soon">

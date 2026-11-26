@@ -211,7 +211,7 @@ input[type='reset'] {
 
 /* Selection */
 ::selection {
-  background-color: rgba(0, 232, 208, 0.25);
+  background-color: var(--color-aqua-a25);
   color: var(--color-text-primary);
 }
 
