@@ -85,8 +85,8 @@ export interface LockscreenBackground {
   color: string;
   /** Light theme: white sheet from `topU` down; the area above stays `color`. */
   sheet: { color: string; topU: number; radiusU: number } | null;
-  /** Dark theme: faint aqua radial glow centred at `cyU`. */
-  glow: { color: string; alpha: number; cyU: number } | null;
+  /** The one festival-hue band across the top edge, `heightU` tall, on both themes. */
+  band: { color: string; heightU: number };
 }
 
 export interface LockscreenHeader {
