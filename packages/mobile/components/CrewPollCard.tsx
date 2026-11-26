@@ -43,7 +43,7 @@ interface CrewPollCardProps {
 }
 
 /**
- * R26: Animated result bar — width transitions via Reanimated withTiming (400ms).
+ * R26: Animated result bar — scaleX (left origin) via Reanimated withTiming (400ms).
  * Instant when reduce-motion is on. Only the fill bar is animated; option row
  * border / gestures are untouched.
  */
@@ -79,7 +79,7 @@ function PollBarFill({
   }, [pct, reduceMotion, widthPct]);
 
   const animStyle = useAnimatedStyle(() => ({
-    width: `${widthPct.value}%` as unknown as number,
+    transform: [{ scaleX: widthPct.value / 100 }],
   }));
 
   return (
@@ -286,8 +286,10 @@ const useStyles = makeStyles((t) => ({
   optionFill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
+    transformOrigin: 'left',
     backgroundColor: t.colors.ring.aqua,
   },
   optionFillWinning: {

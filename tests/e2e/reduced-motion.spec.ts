@@ -9,8 +9,8 @@ import type { Page } from '@playwright/test';
  * animations.css, which targets `*, *::before, *::after` and sets
  * `animation-duration`/`transition-duration` to `0.01ms !important`.
  *
- * We probe that rule with `.skeleton-shimmer` (theme.css), the app's real
- * loading-shimmer utility (`animation: skeleton-loading 1.4s linear
+ * We probe that rule with `.skeleton-shimmer::after` (theme.css), the app's real
+ * loading-shimmer overlay (`animation: skeleton-sweep 1.4s linear
  * infinite`, used unconditionally by Skeleton.tsx and every `*Skeleton.tsx`
  * loading state — no JS-level reduced-motion gate of its own). A live
  * skeleton is only on screen for the brief window before the seeded server
@@ -25,14 +25,14 @@ async function gotoApp(page: Page, app: { baseUrl: string }) {
   await expect(page.locator('#app')).toBeVisible();
 }
 
-// Computed `animation-duration` (seconds) of a detached `.skeleton-shimmer`
+// Computed `animation-duration` (seconds) of a detached `.skeleton-shimmer::after`
 // probe. Un-collapsed this is ~1.4s; under reduced motion, ~0.00001s (0.01ms).
 async function skeletonShimmerAnimationDurationSeconds(page: Page): Promise<number> {
   const raw = await page.evaluate(() => {
     const probe = document.createElement('div');
     probe.className = 'skeleton-shimmer';
     document.body.appendChild(probe);
-    const value = getComputedStyle(probe).animationDuration;
+    const value = getComputedStyle(probe, '::after').animationDuration;
     probe.remove();
     return value;
   });
@@ -69,6 +69,21 @@ test.describe('prefers-reduced-motion', () => {
     // its real 1.4s loop (theme.css), not a coincidental zero.
     const durationSeconds = await skeletonShimmerAnimationDurationSeconds(page);
     expect(durationSeconds).toBeGreaterThan(0.02);
+  });
+
+  test('low-power mode stops every ambient loop', async ({ app, page }) => {
+    await gotoApp(page, app);
+    const running = await page.evaluate(() => {
+      document.documentElement.setAttribute('data-low-power', '');
+      const probe = document.createElement('div');
+      probe.className = 'ambient-loop';
+      probe.style.animation = 'live-glow 3s infinite';
+      document.body.appendChild(probe);
+      const name = getComputedStyle(probe).animationName;
+      probe.remove();
+      return name;
+    });
+    expect(running).toBe('none');
   });
 });
 

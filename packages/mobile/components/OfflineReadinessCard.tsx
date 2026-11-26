@@ -5,9 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SectionReadiness } from '@festie/shared/stores';
 import { timeAgo, offlineStatusLabel, offlineActionLabel } from '@festie/shared/utils';
 import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
-import { useUIStore } from '@festie/shared/stores';
+import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { shouldPulse } from '../lib/ambientMotion';
 import { useOfflineDownload } from '../hooks/useOfflineDownload';
 
 interface Props {
@@ -19,15 +20,17 @@ interface Props {
 function ActiveDot() {
   const dotStyles = useDotStyles();
   const reduceMotion = useReduceMotion();
+  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
+  const pulsing = shouldPulse({ reduceMotion, lowPowerMode });
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    if (reduceMotion) {
+    if (!pulsing) {
       opacity.value = 0.7;
       return;
     }
     opacity.value = withRepeat(withTiming(0.45, { duration: 450, easing: Easing.inOut(Easing.ease) }), -1, true);
-  }, [reduceMotion, opacity]);
+  }, [pulsing, opacity]);
 
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

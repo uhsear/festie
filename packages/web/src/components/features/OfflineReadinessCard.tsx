@@ -47,7 +47,7 @@ function StepRow({
           <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
         ) : isActive ? (
           <span
-            className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
+            className="ambient-loop block w-2 h-2 rounded-full motion-reduce:opacity-60"
             style={{ background: 'var(--color-accent-aqua)', animation: 'offline-step-pulse 900ms ease-in-out infinite' }}
             aria-hidden="true"
           />
@@ -171,7 +171,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
           ) : summary.overall === 'syncing' ? (
             <span
-              className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
+              className="ambient-loop block w-2 h-2 rounded-full motion-reduce:opacity-60"
               style={{ background: 'var(--color-accent-aqua)', animation: 'offline-step-pulse 900ms ease-in-out infinite' }}
               aria-hidden="true"
             />

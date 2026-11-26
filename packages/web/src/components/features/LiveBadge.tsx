@@ -1,5 +1,6 @@
 import { m, useReducedMotion } from 'motion/react';
 import { COPY } from '@festie/shared/constants';
+import { useFestivalModeStore } from '@festie/shared/stores/festivalModeStore';
 import { SetStatus } from '@/hooks/useSetStatus';
 import { cn } from '@/lib/utils';
 
@@ -15,7 +16,9 @@ interface LiveBadgeProps {
 }
 
 export default function LiveBadge({ status, label, className }: LiveBadgeProps) {
-  const prefersReducedMotion = useReducedMotion();
+  // Reduced motion and festival low-power mode both park the pulsing dot.
+  const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
+  const prefersReducedMotion = useReducedMotion() || lowPowerMode;
 
   // Live reads the `live` token group (OD-3: green, never coral). The fill and
   // the on-accent ink come from the same theme, so contrast holds in Daylight.

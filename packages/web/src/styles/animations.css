@@ -108,13 +108,32 @@
   animation: field-error-in var(--duration-med) var(--ease-out) both;
 }
 
-/* R7: band sweeps left→right: starts off-left (-200%) and ends off-right (200%). */
-@keyframes skeleton-loading {
-  0% {
-    background-position: -200% 0;
+/* R7: the highlight overlay of .skeleton-shimmer sweeps left to right by transform. */
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
   }
+}
+
+/* A live number changed: one 200 ms background pulse instead of a count-up. */
+@keyframes value-flash {
+  from {
+    background-color: var(--color-aqua-a12);
+  }
+}
+
+.value-flash {
+  animation: value-flash 200ms var(--ease-out) both;
+}
+
+/* Live set card glow: opacity only, on a ::before layer. */
+@keyframes live-glow {
+  0%,
   100% {
-    background-position: 200% 0;
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -139,12 +158,10 @@
 
 /* Crew keyframes */
 
+/* No `to` frame: the bar ends on its own inline scaleX (the vote share). */
 @keyframes crew-bar-fill {
   from {
     transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
   }
 }
 
@@ -176,10 +193,12 @@
 @keyframes timeline-now-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-live-fill) 55%, transparent);
+    transform: scale(1);
+    opacity: 0.55;
   }
   50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-live-fill) 0%, transparent);
+    transform: scale(2.2);
+    opacity: 0;
   }
 }
 
@@ -225,16 +244,6 @@
 }
 
 /* Legacy keyframes */
-
-@keyframes pulseGlow {
-  0%,
-  100% {
-    box-shadow: var(--shadow-glow-coral);
-  }
-  50% {
-    box-shadow: 0 0 32px rgba(var(--accent-coral-rgb), 0.5);
-  }
-}
 
 @keyframes breathe {
   0%,
