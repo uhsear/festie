@@ -33,6 +33,7 @@ import {
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
 
@@ -346,8 +347,7 @@ export default function AdminAuditScreen() {
       {loading ? (
         <LoadingState label="Loading audit log" />
       ) : error ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load audit log"
           message={error}
           action={{ label: 'Try again', onPress: onRefresh }}

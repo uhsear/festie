@@ -1,4 +1,3 @@
-import { CloudOff } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { COPY } from '@festie/shared/constants';
 import { pickDefaultFestival } from '@festie/shared/utils';
@@ -23,7 +22,7 @@ export default function FestivalLoadError() {
 
   return (
     <EmptyState
-      icon={<CloudOff className="w-12 h-12" aria-hidden="true" />}
+      illustration="offline"
       title={COPY.festivalLoad.errorTitle}
       description={error ?? COPY.festivalLoad.errorBody}
       cta={{ label: COPY.festivalLoad.retry, onClick: retry }}

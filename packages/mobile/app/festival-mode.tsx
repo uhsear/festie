@@ -24,6 +24,7 @@ import { setReturnTo } from '../lib/returnTo';
 import { safeStageColor } from '../lib/stageColor';
 import SosControl, { SOS_CONTROL_SIZE } from '../components/SosControl';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import FreshnessChip from '../components/FreshnessChip';
 import OfflineStatusChip from '../components/OfflineStatusChip';
@@ -115,8 +116,7 @@ export default function FestivalModeScreen() {
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Now & Next', headerShown: true }} />
       {!currentFestival && loadState === 'error' ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={COPY.festivalLoad.errorTitle}
           message={festivalsError ?? COPY.festivalLoad.errorBody}
           action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}

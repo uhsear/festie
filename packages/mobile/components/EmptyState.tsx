@@ -14,7 +14,7 @@ const FALLBACK_ICON: Record<IllustrationName, keyof typeof Ionicons.glyphMap> = 
   offline: 'cloud-offline-outline',
 };
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   /** Ionicons name for the centered glyph. Optional when `illustration` is given. */
   icon?: keyof typeof Ionicons.glyphMap;
   /** Headline describing the empty/placeholder condition. */

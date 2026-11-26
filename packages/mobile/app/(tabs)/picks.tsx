@@ -55,6 +55,7 @@ import { undoNotifier } from '../../lib/undoNotifier';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import SetCardMobile from '../../components/SetCardMobile';
 import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
 import { usePicksCalendar } from '../../hooks/usePicksCalendar';
@@ -715,8 +716,7 @@ export default function PicksScreen() {
     body = <PicksSkeleton />;
   } else if (error && stats.total === 0) {
     body = (
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn’t load your picks"
         message={error}
         action={{ label: 'Try again', onPress: handleRefresh }}
