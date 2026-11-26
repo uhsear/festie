@@ -47,11 +47,18 @@ describe('the one SOS control (DP-38)', () => {
     expect(read('components/ScreenHeader.tsx')).not.toContain('TopBannerContext');
   });
 
-  it('shrinks the SOS banner to a pill after the arrival so headers show again, and releases the inset', () => {
+  it('shrinks the SOS banner to a one-line strip after the arrival, so it never covers a header', () => {
     expect(banner).toContain('const FULL_WIDTH_MS = duration.slow * 2 + 2_000');
     expect(banner).toContain('setTimeout(() => setCompactFor(arrivalKey), FULL_WIDTH_MS)');
-    expect(banner).toContain('const fullWidth = active && !compact');
-    expect(banner).toContain('onActiveChange?.(fullWidth)');
+    expect(banner).toContain('onActiveChange?.(active)');
+    expect(banner).not.toContain('pillSlot');
+    expect(banner).not.toMatch(/position: 'absolute'/);
+  });
+
+  it('keeps every persistent top bar to one line inside the status-bar inset plus a header top padding (FU-P4)', () => {
+    const offline = read('components/OfflineBanner.tsx');
+    expect(offline).not.toContain('numberOfLines={2}');
+    expect(offline).not.toMatch(/paddingTop: insets\.top \+/);
   });
 
   it('ends lists clear of the control: its footprint plus a cushion', () => {

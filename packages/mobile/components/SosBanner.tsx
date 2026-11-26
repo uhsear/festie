@@ -15,20 +15,20 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@festie/shared/stores';
 import { useActiveSos, useLiveLocationCrewSync } from '@festie/shared/hooks';
 import { sosHeadline, sosSeenLabel, sosWhen } from '@festie/shared/utils';
-import { duration, durationEffects, durationSpatial, elevation } from '@festie/shared/tokens';
+import { duration, durationEffects, durationSpatial } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { sosBannerHref } from '../lib/dayOfRoutes';
 import AppPressable from './AppPressable';
 
-/** Same hold as the web banner: two flashes, then two seconds, before it shrinks to a pill. */
+/** Same hold as the web banner: two flashes, then two seconds, before it shrinks to a one-line strip. */
 const FULL_WIDTH_MS = duration.slow * 2 + 2_000;
 
 interface SosBannerProps {
   /** Pad for the status bar. False when a bar above (OfflineBanner) already does. */
   padTop: boolean;
-  /** Reports whether the full-width banner is showing, so the chrome applies the top inset once. The pill takes no inset. */
+  /** Reports whether the banner or its strip is showing, so the chrome applies the top inset once. */
   onActiveChange?: (active: boolean) => void;
 }
 
@@ -41,7 +41,8 @@ interface SosBannerProps {
  * per change in who raised an SOS, not on every minute tick. It slides in at the medium spatial
  * duration and flashes coral twice for each new raiser; Reduce Motion shows it with neither.
  * It floats over the screen from the root overlay, so its arrival never moves the content below.
- * After FULL_WIDTH_MS it shrinks to an icon-only pill at the right edge, so screen headers show again.
+ * After FULL_WIDTH_MS it shrinks to a one-line strip that ends inside the screen header's top padding,
+ * so it never covers a header title or its right-hand controls.
  */
 export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const t = useTokens();
@@ -68,11 +69,10 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
     return () => clearTimeout(id);
   }, [arrivalKey]);
 
-  const fullWidth = active && !compact;
   useEffect(() => {
-    onActiveChange?.(fullWidth);
+    onActiveChange?.(active);
     return () => onActiveChange?.(false);
-  }, [fullWidth, onActiveChange]);
+  }, [active, onActiveChange]);
 
   useEffect(() => {
     if (headline) AccessibilityInfo.announceForAccessibility(headline);
@@ -94,19 +94,19 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const when = sosWhen(entries) + (own ? ` · ${sosSeenLabel(newest)}` : '');
 
   return (
-    <Animated.View
-      entering={reduceMotion ? undefined : FadeInDown.duration(durationSpatial.med)}
-      style={compact ? [s.pillSlot, { top: insets.top + t.spacing[1] }] : undefined}
-    >
+    <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(durationSpatial.med)}>
       <AppPressable
-        style={compact ? s.pill : [s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
+        style={compact ? [s.strip, { paddingTop: padTop ? insets.top : 0 }] : [s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
+        hitSlop={compact ? { bottom: t.spacing[2] } : undefined}
         onPress={() => router.push(href)}
         accessibilityRole="button"
         accessibilityLabel={`${headline}, ${when}. ${toCompass ? 'Open the compass to find them' : 'Open crew to find them'}`}
         rippleColor={t.colors.shade[9]}
       >
-        <Ionicons name="alert-circle" size={iconSize.md} color={t.colors.text.onAccent} />
-        {compact ? null : (
+        <Ionicons name="alert-circle" size={compact ? iconSize.compact : iconSize.md} color={t.colors.text.onAccent} />
+        {compact ? (
+          <Text style={s.stripText}>{headline}</Text>
+        ) : (
           <>
             <View style={s.body}>
               <Text style={s.headline}>{headline}</Text>
@@ -132,19 +132,18 @@ const useStyles = makeStyles((t) => ({
     minHeight: 48,
     backgroundColor: t.colors.accent.coralStrong,
   },
-  pillSlot: {
-    position: 'absolute',
-    right: t.spacing[2],
-    ...elevation.low,
-  },
-  pill: {
-    width: 44,
-    height: 44,
-    borderRadius: t.radii.pill,
-    overflow: 'hidden',
+  // One caption line below the status bar: it ends where a screen header's own top padding ends.
+  strip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
     backgroundColor: t.colors.accent.coralStrong,
+  },
+  stripText: {
+    ...typeStyle('caption', 700),
+    color: t.colors.text.onAccent,
+    flex: 1,
   },
   flash: {
     ...StyleSheet.absoluteFill,
