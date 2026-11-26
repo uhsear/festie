@@ -13,13 +13,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useAuthStore, useLiveLocationStore, useUIStore } from '@festie/shared/stores';
 import { SOS_CONTROL } from '@festie/shared/constants';
-import { duration, durationEffects, elevation } from '@festie/shared/tokens';
+import { duration, durationEffects, elevation, spacing } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useSosRaise } from '../hooks/useSosRaise';
 
 export const SOS_CONTROL_SIZE = 64;
 const SIZE = SOS_CONTROL_SIZE;
+/** Gap between the control and the bottom edge of the screen body (the tab bar, or the safe area on stack routes). */
+const BOTTOM_GAP = spacing[5];
+/** How far the control reaches up from the bottom edge, plus a cushion. A list pads its end by this so the last row clears it. */
+export const SOS_CONTROL_CLEARANCE = BOTTOM_GAP + SIZE + spacing[2];
 const RING_R = 29;
 const RING_LENGTH = 2 * Math.PI * RING_R;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -87,7 +91,7 @@ export default function SosControl({ crewId, bottomInset = 0 }: SosControlProps)
   };
 
   return (
-    <View style={[s.wrap, { bottom: bottomInset + t.spacing[5] }]} pointerEvents="box-none">
+    <View style={[s.wrap, { bottom: bottomInset + BOTTOM_GAP }]} pointerEvents="box-none">
       {alerting ? <Animated.View pointerEvents="none" style={[s.alertRing, alertStyle]} /> : null}
       <Pressable
         testID="sos-control"

@@ -22,7 +22,7 @@ import { useNow } from '../hooks/useNow';
 import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import { setReturnTo } from '../lib/returnTo';
 import { safeStageColor } from '../lib/stageColor';
-import SosControl, { SOS_CONTROL_SIZE } from '../components/SosControl';
+import SosControl, { SOS_CONTROL_CLEARANCE } from '../components/SosControl';
 import EmptyState from '../components/EmptyState';
 import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
@@ -134,7 +134,7 @@ export default function FestivalModeScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: Math.max(t.spacing[4], insets.bottom + t.spacing[2]) + (crewId && !after ? SOS_CONTROL_SIZE : 0) },
+            { paddingBottom: crewId && !after ? insets.bottom + SOS_CONTROL_CLEARANCE : Math.max(t.spacing[4], insets.bottom + t.spacing[2]) },
           ]}
         >
           <View style={[styles.headerRow, largeText && { flexDirection: 'column', alignItems: 'flex-start' }]}>
