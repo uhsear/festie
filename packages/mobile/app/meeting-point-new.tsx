@@ -10,6 +10,7 @@ import { isCrewOwner } from '@festie/shared/utils';
 import { COPY, signInTo } from '@festie/shared/constants';
 import CrewMeetingPoints from '../components/CrewMeetingPoints';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import { makeStyles, useTokens } from '../hooks/useTokens';
 
@@ -68,8 +69,7 @@ export default function MeetingPointNewScreen() {
   if (status === 'loading') return gate(<LoadingState label="Loading your crew…" />);
   if (status === 'error') {
     return gate(
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn't load your crew"
         message="Check your connection, then try again."
         action={{ label: 'Try again', onPress: retryCrew }}
@@ -78,8 +78,7 @@ export default function MeetingPointNewScreen() {
   }
   if (status === 'joining') {
     return gate(
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Joining when you're back online"
         message="Your join is saved on this device. The crew opens once you reconnect."
       />,

@@ -67,6 +67,7 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import ScreenHeader from '../../components/ScreenHeader';
 import TBASection from '../../components/TBASection';
 import type { ListRow } from '../../components/schedule/listRow';
@@ -644,8 +645,7 @@ export default function TimelineScreen() {
   const lineupStandsIn = lineupReplacesEmptyState(announced, searchQuery);
 
   const errorScheduleState = (
-    <EmptyState
-      icon="cloud-offline-outline"
+    <LoadErrorState
       title="Couldn’t load the schedule"
       message={scheduleLoadError ?? ''}
       action={{

@@ -13,6 +13,7 @@ import type { AdminArtistRow, ArtistChanges } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import { isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
@@ -191,8 +192,7 @@ export default function FestivalArtistsScreen() {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: HEADER_TITLE, headerShown: true }} />
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load artists"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => void load() }}

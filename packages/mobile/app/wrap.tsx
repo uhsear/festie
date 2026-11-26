@@ -17,6 +17,7 @@ import { RATING_IONICON } from '../lib/ratingIcon';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useSharedValue, withTiming, Easing, useDerivedValue, runOnJS } from 'react-native-reanimated';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import SectionLabel from '../components/SectionLabel';
 import { Skeleton } from '../components/Skeleton';
 import CrewPhotoLink from '../components/CrewPhotoLink';
@@ -191,8 +192,7 @@ export default function WrapScreen() {
     }
     if (error && !data) {
       return (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={`Couldn't load your ${COPY.wrap.name}`}
           message={`Something went wrong loading your ${COPY.wrap.name}.`}
           action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}
@@ -633,8 +633,7 @@ function CrewWrapTab({
   }
   if (error || !wrap) {
     return (
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn't load your Crew Wrap"
         message={`Something went wrong loading the ${COPY.wrap.crewName}.`}
         action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}

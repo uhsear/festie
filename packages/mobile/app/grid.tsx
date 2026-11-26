@@ -55,6 +55,7 @@ import { useNow } from '../hooks/useNow';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import { SCHEDULE_HREF } from '../lib/dayOfRoutes';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
@@ -353,8 +354,7 @@ export default function GridScreen() {
       <View style={styles.screen}>
         <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
         {loadState === 'error' ? (
-          <EmptyState
-            icon="cloud-offline-outline"
+          <LoadErrorState
             title={COPY.festivalLoad.errorTitle}
             message={festivalsError ?? COPY.festivalLoad.errorBody}
             action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}

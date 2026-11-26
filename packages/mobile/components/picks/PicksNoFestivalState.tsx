@@ -1,6 +1,7 @@
 import { festivalLoadState } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import EmptyState from '../EmptyState';
+import LoadErrorState from '../LoadErrorState';
 import LoadingState from '../LoadingState';
 import type { Festival } from '@festie/shared/types';
 
@@ -23,8 +24,7 @@ export default function PicksNoFestivalState({
   const loadState = festivalLoadState({ currentFestival, festivals, isLoading, error });
   return (
 loadState === 'error' ? (
-  <EmptyState
-    icon="cloud-offline-outline"
+  <LoadErrorState
     title={COPY.festivalLoad.errorTitle}
     message={error ?? COPY.festivalLoad.errorBody}
     action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}

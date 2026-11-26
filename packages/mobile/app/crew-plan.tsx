@@ -15,6 +15,7 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { useNow } from '../hooks/useNow';
 import FreshnessChip from '../components/FreshnessChip';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import Button from '../components/Button';
 import { ArtistNameRuns, artistOpenActions } from '../components/ArtistName';
@@ -73,8 +74,7 @@ export default function CrewPlanScreen() {
   if (status === 'loading') return gate(<LoadingState label="Loading your crew…" />);
   if (status === 'error') {
     return gate(
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn't load your crew"
         message="Check your connection, then try again."
         action={{ label: 'Try again', onPress: retryCrew }}
@@ -83,8 +83,7 @@ export default function CrewPlanScreen() {
   }
   if (status === 'joining') {
     return gate(
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Joining when you're back online"
         message="Your join is saved on this device. The crew opens once you reconnect."
       />,
@@ -103,8 +102,7 @@ export default function CrewPlanScreen() {
   if (festival.state === 'switching') return gate(<LoadingState label={`Opening ${festival.festivalName}…`} />);
   if (festival.state === 'failed') {
     return gate(
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title={`Couldn't open ${festival.festivalName}`}
         message={`${crew?.name} is planning ${festival.festivalName}. Connect to the internet, then try again.`}
         action={{ label: 'Try again', onPress: festival.retry }}
