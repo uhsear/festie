@@ -106,7 +106,7 @@ export default function InboxScreen() {
             </View>
           ) : undefined
         }
-        ListEmptyComponent={loaded && !error ? <EmptyState illustration="emptyList" title={INBOX_COPY.emptyTitle} message={INBOX_COPY.emptyBody} /> : undefined}
+        ListEmptyComponent={loaded && !error ? <EmptyState ghostRow="inbox" title={INBOX_COPY.emptyTitle} message={INBOX_COPY.emptyBody} /> : undefined}
         ListFooterComponent={<Text style={styles.footnote}>{INBOX_COPY.footnote}</Text>}
       />
     );

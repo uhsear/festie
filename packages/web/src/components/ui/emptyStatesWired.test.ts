@@ -9,7 +9,9 @@ describe('empty and error states are wired to EmptyState with an illustration', 
   it.each([
     ['components/features/FestivalLoadError.tsx', 'illustration="offline"'],
     ['routes/inbox.tsx', 'illustration="offline"'],
-    ['routes/inbox.tsx', 'illustration="emptyList"'],
+    ['routes/inbox.tsx', 'ghostRow="inbox"'],
+    ['routes/picks.tsx', 'ghostRow="picks"'],
+    ['routes/crew.tsx', 'ghostRow="crew"'],
     ['routes/not-found.tsx', 'illustration="emptyList"'],
     ['routes/plan-snapshot.tsx', 'illustration="emptyList"'],
   ])('%s has %s', (file, illustration) => {

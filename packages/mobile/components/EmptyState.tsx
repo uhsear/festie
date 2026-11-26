@@ -2,6 +2,8 @@ import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from './Button';
+import GhostRow from './GhostRow';
+import type { GhostRowKind } from '@festie/shared/constants/ghostRows';
 import { SvgXml } from 'react-native-svg';
 import { illustrationSvg, illustrationSlot, type IllustrationName } from '@festie/shared/illustrations';
 import { makeStyles, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
@@ -27,6 +29,8 @@ export interface EmptyStateProps {
   secondaryAction?: { label: string; onPress: () => void };
   /** Shared illustration drawn instead of the icon. */
   illustration?: IllustrationName;
+  /** A product-derived ghost row drawn instead of the illustration. */
+  ghostRow?: GhostRowKind;
   /**
    * Set when the EmptyState fills a screen that has NO native header / nav bar
    * of its own (so the top safe-area inset — notch / Dynamic Island on iOS — is
@@ -44,7 +48,7 @@ export interface EmptyStateProps {
  * Centered empty/placeholder state: a large icon, a title, optional message,
  * and an optional action button. Use when a list or screen has no content.
  */
-export default function EmptyState({ icon, title, message, action, secondaryAction, illustration, headerless = false }: EmptyStateProps) {
+export default function EmptyState({ icon, title, message, action, secondaryAction, illustration, ghostRow, headerless = false }: EmptyStateProps) {
   const styles = useStyles();
   const t = useTokens();
   const insets = useSafeAreaInsets();
@@ -54,7 +58,9 @@ export default function EmptyState({ icon, title, message, action, secondaryActi
   return (
     <View style={[styles.container, insetStyle]}>
       {/* R21: Icon 48px in secondary text colour (same token as web), or the shared illustration. */}
-      {illustration && !largeText ? (
+      {ghostRow ? (
+        <GhostRow kind={ghostRow} />
+      ) : illustration && !largeText ? (
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <SvgXml xml={illustrationSvg(illustration, t.colors.text.secondary)} width={illustrationSlot.width} height={illustrationSlot.height} />
         </View>
