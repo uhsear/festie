@@ -35,8 +35,10 @@ import FestivalPicker from './FestivalPicker';
 import { isSchedulePath } from './ScheduleViewSwitcher';
 import ScheduleResultsRow from './ScheduleResultsRow';
 
+const FESTIVAL_MODE_PATH = '/festival-mode';
+
 // Routes that carry the festival/day/stage controls. Anything else (admin, 404)
-// gets no schedule chrome; AppShell already hides it on account/crew/festival-mode.
+// gets no schedule chrome; AppShell already hides it on account/crew; /festival-mode gets a title only.
 const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan'];
 
 interface SubHeaderProps {
@@ -155,6 +157,17 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const hasWideFold = showGenreFilter || showDaysGoing;
   const filterCount = Number(activeStages.length > 0) + Number(activeGenres.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
   const currentStatus = currentFestival ? festivalStatus(currentFestival, days) : null;
+
+  // Now & Next carries no controls: the festival name is its page title, so the lead object owns the surface.
+  if (pathname === FESTIVAL_MODE_PATH) {
+    return currentFestival ? (
+      <div className="px-[var(--space-3)] sm:px-6 py-2 border-b border-border bg-[var(--color-bg-chrome)] shrink-0 min-w-0">
+        <h1 className="type-title text-text-primary break-words" data-testid="festival-mode-title">
+          {currentFestival.name}
+        </h1>
+      </div>
+    ) : null;
+  }
 
   if (!SUB_HEADER_PATHS.includes(pathname)) return null;
 

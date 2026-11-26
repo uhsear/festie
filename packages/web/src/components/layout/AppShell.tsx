@@ -58,7 +58,7 @@ function RouteFallback() {
 // Routes where the global festival/day/stage sub-header has no purpose.
 // The first-visit walkthrough shows on the lineup only, never over a deep link (/set/:id, /join, /u/:username).
 const onboardingRoutes = ['/', '/cards'];
-const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
+const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
 // /picks has its own filters (T20); /grid gets the full schedule filters (T17).

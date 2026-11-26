@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { isValidElement, useState, type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { FestivalSet } from '@festie/shared/types';
@@ -10,6 +10,7 @@ import {
   fmtZonedClock,
   fmtZonedDayClock,
   settleUpLine,
+  festivalTint,
   startsInIsRelative,
   formatBatteryLabel,
   lostContactLabel,
@@ -20,7 +21,6 @@ import {
   type StageWalk,
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
-import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
 import Avatar from './Avatar';
@@ -42,13 +42,44 @@ const MAX_CREW_ROWS = 5;
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-function Quiet({ icon, title, body, action }: { icon: IconName; title: string; body?: string; action?: ReactNode }) {
+/** Small stand-in for the Wrap poster (9:16, festival tint). Decorative; the Wrap button carries the action. */
+function WrapThumb({ festivalName }: { festivalName?: string }) {
+  const s = useStyles();
+  const tint = festivalTint(festivalName);
+  return (
+    <View
+      testID="fm-wrap-thumb"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[s.wrapThumb, { backgroundColor: tint.bg, borderTopColor: tint.active }]}
+    />
+  );
+}
+
+function Quiet({
+  icon,
+  title,
+  body,
+  action,
+  lead,
+}: {
+  icon: IconName | ReactNode;
+  title: string;
+  body?: string;
+  action?: ReactNode;
+  lead?: string;
+}) {
   const t = useTokens();
   const s = useStyles();
   return (
     <View style={s.card}>
+      {lead ? (
+        <Text style={s.leadCountdownLg} testID="fm-lead-countdown">
+          {lead}
+        </Text>
+      ) : null}
       <View style={s.quietRow}>
-        <Ionicons name={icon} size={iconSize.md} color={t.colors.text.muted} />
+        {isValidElement(icon) ? icon : <Ionicons name={icon as IconName} size={iconSize.md} color={t.colors.text.muted} />}
         <View style={s.flex}>
           <Text style={s.quietTitle}>{title}</Text>
           {body ? <Text style={s.secondary}>{body}</Text> : null}
@@ -66,6 +97,10 @@ interface HeroProps {
   b2bSeparator?: string;
   lineupMode: boolean;
   getStageName: (stageId: string) => string | undefined;
+  /** Resolved colour for a stage; the lead set name is drawn in it. */
+  getStageColor?: (stageId: string) => string;
+  /** Tints the Wrap thumbnail once the festival is over. Never rendered as text. */
+  festivalName?: string;
   onOpenSet: (set: FestivalSet) => void;
   onBrowse: () => void;
   onWrap?: () => void;
@@ -79,6 +114,8 @@ export function NowHero({
   b2bSeparator,
   lineupMode,
   getStageName,
+  getStageColor,
+  festivalName,
   onOpenSet,
   onBrowse,
   onWrap,
@@ -91,6 +128,10 @@ export function NowHero({
   const next = upcoming[0];
   const name = (set: FestivalSet) => artistDisplayName(set, b2bSeparator);
   const heading = lineupMode ? 'Now on the lineup' : 'Now';
+  const stageColor = (stageId: string) => {
+    const color = getStageColor?.(stageId);
+    return color ? { color } : null;
+  };
 
   let body: ReactNode;
   if (live) {
@@ -105,13 +146,15 @@ export function NowHero({
           accessibilityLabel={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
           {...artistOpenActions(set, b2bSeparator)}
         >
-          <Text style={s.artist}>
+          <Text style={[s.artist, stageColor(set.stageId)]}>
             <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
           </Text>
           {stage ? <Text style={s.secondary}>{stage}</Text> : null}
           <View style={s.metaRow}>
+            <Text style={s.leadCountdown} testID="fm-lead-countdown">
+              {fmtTimeLeft(end, nowMs)}
+            </Text>
             <Text style={s.figure}>until {fmtZonedClock(end, timeZone)}</Text>
-            <Text style={s.figureMuted}>{fmtTimeLeft(end, nowMs)}</Text>
           </View>
         </AppPressable>
       );
@@ -126,6 +169,15 @@ export function NowHero({
     body = (
       <Quiet
         icon="calendar-outline"
+        lead={
+          startsAt === null
+            ? undefined
+            : far
+              ? `${days} day${days === 1 ? '' : 's'}`
+              : startsAtTimed
+                ? fmtStartsIn(startsAt, nowMs, timeZone)
+                : undefined
+        }
         title={
           startsAt === null
             ? 'Not started yet'
@@ -147,7 +199,7 @@ export function NowHero({
   } else if (phase === 'after') {
     body = (
       <Quiet
-        icon={CONCEPT_IONICON.wrap}
+        icon={<WrapThumb festivalName={festivalName} />}
         title="That's a wrap"
         body="The festival is over."
         action={onWrap ? <Button label={COPY.wrap.open} variant="secondary" onPress={onWrap} /> : undefined}
@@ -182,7 +234,7 @@ export function NowHero({
         {...artistOpenActions(next.set, b2bSeparator)}
       >
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
-        <Text style={s.artist}>
+        <Text style={[s.artist, stageColor(next.set.stageId)]}>
           <ArtistNameRuns set={next.set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
         </Text>
         <View style={s.nextRow}>
@@ -193,7 +245,7 @@ export function NowHero({
             </View>
           ) : null}
           <View style={s.countdownRow}>
-            <Text style={[s.countdown, (imminent || walk?.late) && s.countdownImminent]}>{startsIn}</Text>
+            <Text testID="fm-lead-countdown" style={[s.countdown, (imminent || walk?.late) && s.countdownImminent]}>{startsIn}</Text>
             {relative && <Text style={s.figureMuted}>{fmtZonedClock(next.start, timeZone)}</Text>}
           </View>
         </View>
@@ -477,9 +529,12 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.live.fill,
     backgroundColor: t.colors.live.ring,
   },
-  artist: { ...typeStyle('heading'), color: t.colors.text.primary },
+  artist: { ...typeStyle('display-lg'), color: t.colors.text.primary },
   secondary: { ...typeStyle('label'), color: t.colors.text.secondary },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: t.spacing[3], rowGap: t.spacing[1] },
+  leadCountdown: { ...typeStyle('display-xl', undefined, { tabular: true }), color: t.colors.text.primary },
+  leadCountdownLg: { ...typeStyle('display-lg', undefined, { tabular: true }), color: t.colors.text.primary },
+  wrapThumb: { width: 54, height: 96, borderRadius: t.radii.default, borderWidth: 1, borderColor: t.colors.border.default, borderTopWidth: 3 },
   figure: { ...typeStyle('numeral', 600), color: t.colors.text.primary },
   figureMuted: { ...typeStyle('numeral'), color: t.colors.text.secondary },
   nextRow: {
@@ -494,7 +549,7 @@ const useStyles = makeStyles((t) => ({
   walk: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[1], flexShrink: 1 },
   walkText: { ...typeStyle('label'), color: t.colors.text.primary, flexShrink: 1 },
   countdownRow: { flexDirection: 'row', alignItems: 'baseline', gap: t.spacing[2] },
-  countdown: { ...typeStyle('heading'), fontVariant: ['tabular-nums'], color: t.colors.accent.aqua },
+  countdown: { ...typeStyle('display-xl', undefined, { tabular: true }), color: t.colors.accent.aqua },
   countdownImminent: { color: t.colors.accent.coral },
   quietRow: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing[3] },
   quietTitle: { ...typeStyle('title'), color: t.colors.text.primary },

@@ -309,6 +309,13 @@ describe('SubHeader route scope', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(screen.queryByTestId('festival-select')).not.toBeInTheDocument();
   });
+
+  it('shows only the festival name as the page title on /festival-mode', () => {
+    mockPathname = '/festival-mode';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Festival One' })).toBeInTheDocument();
+    expect(screen.queryByTestId('festival-select')).not.toBeInTheDocument();
+  });
 });
 
 describe('SubHeader status line', () => {

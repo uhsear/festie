@@ -9,6 +9,7 @@ import {
   fmtZonedClock,
   isFixRecent,
   resolveFestivalTimeZone,
+  resolveStageColor,
   selectNowNext,
   showsFestivalWeather,
   stageCoord,
@@ -53,7 +54,8 @@ function FestivalModeViewInner() {
   const stages = useFestivalStore((s) => s.stages);
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
-  const { getStageName } = useFestival();
+  const { getStageName, getStageColor: getStageColorRaw } = useFestival();
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-primary)');
   const navigate = useNavigate();
 
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -113,8 +115,7 @@ function FestivalModeViewInner() {
 
   return (
     <div className={PAGE} data-testid="festival-mode-view">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 mb-4 min-w-0">
-        <h1 className="type-display-lg text-text-primary min-w-0 break-words">{currentFestival.name}</h1>
+      <div className="flex flex-wrap items-baseline justify-end gap-x-3 gap-y-2 mb-4 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
@@ -140,6 +141,8 @@ function FestivalModeViewInner() {
               b2bSeparator={currentFestival.b2bSeparator}
               lineupMode={lineupMode}
               getStageName={getStageName}
+              getStageColor={getStageColor}
+              festivalName={currentFestival.name}
               onOpenSet={setDetailSet}
               onBrowse={() => navigate({ to: '/cards' })}
               onWrap={user ? () => navigate({ to: '/wrap' }) : undefined}

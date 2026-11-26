@@ -26,7 +26,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 
 let crewDayOf: CrewDayOf = { crew: null, whereabouts: [], meet: null };
 vi.mock('@festie/shared/hooks', () => ({
-  useFestival: () => ({ getStageName: () => 'Main Stage' }),
+  useFestival: () => ({ getStageName: () => 'Main Stage', getStageColor: () => '#112233' }),
   useCrewDayOf: () => crewDayOf,
 }));
 
