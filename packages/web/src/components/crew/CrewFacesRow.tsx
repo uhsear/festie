@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
 import { useCrewFaces, useFestival } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores';
 import { resolveFestivalTimeZone, resolveStageColor } from '@festie/shared/utils';
+import { useNow } from '../../hooks/useSetStatus';
 import { useLastKnownFix } from '../../hooks/useLastKnownFix';
 import Avatar from '../ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -14,11 +14,7 @@ export default function CrewFacesRow() {
   const days = useFestivalStore((s) => s.days);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const { getStageColor } = useFestival();
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
+  const nowMs = useNow();
   const faces = useCrewFaces(nowMs, days, useLastKnownFix(), resolveFestivalTimeZone(currentFestival));
   if (faces.length === 0) return null;
 

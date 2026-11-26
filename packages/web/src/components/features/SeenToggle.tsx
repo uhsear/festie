@@ -28,7 +28,7 @@ export default function SeenToggle({ name, value, onChange }: Props) {
       </button>
       <button
         type="button"
-        aria-label={name ? `Missed it ${name}` : undefined}
+        aria-label={name ? `Missed it, ${name}` : undefined}
         aria-pressed={value === false}
         onClick={() => onChange(false)}
         className={cn(segmentClass, 'border-l border-border', value === false ? onClass : offClass)}

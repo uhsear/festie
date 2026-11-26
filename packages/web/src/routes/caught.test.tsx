@@ -117,7 +117,7 @@ describe('CaughtPage', () => {
     expect(screen.getByRole('button', { name: 'Saw it, Artist A' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Saw it, Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', null, 'u1');
-    fireEvent.click(screen.getByRole('button', { name: 'Missed it Artist A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it, Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', false, 'u1');
   });
 
@@ -146,7 +146,7 @@ describe('CaughtPage', () => {
     const scales = screen.getAllByText('rate-five');
     expect(scales).toHaveLength(2);
     for (const scale of scales) expect(scale).toHaveAttribute('data-show-caption', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Missed it Artist A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it, Artist A' }));
     expect(screen.getAllByText('rate-five')).toHaveLength(1);
   });
 

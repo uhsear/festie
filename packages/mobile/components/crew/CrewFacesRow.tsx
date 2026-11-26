@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useCrewFaces, useFestival } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores';
 import { resolveFestivalTimeZone } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useNow } from '../../hooks/useNow';
 import { useLastKnownFix } from '../../hooks/useLastKnownFix';
 import { safeStageColor } from '../../lib/stageColor';
 import Avatar from '../Avatar';
@@ -18,11 +18,7 @@ export default function CrewFacesRow() {
   const days = useFestivalStore((s) => s.days);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const { getStageColor } = useFestival();
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 60_000);
-    return () => clearInterval(id);
-  }, []);
+  const nowMs = useNow(60_000);
   const faces = useCrewFaces(nowMs, days, useLastKnownFix(), resolveFestivalTimeZone(currentFestival));
   if (faces.length === 0) return null;
 
