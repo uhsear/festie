@@ -75,7 +75,7 @@ function WrapThumb({ festivalName }: { festivalName?: string }) {
 }
 
 const card =
-  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
+  'fm-card-enter motion-reduce:animate-none relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
 
 function Quiet({ icon, title, body, action, lead }: { icon: ReactNode; title: string; body?: string; action?: ReactNode; lead?: string }) {
   return (
@@ -203,7 +203,7 @@ export default function NowHero({
     // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
     const relative = startsInIsRelative(next.start, nowMs);
     body = (
-      <div data-testid="fm-next-hero" className={cn(card, 'border-border')}>
+      <div key={next.set.id} data-testid="fm-next-hero" className={cn(card, 'border-border')}>
         <RowOpenButton
           onClick={() => onOpenSet(next.set)}
           label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
