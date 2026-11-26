@@ -140,7 +140,8 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, SWITCH_RESTRICTED] },
   },
   {
-    files: SWITCH_FILES,
+    // Only the allowlisted switch files lose the ratchet; the others keep the block above.
+    files: SWITCH_FILES.filter((f) => RATCHET_ALLOWLIST.includes(f)),
     rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] },
   },
   storybook.configs['flat/recommended'],
