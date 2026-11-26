@@ -29,7 +29,7 @@ export default function CrewFacesRow() {
           <li key={f.userId} className="flex w-20 shrink-0 flex-col items-center gap-1 text-center">
             <span
               className={cn('rounded-full border-2 p-0.5', f.stageId ? '' : 'border-border')}
-              style={f.stageId ? { borderColor: resolveStageColor(getStageColor(f.stageId), 'var(--border)') } : undefined}
+              style={f.stageId ? { borderColor: resolveStageColor(getStageColor(f.stageId), 'var(--color-border)') } : undefined}
             >
               <Avatar name={f.name} size="md" />
             </span>

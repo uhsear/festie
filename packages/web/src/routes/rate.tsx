@@ -207,7 +207,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
           className="h-full rounded-full"
           style={{
             width: `${((index + 1) / queue.length) * 100}%`,
-            backgroundColor: resolveStageColor(set.stageId ? getStageColor(set.stageId) : null, 'var(--text-muted)'),
+            backgroundColor: resolveStageColor(set.stageId ? getStageColor(set.stageId) : null, 'var(--color-text-muted)'),
           }}
         />
       </div>

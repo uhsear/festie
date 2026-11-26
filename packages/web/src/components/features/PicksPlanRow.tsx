@@ -50,7 +50,7 @@ function PicksPlanRow({ set, hasClash, clashMin }: PicksPlanRowProps) {
   const b2bSeparator = currentFestival?.b2bSeparator;
   const artist = artistDisplayName(set, b2bSeparator);
   const stageName = stage?.name || '';
-  const stageColor = resolveStageColor(stage?.color, 'var(--text-muted)');
+  const stageColor = resolveStageColor(stage?.color, 'var(--color-text-muted)');
   const time = formatSetTimeRange(set) || 'TBA';
   const hasNote = !!myNote;
   const hasReminder = reminder != null;

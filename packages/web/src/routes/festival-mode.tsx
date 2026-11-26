@@ -54,7 +54,7 @@ function FestivalModeViewInner() {
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getStageName, getStageColor: getStageColorRaw } = useFestival();
-  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-primary)');
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-primary)');
   const navigate = useNavigate();
 
   const [nowMs, setNowMs] = useState(() => Date.now());

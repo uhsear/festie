@@ -75,9 +75,9 @@ function CardsViewInner() {
   const { getMyPick, getOtherPicks } = usePicks();
   const canPick = useCanPick();
   const { getStageColor: getStageColorRaw, getStageName, getDays, getFilteredSets } = useFestival();
-  // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
+  // Map shared's platform-neutral fallback sentinel to the web stage-fallback CSS var.
   const getStageColor = useCallback(
-    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
+    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-stage-fallback)'),
     [getStageColorRaw],
   );
   const prefersReducedMotion = usePrefersReducedMotion();

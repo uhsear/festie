@@ -75,7 +75,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
-    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
+    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)'),
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();

@@ -28,7 +28,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
   const { savePick } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
-  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)');
   const currentFestival = useFestivalStore((state) => state.currentFestival);
   const b2bSeparator = currentFestival?.b2bSeparator;
 

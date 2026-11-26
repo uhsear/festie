@@ -4,13 +4,16 @@ import { render, screen } from '@testing-library/react';
 const faces: unknown[] = [];
 vi.mock('@festie/shared/hooks', () => ({
   useCrewFaces: () => faces,
-  useFestival: () => ({ getStageColor: (id: string) => (id === 'main' ? 'rgb(1, 2, 3)' : 'rgb(9, 9, 9)') }),
+  useFestival: () => ({
+    getStageColor: (id: string) => (id === 'main' ? 'rgb(1, 2, 3)' : id === 'plain' ? STAGE_COLOR_FALLBACK : 'rgb(9, 9, 9)'),
+  }),
 }));
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ days: [], currentFestival: null }),
 }));
 vi.mock('../../hooks/useLastKnownFix', () => ({ useLastKnownFix: () => ({ coord: null, at: null }) }));
 
+import { STAGE_COLOR_FALLBACK } from '@festie/shared/utils';
 import CrewFacesRow from './CrewFacesRow';
 
 describe('CrewFacesRow', () => {
@@ -33,5 +36,12 @@ describe('CrewFacesRow', () => {
     expect(screen.getByText('Seen 12 min ago')).toBeInTheDocument();
     const ring = screen.getByText('Ari').parentElement!.querySelector('span');
     expect(ring).toHaveStyle({ borderColor: 'rgb(1, 2, 3)' });
+  });
+
+  it('falls back to a defined border token when the stage has no colour', () => {
+    faces.push({ userId: 'a', name: 'Ari', stageId: 'plain', caption: 'At Plain', sos: false });
+    render(<CrewFacesRow />);
+    const ring = screen.getByText('Ari').parentElement!.querySelector('span') as HTMLElement;
+    expect(ring.style.borderColor).toBe('var(--color-border)');
   });
 });
