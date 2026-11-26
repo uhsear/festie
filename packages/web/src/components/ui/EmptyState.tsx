@@ -4,6 +4,8 @@ import { illustrationDataUri, illustrationSlot, type IllustrationName } from '@f
 import { Heart, Inbox, Users, WifiOff, type LucideIcon } from 'lucide-react';
 import { colors, colorsDaylight } from '@festie/shared/tokens';
 import Button from './Button';
+import GhostRow from './GhostRow';
+import type { GhostRowKind } from '@festie/shared/constants/ghostRows';
 import { cn } from '../../lib/utils';
 
 // Shown at 48px instead of the illustration when the viewport is short (theme.css).
@@ -23,6 +25,8 @@ interface EmptyStateProps {
     onClick: () => void;
   };
   illustration?: IllustrationName;
+  /** A product-derived ghost row drawn instead of the illustration. */
+  ghostRow?: GhostRowKind;
   secondaryCta?: {
     label: string;
     onClick: () => void;
@@ -38,6 +42,7 @@ export default function EmptyState({
   description,
   cta,
   illustration,
+  ghostRow,
   secondaryCta,
   className,
   headingLevel = 2,
@@ -58,7 +63,9 @@ export default function EmptyState({
       )}
     >
       <div className="flex flex-col items-center gap-4 w-full">
-        {illustration ? (
+        {ghostRow ? (
+          <GhostRow kind={ghostRow} />
+        ) : illustration ? (
           <>
             <img
               alt=""

@@ -48,6 +48,7 @@ vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => null
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
 vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));
+vi.mock('../components/features/LineupFlyer', () => ({ default: () => <div data-testid="lineup-flyer" /> }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div data-testid="cards-skeleton" /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
   RenderErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -224,5 +225,42 @@ describe('CardsView announced lineup', () => {
     render(<CardsView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.queryByText(/acts announced/)).not.toBeInTheDocument();
+  });
+});
+
+describe('CardsView lineup flyer', () => {
+  beforeEach(() => {
+    Object.assign(festivalState, {
+      currentProfile: null,
+      currentFestival: {
+        id: 'f1',
+        timeZone: 'UTC',
+        startDate: '2026-12-05',
+        endDate: '2026-12-06',
+        publishedAt: '2026-11-10T00:00:00.000Z',
+        lineup: [],
+      },
+      days: [{ index: 0, date: '2026-12-05', label: 'Fri' }],
+      sets: [mkSet('a', '', ''), mkSet('b', '', '')],
+      selectedDay: 0,
+      stages: [],
+      searchQuery: '',
+      hideAll: false,
+      isLoading: false,
+      error: null,
+    });
+  });
+
+  it('shows the flyer and no set cards, so no pick controls, while no set has a time', () => {
+    render(<CardsView />);
+    expect(screen.getByTestId('lineup-flyer')).toBeInTheDocument();
+    expect(screen.queryAllByTestId('set-card')).toHaveLength(0);
+  });
+
+  it('brings the cards back, and drops the flyer, once one set has a time', () => {
+    festivalState.sets = [mkSet('a', '', ''), mkSet('b', '20:00', '21:00')];
+    render(<CardsView />);
+    expect(screen.queryByTestId('lineup-flyer')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('set-card').length).toBeGreaterThan(0);
   });
 });

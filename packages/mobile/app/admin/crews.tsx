@@ -18,6 +18,7 @@ import { useAuthStore } from '@festie/shared/stores';
 import { filterAdminCrews, removeMemberCopy } from '@festie/shared/utils';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
 import { ConfirmDialog, UserPicker, useReauthPrompt } from '../../components/admin';
@@ -257,8 +258,7 @@ export default function AdminCrewsScreen() {
   if (error) {
     return (
       <View style={styles.screen}>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load crews"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => { setLoading(true); void load().finally(() => setLoading(false)); } }}

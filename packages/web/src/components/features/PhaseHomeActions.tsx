@@ -53,7 +53,7 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
               aria-label={a.a11y}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold',
-                'min-h-[44px] cursor-pointer border-2 transition-colors duration-200',
+                'min-h-[44px] cursor-pointer border-2 transition-colors duration-(--duration-med)',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                 'border-accent-aqua bg-[var(--color-aqua-a08)] text-accent-aqua',
               )}

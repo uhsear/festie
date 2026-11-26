@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { X, Users, Bell, Check, ChevronRight } from 'lucide-react';
 import { ONBOARDING_SLIDES_SHARED } from '@festie/shared';
-import { ONBOARDING_COPY, PRIORITY_LABELS, PRIORITY_OPTIONS } from '@festie/shared/constants';
-import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { ONBOARDING_COPY } from '@festie/shared/constants';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import {
   formatFestivalDateRange,
   getIntroSteps,
@@ -12,8 +12,7 @@ import {
   nextIntroStep,
 } from '@festie/shared/utils';
 import type { IntroCrewChoice, IntroStepKey } from '@festie/shared/utils';
-import type { Priority } from '@festie/shared/types';
-import PriorityIcon from '../ui/PriorityIcon';
+import IntroLineup from './IntroLineup';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -54,12 +53,6 @@ const SLIDE_ICON: Record<'crew' | 'reminders', React.ReactNode> = {
   reminders: <Bell className="w-10 h-10 text-accent-aqua" />,
 };
 
-const PRIORITY_COLOR: Record<Priority, string> = {
-  must: 'var(--color-priority-must)',
-  'want-to-see': 'var(--color-priority-want)',
-  maybe: 'var(--color-priority-maybe)',
-};
-
 export default function Onboarding({ suspended = false }: OnboardingProps) {
   const [pending, setPending] = useState(() => {
     if (isOnboardingCompleted()) return false;
@@ -76,7 +69,6 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const user = useAuthStore((s) => s.user);
-  const theme = useUIStore((s) => s.theme);
   const navigate = useNavigate();
   const { toastError } = useToast();
   const steps = getIntroSteps(festivals.length);
@@ -166,10 +158,11 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
           <IconButton icon={<X className="w-5 h-5" />} label="Dismiss onboarding" onClick={dismiss} />
         </div>
 
-        {/* Step icon */}
+        {/* Step visual: the scripted lineup on the plan slide, a glyph on the others. */}
         {stepKey === 'plan' ? (
-          // Brand mark on the first step; decorative, the title names the app.
-          <img src={theme === 'daylight' ? '/favicon-daylight.svg' : '/favicon.svg'} width={80} height={80} alt="" className="mt-2 mb-4" />
+          <div className="mt-6 mb-4 flex w-full justify-center">
+            <IntroLineup />
+          </div>
         ) : stepKey === 'crew' || stepKey === 'reminders' ? (
           <div className="mt-2 mb-4 flex items-center justify-center w-20 h-20 rounded-full bg-bg-card border border-border">
             {SLIDE_ICON[stepKey]}
@@ -178,23 +171,9 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
 
         {/* Step content */}
         {slide && (
-          <>
+          <div className={cn('flex flex-col', stepKey === 'plan' ? 'w-full items-start text-left' : 'items-center')}>
             <h2 className="text-xl font-display font-bold text-text-primary mb-2">{slide.title}</h2>
             <p className="text-sm text-text-secondary leading-relaxed max-w-xs mb-6">{slide.description}</p>
-          </>
-        )}
-        {stepKey === 'plan' && (
-          <div className="flex flex-wrap justify-center gap-2 mb-6" aria-hidden="true">
-            {PRIORITY_OPTIONS.map((p) => (
-              <span
-                key={p.value}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs font-semibold"
-                style={{ color: PRIORITY_COLOR[p.value] }}
-              >
-                <PriorityIcon priority={p.value} className="w-4 h-4" filled />
-                {PRIORITY_LABELS[p.value]}
-              </span>
-            ))}
           </div>
         )}
         {stepKey === 'festival' && (
@@ -282,7 +261,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
               key={k}
               aria-hidden="true"
               className={cn(
-                'h-1.5 rounded-full transition-[width,background-color] duration-300',
+                'h-1.5 rounded-full transition-[width,background-color] duration-(--duration-slow)',
                 k === stepKey ? 'w-6 bg-accent-aqua' : 'w-1.5 bg-text-muted/30',
               )}
             />

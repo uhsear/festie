@@ -1,6 +1,6 @@
 /* Card animations */
 .card-enter {
-  animation: card-in var(--duration-slow) var(--ease-out);
+  animation: card-in var(--duration-slow) var(--ease-out) both;
 }
 
 @keyframes card-in {
@@ -108,13 +108,32 @@
   animation: field-error-in var(--duration-med) var(--ease-out) both;
 }
 
-/* R7: band sweeps left→right: starts off-left (-200%) and ends off-right (200%). */
-@keyframes skeleton-loading {
-  0% {
-    background-position: -200% 0;
+/* R7: the highlight overlay of .skeleton-shimmer sweeps left to right by transform. */
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
   }
+}
+
+/* A live number changed: one 200 ms background pulse instead of a count-up. */
+@keyframes value-flash {
+  from {
+    background-color: var(--color-aqua-a12);
+  }
+}
+
+.value-flash {
+  animation: value-flash var(--duration-med) var(--ease-out) both;
+}
+
+/* Live set card glow: opacity only, on a ::before layer. */
+@keyframes live-glow {
+  0%,
   100% {
-    background-position: 200% 0;
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -131,20 +150,18 @@
   }
 }
 
-/* R22: 70ms per step, capped at index 6 (420ms max). Set --i via inline style. */
+/* R22: one shared step and cap (stagger tokens). Set --i via inline style. */
 .stagger-item {
   animation: stagger-fade-in var(--duration-slow) var(--ease-out) both;
-  animation-delay: calc(min(var(--i, 0), 6) * 70ms);
+  animation-delay: calc(min(var(--i, 0), var(--stagger-last)) * var(--stagger-step));
 }
 
 /* Crew keyframes */
 
+/* No `to` frame: the bar ends on its own inline scaleX (the vote share). */
 @keyframes crew-bar-fill {
   from {
     transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
   }
 }
 
@@ -176,10 +193,12 @@
 @keyframes timeline-now-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-live-fill) 55%, transparent);
+    transform: scale(1);
+    opacity: 0.55;
   }
   50% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-live-fill) 0%, transparent);
+    transform: scale(2.2);
+    opacity: 0;
   }
 }
 
@@ -225,16 +244,6 @@
 }
 
 /* Legacy keyframes */
-
-@keyframes pulseGlow {
-  0%,
-  100% {
-    box-shadow: var(--shadow-glow-coral);
-  }
-  50% {
-    box-shadow: 0 0 32px rgba(var(--accent-coral-rgb), 0.5);
-  }
-}
 
 @keyframes breathe {
   0%,
@@ -300,6 +309,8 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* Staggered entrances hold at opacity 0 until their delay passes; skip the wait. */
+    animation-delay: 0s !important;
     /* Reduced motion removes movement, not feedback: transforms and layout snap,
        but colour and opacity changes still fade so state changes stay visible. */
     transition-property: color, background-color, border-color, outline-color, opacity, box-shadow, fill, stroke !important;

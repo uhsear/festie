@@ -14,6 +14,7 @@ import {
   type MapStatus,
   type PursueTarget,
 } from './mapDom';
+import { cameraDuration } from './mapMotion';
 
 /**
  * SOS markers (emphasized; one per active SOS). Two effects, cohesive:
@@ -115,7 +116,7 @@ export function useSosMarkers(
       if (!framedRef.current.has(s.userId)) {
         framedRef.current.add(s.userId);
         marker.togglePopup();
-        map.flyTo({ center: [lng, lat], zoom: 15, duration: 600 });
+        map.flyTo({ center: [lng, lat], zoom: 15, duration: cameraDuration() });
       }
     }
   }, [status, sosIdsKey, selectPursue, mapRef, glRef, markersRef, framedRef]);

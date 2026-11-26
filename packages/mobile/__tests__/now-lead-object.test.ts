@@ -15,3 +15,16 @@ describe('Now & Next lead object (DP-37)', () => {
     expect(src).not.toMatch(/<Text[^>]*>\s*\{festivalName\}/);
   });
 });
+
+describe('Now & Next live handoff (DP-50)', () => {
+  it('fades the card in at the medium duration, gated by Reduce Motion', () => {
+    const src = read('components/SetChangeEnter.tsx');
+    expect(src).toContain('FadeIn.duration(motionDuration.med)');
+    expect(src).toMatch(/if \(reduceMotion\) return <>\{children\}<\/>/);
+  });
+  it('keys each card by set id so a set change replays the entrance', () => {
+    expect(read('components/NowSurface.tsx')).toContain('<SetChangeEnter key={set.id}>');
+    expect(read('components/NowSurface.tsx')).toContain('<SetChangeEnter key={next.set.id}>');
+    expect(read('components/NowNextStrip.tsx')).toContain('<SetChangeEnter key={focus.set.id}>');
+  });
+});

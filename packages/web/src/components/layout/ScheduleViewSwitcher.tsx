@@ -54,7 +54,7 @@ export default function ScheduleViewSwitcher({ className }: { className?: string
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'inline-flex no-underline items-center justify-center gap-1.5 rounded-full px-3.5 max-sm:px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold',
-                'cursor-pointer transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)]',
+                'cursor-pointer transition-colors duration-(--duration-med) ease-(--ease-out)',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
                 '[&_svg]:w-4 [&_svg]:h-4',
                 active
