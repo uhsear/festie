@@ -33,6 +33,7 @@ import {
 import { AUTH_COPY, GUEST_LEGAL_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import BrandWordmark from '../../components/BrandWordmark';
 import GuestLegalFooter, { openPage } from '../../components/GuestLegalFooter';
 import InviteCard from '../../components/InviteCard';
 import ProviderButtons from '../../components/ProviderButtons';
@@ -40,7 +41,7 @@ import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 // Screen order; the first invalid field in this order takes focus.
 const FIELD_ORDER: RegisterField[] = ['username', 'email', 'password', 'confirmPassword', 'dateOfBirth', 'tosAccepted'];
@@ -54,13 +55,6 @@ const useStyles = makeStyles((t) => ({
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: t.spacing[6],
-  },
-  title: {
-    // display-lg = Clash Display 700 — brand wordmark, first impression screen.
-    ...typeStyle('display-lg'),
-    color: t.colors.accent.coral,
-    textAlign: 'center',
-    marginBottom: t.spacing[1],
   },
   subtitle: {
     ...typeStyle('body'),
@@ -404,12 +398,7 @@ export default function RegisterScreen() {
       >
         {/* R25: hero staggered reveal — brand word then subtitle, gated on reduceMotion */}
         <BrandMark />
-        <Animated.Text
-          style={styles.title}
-          maxFontSizeMultiplier={typeScaleCap('display-lg')}
-          entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)}>
-          {AUTH_COPY.wordmark}
-        </Animated.Text>
+        <BrandWordmark entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)} />
         <Animated.Text
           style={styles.subtitle}
           maxFontSizeMultiplier={MAX_FONT_SCALE}

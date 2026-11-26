@@ -60,6 +60,8 @@ export default function Toast() {
               <button
                 type="button"
                 onClick={() => {
+                  // The leaving toast stays mounted for TOAST_EXIT_MS; a second Enter must not undo twice.
+                  if (t.leaving) return;
                   t.onUndo?.();
                   removeToast(t.id);
                 }}

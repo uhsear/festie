@@ -45,7 +45,7 @@ export default function WrapCardPoster({ card, festivalName, byline }: Props) {
                     </div>
                   )}
                 </div>
-                {Icon && <Icon size={font.statValue} color={colors.accent} strokeWidth={2} aria-hidden="true" />}
+                {Icon && <Icon size={font.statValue} color={colors.accent} aria-hidden="true" />}
                 {row.badge && (
                   <div style={{ fontSize: font.kicker, fontWeight: 800, color: colors.accent, flexShrink: 0 }}>
                     {row.badge}

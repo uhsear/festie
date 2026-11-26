@@ -55,8 +55,13 @@
 
 /* ── /cards: interaction overrides ───────────────────────────────────── */
 .card-grid .set-card:has(.set-card-click-target:active) {
-  transform: scale(0.985);
-  transition: transform 90ms var(--ease-standard);
+  scale: var(--press-scale);
+  transition: scale 90ms var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-grid .set-card:has(.set-card-click-target:active) {
+    scale: 1;
+  }
 }
 /* Desktop hover lightens the interactive card border (mirrors the touch
    behavior in components.css `@media (hover: none)`, which desktop hovers

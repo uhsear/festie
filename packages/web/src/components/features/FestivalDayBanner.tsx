@@ -52,7 +52,7 @@ export default function FestivalDayBanner() {
       </span>
       <Link
         to="/festival-mode"
-        className="shrink-0 flex items-center bg-accent-aqua text-[var(--text-on-light-accent)] border-none rounded-xl py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        className="shrink-0 flex items-center bg-accent-aqua text-[var(--text-on-light-accent)] border-none rounded-xl py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] press-scale transition-[scale,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >
@@ -60,7 +60,7 @@ export default function FestivalDayBanner() {
       </Link>
       <button
         type="button"
-        className="shrink-0 bg-transparent border-none text-text-secondary cursor-pointer text-xl p-0 px-1 leading-none min-h-11 min-w-11 hover:text-text-primary active:scale-[0.97] transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)]"
+        className="shrink-0 bg-transparent border-none text-text-secondary cursor-pointer text-xl p-0 px-1 leading-none min-h-11 min-w-11 hover:text-text-primary press-scale transition-[scale,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)]"
         onClick={dismiss}
         aria-label="Dismiss festival day reminder"
         data-testid="festival-day-banner-close"

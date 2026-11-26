@@ -85,9 +85,9 @@ function TimelineGridCell({
         'flex flex-col justify-center',
         'z-[2] opacity-[0.88]',
         // Press & hover feedback
-        'transition-[transform,box-shadow] duration-150',
+        'transition-[scale,box-shadow] duration-150',
         'ease-out',
-        'active:scale-[0.97]',
+        'press-scale',
         'hover:opacity-100 hover:shadow-[0_2px_10px_rgba(0,0,0,0.28)]',
         // Enter animation via data-day attribute on parent grid. No will-change:
         // it kept ~100 compositor layers alive after the 260ms animation ended.

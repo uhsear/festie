@@ -19,8 +19,9 @@ import { ACCOUNT_COPY, AUTH_COPY } from '@festie/shared/constants';
 import { isValidEmail } from '@festie/shared/utils';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import BrandWordmark from '../../components/BrandWordmark';
 import GuestLegalFooter from '../../components/GuestLegalFooter';
-import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 /**
  * Forgot-password screen — mobile mirror of the web /forgot-password page.
@@ -38,13 +39,6 @@ const useStyles = makeStyles((t) => ({
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: t.spacing[6],
-  },
-  title: {
-    // display-lg = Clash Display 700 — brand wordmark, first impression screen.
-    ...typeStyle('display-lg'),
-    color: t.colors.accent.coral,
-    textAlign: 'center',
-    marginBottom: t.spacing[1],
   },
   subtitle: {
     ...typeStyle('body'),
@@ -196,7 +190,7 @@ export default function ForgotPasswordScreen() {
         showsVerticalScrollIndicator={false}
       >
         <BrandMark />
-        <Text style={styles.title} maxFontSizeMultiplier={typeScaleCap('display-lg')}>{AUTH_COPY.wordmark}</Text>
+        <BrandWordmark />
         <Text style={styles.subtitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>{AUTH_COPY.tagline}</Text>
         <Text style={styles.screenLine} maxFontSizeMultiplier={MAX_FONT_SCALE}>{AUTH_COPY.resetTitle}</Text>
 

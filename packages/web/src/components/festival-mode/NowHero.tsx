@@ -47,7 +47,7 @@ function startsInWords(startsAt: number, nowMs: number, timeZone: string | undef
 }
 
 const card =
-  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100';
+  'relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
 
 function Quiet({ icon, title, body, action }: { icon: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (

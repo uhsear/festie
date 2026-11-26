@@ -24,7 +24,7 @@ const options: Array<[number, string]> = [
 ];
 
 const baseButtonClass =
-  'flex-1 py-2.5 min-h-[44px] rounded-full text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,transform] duration-200 ease-[var(--ease-standard)] text-text-primary touch-manipulation appearance-none hover:border-text-muted hover:bg-bg-card-hover active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
+  'flex-1 py-2.5 min-h-[44px] rounded-full text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,scale] duration-200 ease-[var(--ease-standard)] text-text-primary touch-manipulation appearance-none hover:border-text-muted hover:bg-bg-card-hover press-scale focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
 
 const problemLinkClass =
   'min-h-[44px] px-2 underline cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua';

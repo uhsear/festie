@@ -24,6 +24,7 @@ function setupMockToast(
     message: string;
     type: 'success' | 'error' | 'warning' | 'info';
     onUndo?: () => void;
+    leaving?: boolean;
   }>,
 ) {
   mockUseToast.mockReturnValue({
@@ -110,6 +111,15 @@ describe('Toast', () => {
     render(<Toast />);
     await user.click(screen.getByText('Undo'));
     expect(undoFn).toHaveBeenCalledOnce();
+  });
+
+  it('does not run onUndo again while the toast is leaving', async () => {
+    const undoFn = vi.fn();
+    setupMockToast([{ id: '1', message: 'Removed', type: 'info', onUndo: undoFn, leaving: true }]);
+    const user = userEvent.setup();
+    render(<Toast />);
+    await user.click(screen.getByText('Undo'));
+    expect(undoFn).not.toHaveBeenCalled();
   });
 
   it('styles Undo as a full-opacity 14px control', () => {

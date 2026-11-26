@@ -369,7 +369,7 @@ function SetCard({
                     'transition-[scale,box-shadow,background,border-color,color] duration-100 ease-[var(--ease-out)]',
                     'hover:border-text-secondary hover:bg-[var(--color-overlay-5)]',
                     'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-[-2px]',
-                    'active:scale-[0.92] motion-reduce:active:scale-100',
+                    'press-scale',
                     // Active priority states — static glow (mobile keeps these
                     // static for list-scroll perf; no infinite pulse animation).
                     active &&

@@ -113,7 +113,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
                 className={cn(
                   'shrink-0 rounded-full px-4 py-2 text-sm font-bold',
                   'bg-accent-aqua text-[var(--text-on-light-accent)]',
-                  'transition-[transform,box-shadow] duration-150 active:scale-[0.96] motion-reduce:transform-none',
+                  'transition-[scale,box-shadow] duration-150 press-scale',
                   'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                 )}
                 aria-label={addLabel(dn, nudge.count, breakdown)}
