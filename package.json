@@ -25,6 +25,7 @@
     "check:design": "node scripts/ci/design-ratchet.mjs all && node --test scripts/ci/design-ratchet.test.mjs",
     "check:docs": "node scripts/ci/check-docs.mjs",
     "check:ground": "node scripts/check-ground.mjs",
+    "check:brand-rasters": "node scripts/measure-brand-rasters.mjs --check",
     "build:static-pages": "node --import tsx/esm scripts/build-legal-css.ts",
     "check:legal": "node scripts/ci/check-legal-placeholders.mjs",
     "check:migrations": "node scripts/ci/check-migrations.mjs",

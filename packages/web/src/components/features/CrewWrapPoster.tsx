@@ -5,7 +5,8 @@ import type {
   CrewWrapData,
 } from '@festie/shared/types';
 import { POSTER } from '@festie/shared/tokens';
-import { crewPosterContent, festivalTint } from '@festie/shared/utils';
+import { crewPosterContent } from '@festie/shared/utils';
+import PosterDominant from '../wrap/PosterDominant';
 import PosterFrame from '../wrap/PosterFrame';
 
 // Re-export the shared types so existing importers (e.g. routes/wrap.tsx) keep
@@ -28,15 +29,14 @@ const { font, colors } = POSTER;
  * shows fallbacks rather than blanks or NaN.
  */
 export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney, byline }: Props) {
-  const tint = festivalTint(festivalName);
   const topOverlap = wrap.topOverlap;
-  const { spotlight, stats, seenTogether } = crewPosterContent(wrap, { showMoney });
+  const { dominant, spotlight, stats, seenTogether } = crewPosterContent(wrap, { showMoney });
 
   return (
     <PosterFrame festivalName={festivalName} kicker="CREW WRAP" byline={byline}>
-      <div style={{ fontSize: font.headline, fontWeight: 700, lineHeight: 1.1 }}>{crewName}</div>
+      <PosterDominant value={dominant.value} label={dominant.label} sub={crewName} />
 
-      <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 24 }}>
         <Superlative
           label="Most-overlapping taste"
           value={topOverlap ? `${topOverlap.aName} + ${topOverlap.bName}` : 'Rate more sets together'}
@@ -61,8 +61,8 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney
                   display: 'flex',
                   alignItems: 'center',
                   gap: 20,
-                  padding: '18px 0',
-                  borderBottom: `1px solid ${tint.faint}`,
+                  padding: '14px 0',
+                  borderBottom: `1px solid ${colors.rule}`,
                 }}
               >
                 <div
@@ -70,7 +70,7 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney
                     flex: 1,
                     minWidth: 0,
                     fontSize: font.artist,
-                    fontWeight: 700,
+                    fontWeight: POSTER.weight,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -78,7 +78,7 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney
                 >
                   {s.artist || s.setId}
                 </div>
-                <div style={{ fontSize: font.secondary, fontWeight: 800, color: colors.accent, flexShrink: 0 }}>
+                <div style={{ fontSize: font.secondary, fontWeight: POSTER.weight, color: colors.accent, flexShrink: 0 }}>
                   {s.count} loved it
                 </div>
               </div>
@@ -91,19 +91,19 @@ export default function CrewWrapPoster({ crewName, festivalName, wrap, showMoney
         </div>
       </div>
 
-      <div style={{ marginTop: 40, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+      <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
         {stats.map((t) => (
           <div
             key={t.label}
             style={{
-              background: tint.pale,
+              background: colors.tile,
               borderRadius: 24,
-              border: `1px solid ${tint.faint}`,
+              border: `1px solid ${colors.rule}`,
               padding: 28,
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: font.statValue, fontWeight: 800, color: colors.accent, lineHeight: 1 }}>{t.value}</div>
+            <div style={{ fontSize: font.statValue, fontWeight: POSTER.weight, color: colors.accent, lineHeight: 1 }}>{t.value}</div>
             <div
               style={{
                 fontSize: font.statLabel,
@@ -128,7 +128,7 @@ function Superlative({ label, value, sub }: { label: string; value: string; sub?
       <div style={{ fontSize: font.statLabel, letterSpacing: 4, textTransform: 'uppercase', color: colors.secondary, marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ fontSize: font.artist, fontWeight: 800 }}>{value}</div>
+      <div style={{ fontSize: font.artist, fontWeight: POSTER.weight }}>{value}</div>
       {sub && <div style={{ fontSize: font.secondary, color: colors.secondary, marginTop: 4 }}>{sub}</div>}
     </div>
   );

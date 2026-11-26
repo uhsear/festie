@@ -50,7 +50,7 @@ const fakeModel = (count: number, width = 1290, height = 2796) => ({
   heightU: (height / width) * 100,
   theme: 'dark',
   palette: { text: '#fff', text2: '#ccc', muted: '#999', surface: '#111', border: '#222', must: '#f00', want: '#0ff', maybe: '#fa0', clash: '#fa0' },
-  background: { color: '#0a0a0a', sheet: null, glow: null },
+  background: { color: '#0a0a0a', sheet: null, band: { color: '#42f06e', heightU: 2.2 } },
   contentTopU: 38,
   contentEndU: 80,
   sideU: 6,

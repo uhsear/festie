@@ -7,7 +7,7 @@ vi.mock('motion/react', () => ({
   motion: { span: (p: Record<string, unknown>) => <span data-testid="confetti-piece" {...{ className: p.className as string }} /> },
 }));
 
-import WrapCarousel from './WrapCarousel';
+import WrapCarousel, { DESKTOP_POSTER_WIDTH, SIDE_OVERLAP, SIDE_SCALE } from './WrapCarousel';
 
 const cards: WrapCard[] = [
   { kind: 'plan', kicker: 'YOUR PLAN', headline: '3 sets planned' },
@@ -20,6 +20,11 @@ beforeEach(() => {
 });
 
 describe('WrapCarousel', () => {
+  it('keeps a scaled side poster from reaching into the active poster', () => {
+    const insetPerSide = (DESKTOP_POSTER_WIDTH * (1 - SIDE_SCALE)) / 2;
+    expect(2 * SIDE_OVERLAP).toBeLessThanOrEqual(insetPerSide + 1e-9);
+  });
+
   it('moves the current card with next and previous', () => {
     render(<WrapCarousel cards={cards} festivalName="Coachella" byline={null} sharing={false} onShare={vi.fn()} />);
     const dots = screen.getAllByRole('button', { name: /^Card \d of 3$/ });
@@ -39,5 +44,23 @@ describe('WrapCarousel', () => {
     const [node, index] = onShare.mock.calls[0]!;
     expect(index).toBe(1);
     expect((node as HTMLElement).textContent).toContain('Artist One');
+  });
+
+  it('centres a 480 px active poster between two side cards on desktop', () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    try {
+      const { container } = render(
+        <WrapCarousel cards={cards} festivalName="Coachella" byline={null} sharing={false} onShare={vi.fn()} />,
+      );
+      const slides = container.querySelectorAll<HTMLElement>('[aria-roledescription="slide"]');
+      expect(slides).toHaveLength(3);
+      expect(slides[0]!.style.width).toBe('480px');
+      expect(slides[0]!.style.transform).toBe('');
+      expect(slides[1]!.style.transform).toBe('scale(0.8)');
+      expect(slides[1]!.style.opacity).toBe('0.6');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: original });
+    }
   });
 });

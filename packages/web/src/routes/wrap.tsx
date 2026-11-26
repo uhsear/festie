@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { fetchCrewWrap, fetchWrap } from '@festie/shared/services';
@@ -74,7 +74,9 @@ function WrapPageInner() {
   });
 
   // Hooks above and below must run on every render, before the early returns.
-  const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
+  // Stage colours come from the loaded festival; another festival's wrap gets neutral rails.
+  const stages = useFestivalStore((s) => (s.currentFestival?.id === festivalId ? s.stages : undefined));
+  const cards = useMemo(() => (data ? buildWrapCards(data, stages) : []), [data, stages]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival) : []), [data]);
   const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings || []), [data?.allRatings]);
 
@@ -170,48 +172,6 @@ function WrapPageInner() {
 
   const festivalName = data.festival.name;
 
-  if (tab === 'crew') {
-    const crew = data.crew;
-    const sameAsActive = !!crew && activeCrew?.id === crew.id;
-    return (
-      <div>
-        {tabBar}
-        <div id="wrap-tab-panel">
-          <CrewWrapTab
-            crewId={crew?.id ?? null}
-            crewName={crew?.name ?? 'Your crew'}
-            festivalId={festivalId}
-            festivalName={festivalName}
-            byline={wrapByline(data.festival, null, false)}
-            photoAlbumUrl={sameAsActive ? (activeCrew?.photoAlbumUrl ?? null) : (crew?.photoAlbumUrl ?? null)}
-            onPhotosSaved={async () => {
-              await qc.invalidateQueries({ queryKey: ['wrap', festivalId] });
-              if (crew && sameAsActive) await selectCrew(crew.id);
-            }}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (cards.length === 0) {
-    return (
-      <div>
-        {tabBar}
-        <div id="wrap-tab-panel" className="max-w-lg mx-auto pt-4">
-          <Card padding="lg">
-            <EmptyState
-              icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
-              title="Nothing to wrap yet"
-              description="Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page."
-              cta={{ label: 'Open the lineup', onClick: () => navigate({ to: '/' }) }}
-            />
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   const plan = summarizePlan(data.planned, data.caughtExtra ?? []);
   const hasPlan = plan.planned > 0;
   const stats = data.stats;
@@ -225,10 +185,45 @@ function WrapPageInner() {
   ].join(' · ');
   const byline = wrapByline(data.festival, user.username ?? null, showHandle);
 
-  return (
-    <div>
-      {tabBar}
-      <div id="wrap-tab-panel" className="max-w-lg mx-auto flex flex-col gap-6 pt-4 pb-6">
+  // The tab bar holds one position in the tree for both views, so a switch never remounts it and focus stays on the tab.
+  // It sits outside the panel that its tabs control.
+  const showPoster = tab === 'me' && cards.length > 0;
+  let panel: ReactNode;
+  if (tab === 'crew') {
+    const crew = data.crew;
+    const sameAsActive = !!crew && activeCrew?.id === crew.id;
+    panel = (
+      <div id="wrap-tab-panel">
+        <CrewWrapTab
+          crewId={crew?.id ?? null}
+          crewName={crew?.name ?? 'Your crew'}
+          festivalId={festivalId}
+          festivalName={festivalName}
+          byline={wrapByline(data.festival, null, false)}
+          photoAlbumUrl={sameAsActive ? (activeCrew?.photoAlbumUrl ?? null) : (crew?.photoAlbumUrl ?? null)}
+          onPhotosSaved={async () => {
+            await qc.invalidateQueries({ queryKey: ['wrap', festivalId] });
+            if (crew && sameAsActive) await selectCrew(crew.id);
+          }}
+        />
+      </div>
+    );
+  } else if (cards.length === 0) {
+    panel = (
+      <div id="wrap-tab-panel" className="max-w-lg mx-auto pt-4">
+        <Card padding="lg">
+          <EmptyState
+            icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
+            title="Nothing to wrap yet"
+            description="Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page."
+            cta={{ label: 'Open the lineup', onClick: () => navigate({ to: '/' }) }}
+          />
+        </Card>
+      </div>
+    );
+  } else {
+    panel = (
+      <div id="wrap-tab-panel" className="max-w-lg w-full mx-auto flex flex-col gap-6 pt-6 pb-6">
         {user.username && (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3">
             <p id="wrap-handle-title" className="min-w-0 flex-1 text-sm text-text-primary">
@@ -267,14 +262,6 @@ function WrapPageInner() {
           detail={detail}
         />
 
-        <WrapCarousel
-          cards={cards}
-          festivalName={festivalName}
-          byline={byline}
-          sharing={sharing}
-          onShare={handleShare}
-        />
-
         {/* Full list */}
         {allSorted.length > 0 && (
           <section>
@@ -298,6 +285,25 @@ function WrapPageInner() {
 
         <div className="text-center text-xs text-text-muted">festie.us</div>
       </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Poster first (DP-43); the You/Crew switch and the extras sit under the share button. */}
+      {showPoster ? (
+        <div className="-mx-6 mt-2 mb-6">
+          <WrapCarousel
+            cards={cards}
+            festivalName={festivalName}
+            byline={byline}
+            sharing={sharing}
+            onShare={handleShare}
+          />
+        </div>
+      ) : null}
+      {tabBar}
+      {panel}
     </div>
   );
 }

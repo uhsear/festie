@@ -1,5 +1,6 @@
 import type { FestivalSet, Priority, Stage } from '../types/domain';
 import { colors } from '../tokens/colors';
+import { POSTER } from '../tokens/poster';
 import { colorsDaylight } from '../tokens/colorsDaylight';
 import { clashBadgeBySetId, detectConflicts } from './conflicts';
 import { contrastRatioRgb, parseHex, toHex } from './contrast';
@@ -22,6 +23,7 @@ import {
   type LockscreenTier,
 } from './lockscreen';
 import { buildPosterArt, buildPosterPage, mixHex } from './lockscreenPoster';
+import { posterBand } from './festivalTint';
 import { formatDayChip } from './scheduleFormat';
 import { festivalStartMinutes, getSetTimeBounds, setMinuteRange, startsAfterMidnight } from './setStatus';
 
@@ -996,10 +998,12 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
     heightU,
     theme,
     palette: ctx.palette,
-    background:
-      theme === 'dark'
-        ? { color: DARK_BG, sheet: null, glow: { color: '#00e8d0', alpha: 0.08, cyU: 0.2 * heightU } }
-        : { color: DARK_BG, sheet: { color: LIGHT_SHEET, topU: contentTopU - 2, radiusU: 3 }, glow: null },
+    background: {
+      color: DARK_BG,
+      sheet: theme === 'dark' ? null : { color: LIGHT_SHEET, topU: contentTopU - 2, radiusU: 3 },
+      // The one festival-hue band across the top edge, as on the share posters; it replaces the dark glow.
+      band: { color: posterBand(input.festival.name).colour, heightU: (POSTER.band.height / POSTER.width) * 100 },
+    },
     contentTopU,
     contentEndU: ctx.contentEndU,
     sideU: ctx.sideU,
