@@ -226,7 +226,7 @@
       "file": "widgets/NowNextActivity.ios.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "iOS Live Activity widget runs in its own bundle and cannot read the app theme. Same value as accent.aqua."
+      "reason": "iOS Live Activity widget runs in its own bundle and cannot read the app theme. Same value as live.text, one copy per widget function."
     }
   ]
 }
