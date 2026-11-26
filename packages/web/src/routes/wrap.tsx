@@ -226,9 +226,21 @@ function WrapPageInner() {
   const byline = wrapByline(data.festival, user.username ?? null, showHandle);
 
   return (
-    <div>
-      {tabBar}
-      <div id="wrap-tab-panel" className="max-w-lg mx-auto flex flex-col gap-6 pt-4 pb-6">
+    <div id="wrap-tab-panel" className="flex flex-col gap-6 pt-2 pb-6">
+      {/* Poster first (DP-43); the You/Crew switch and the extras sit under the share button. */}
+      <div className="-mx-6">
+        <WrapCarousel
+          cards={cards}
+          festivalName={festivalName}
+          byline={byline}
+          sharing={sharing}
+          onShare={handleShare}
+        />
+      </div>
+
+      <div className="max-w-lg w-full mx-auto flex flex-col gap-6">
+        {tabBar}
+
         {user.username && (
           <div className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3">
             <p id="wrap-handle-title" className="min-w-0 flex-1 text-sm text-text-primary">
@@ -265,14 +277,6 @@ function WrapPageInner() {
           value={hasPlan ? plan.planned : stats.totalRated}
           label={hasPlan ? 'sets planned' : 'sets rated'}
           detail={detail}
-        />
-
-        <WrapCarousel
-          cards={cards}
-          festivalName={festivalName}
-          byline={byline}
-          sharing={sharing}
-          onShare={handleShare}
         />
 
         {/* Full list */}

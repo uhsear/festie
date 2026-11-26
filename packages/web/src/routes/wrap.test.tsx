@@ -129,4 +129,12 @@ describe('WrapPage', () => {
     const sw = await screen.findByRole('switch', { name: 'Show @asir on cards' });
     expect(sw).toHaveAttribute('aria-checked', 'true');
   });
+
+  it('puts the poster carousel above the You and Crew switch', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    renderPage();
+    const carousel = await screen.findByText('carousel');
+    const tabs = screen.getByRole('tablist', { name: 'Wrap view' });
+    expect(carousel.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
