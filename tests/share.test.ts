@@ -13,7 +13,6 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import { bootServer } from './_boot-server';
-import { festivalTint } from '../lib/festival-tint';
 import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // DB skip-gate: these integration tests require a live Postgres database.
@@ -148,7 +147,7 @@ after(async () => {
 // server wiring. We probe both prefixes to stay resilient to mount-point changes.
 async function getShareHtml(server: any, profileId: any) {
   let res = await server.request.get(`/s/${profileId}`);
-  if (res.status === 404 && !/Schedule Not Found/i.test(res.text || '')) {
+  if (res.status === 404 && !/cannot find that schedule/i.test(res.text || '')) {
     res = await server.request.get(`/api/v1/share/${profileId}`);
   }
   return res;
@@ -186,7 +185,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
     assert.match(res.text, /Share Test Fest/);
     // The picked artist must appear in the rendered page.
     assert.match(res.text, /Aria/);
-    assert.ok(res.text.includes(`background: ${festivalTint('Share Test Fest').bg};`));
+    assert.ok(!res.text.includes('border-top: 4px'), 'no tint top bar');
   });
 
   test('picks sort by festival time: a 01:00 set comes after 23:30', async () => {
@@ -283,7 +282,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
 
     const res = await getVanity(server, `ghost${RUN_ID}`);
     assert.equal(res.status, 404);
-    assert.match(res.text || '', /User Not Found|not found/i);
+    assert.match(res.text || '', /cannot find that user/i);
   });
 
   test('vanity URL for user with no profiles returns 404', async () => {
@@ -295,7 +294,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
 
     const res = await getVanity(server, user.username);
     assert.equal(res.status, 404);
-    assert.match(res.text || '', /No Schedule Yet|not joined|no.*festival/i);
+    assert.match(res.text || '', /No schedule yet/i);
   });
 
   test('vanity URL for a private user is byte-identical to a nonexistent user 404', async () => {
@@ -363,7 +362,7 @@ describe('share routes (public surface)', { skip, concurrency: 1 }, () => {
 
     const res = await getShareHtml(server, `prof-doesnotexist-${RUN_ID}`);
     assert.equal(res.status, 404);
-    assert.match(res.text || '', /Schedule Not Found|not found/i);
+    assert.match(res.text || '', /cannot find that schedule/i);
   });
 
   test('share rate-limit: many rapid requests eventually throttle (429)', async () => {
