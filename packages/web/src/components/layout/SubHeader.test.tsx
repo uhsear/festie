@@ -330,9 +330,9 @@ describe('SubHeader phone fold', () => {
     mockPathname = '/cards';
   });
 
-  it('renders collapsed Search and Filters buttons and folds the filters', () => {
+  it('renders one collapsed Filters button, no separate Search button, and folds the filters', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.getByRole('button', { name: 'Search' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Filters' })).toHaveAttribute('aria-expanded', 'false');
     expect(document.getElementById('subheader-filters')).toHaveClass('max-md:hidden');
   });
@@ -344,25 +344,22 @@ describe('SubHeader phone fold', () => {
     expect(document.getElementById('subheader-filters')).not.toHaveClass('max-md:hidden');
   });
 
-  it('opens and focuses the search input when Search is clicked', () => {
+  it('keeps the search box inside the folded filters, so Filters opens it', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(document.getElementById('subheader-search')).toHaveClass('max-md:hidden');
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(document.getElementById('subheader-search')).not.toHaveClass('max-md:hidden');
-    expect(screen.getByLabelText('Search festival artists')).toHaveFocus();
+    expect(document.getElementById('subheader-filters')).toContainElement(document.getElementById('subheader-search'));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(document.getElementById('subheader-filters')).not.toHaveClass('max-md:hidden');
   });
 
-  it('keeps search open and counts it in Filters when a query is set', () => {
+  it('counts a set query in Filters', () => {
     storeState.searchQuery = 'foo';
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(document.getElementById('subheader-search')).not.toHaveClass('max-md:hidden');
     expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
   });
 
-  it('renders neither button on /picks', () => {
+  it('renders no Filters button on /picks', () => {
     mockPathname = '/picks';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
-    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Filters/ })).not.toBeInTheDocument();
   });
 });
@@ -422,5 +419,14 @@ describe('SubHeader genre chips', () => {
     mockPathname = '/picks';
     render(<SubHeader dayOnly={true} festivalOnly={false} />);
     expect(screen.queryByRole('group', { name: 'Filter by genre' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SubHeader day chips', () => {
+  it('press-scales through the shared utility, not a raw active:scale', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const chip = screen.getByRole('button', { name: 'Fri May 29' });
+    expect(chip).toHaveClass('press-scale');
+    expect(chip.className).not.toMatch(/active:scale/);
   });
 });

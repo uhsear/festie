@@ -45,7 +45,7 @@ export default function ScheduleViewSwitcher() {
   return (
     <nav
       className={cn(
-        'flex items-center gap-1 px-[var(--space-3)] py-2 sm:px-6',
+        'flex items-center gap-1 px-[var(--space-3)] py-1 sm:px-6 sm:py-2',
         'bg-[var(--color-bg-chrome)] border-b border-border shrink-0',
         '[backdrop-filter:saturate(150%)_blur(12px)]',
       )}

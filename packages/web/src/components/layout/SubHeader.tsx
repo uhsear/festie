@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -24,7 +24,7 @@ import { useSwipeDays } from '../../hooks/useSwipeDays';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useSetStatus';
 import { useScrollFade } from '../../hooks/useScrollFade';
-import { Filter, Search, X } from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
@@ -77,13 +77,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();
-  // Below md the search box and filters fold behind two buttons; md+ folds only genres and Days I'm going.
-  const [searchOpen, setSearchOpen] = useState(false);
+  // Below md the search box and every filter fold behind one Filters button; md+ folds only genres and Days I'm going.
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (searchOpen) searchBoxRef.current?.querySelector('input')?.focus();
-  }, [searchOpen]);
   const { ref: stageScrollRef, canScrollLeft, canScrollRight } = useScrollFade<HTMLDivElement>();
   const {
     ref: dayScrollRef,
@@ -205,23 +201,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             <button
               type="button"
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:hidden',
-                'cursor-pointer border-2 border-border text-text-secondary',
-                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-              )}
-              aria-expanded={searchOpen}
-              aria-controls="subheader-search"
-              onClick={() => {
-                selectHaptic();
-                setSearchOpen((v) => !v);
-              }}
-            >
-              <Search className="w-4 h-4" aria-hidden="true" />
-              Search
-            </button>
-            <button
-              type="button"
-              className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
                 !hasWideFold && 'md:hidden',
                 'cursor-pointer border-2 border-border text-text-secondary',
@@ -243,7 +222,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* Day tabs */}
         {showDaySkeleton && (
           <div
-            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0"
+            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:order-3 max-md:w-full"
             aria-hidden="true"
           >
             {Array.from({ length: 3 }).map((_, i) => (
@@ -257,6 +236,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             className={cn(
               // The time-zone label wraps under the chips on a narrow row instead of being cut off.
               'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
+              // Below md the day rail is the second chrome row: it sits under the picker, Filters and status line.
+              'max-md:order-3 max-md:w-full',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -284,8 +265,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                       'day-tab-underline',
                       'py-2 px-4 rounded-full text-[length:var(--font-size-14)] font-semibold cursor-pointer',
                       'whitespace-nowrap snap-center min-h-[44px] inline-flex items-center gap-1.5',
-                      'transition-[background,color,border-color,box-shadow,transform] duration-200 ease-[var(--ease-out)]',
-                      'active:scale-[0.96]',
+                      'transition-[background,color,border-color,box-shadow,scale] duration-200 ease-[var(--ease-out)]',
+                      'press-scale',
                       'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 focus-visible:border-accent-aqua',
                       isActive
                         ? [
@@ -345,14 +326,18 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
 
         {(currentProfile || onSchedulePath) && <ScheduleStatusLine showFreshness={onSchedulePath} />}
 
-        {/* Artist search. Sits before the filters in the DOM so it shares the day-tab row from md up; phones keep it last. */}
+        {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
+        <div
+          id="subheader-filters"
+          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-4', showFold && !filtersOpen && 'max-md:hidden')}
+        >
+        {/* Artist search. Inside the filters wrapper: below md it folds behind Filters; from md up the wrapper is `contents`, so it shares the day-tab row. */}
         {showSearch && (
           <div
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box max-md:order-last ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
-              !searchOpen && searchQuery === '' && 'max-md:hidden',
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
             )}
             role="search"
           >
@@ -387,11 +372,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </div>
         )}
 
-        {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
-        <div
-          id="subheader-filters"
-          className={cn('md:contents max-md:w-full max-md:min-w-0', showFold && !filtersOpen && 'max-md:hidden')}
-        >
         {/* My picks filter */}
         {showMyPicks && (
           <button

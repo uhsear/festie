@@ -174,6 +174,7 @@ describe('PicksView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     render(<PicksView />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Share and export' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Download picks as a calendar file' }, { timeout: 5000 }));
     expect(buildPicksIcsExport).toHaveBeenCalledWith(expect.objectContaining({ picks: { s1: 'must' } }));
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -584,6 +585,7 @@ describe('PicksView', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     render(<PicksView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share and export' }));
     // CalendarDialog is lazy and unmocked; its cold import can pass findByRole's 1s default.
     fireEvent.click(await screen.findByRole('button', { name: 'Add to calendar' }, { timeout: 5000 }));
     fireEvent.click(await screen.findByRole('button', { name: 'Download once' }));
@@ -601,12 +603,18 @@ describe('PicksView', () => {
   it('renders the Share picks button when the profile has picks', async () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
+    expect(screen.queryByRole('button', { name: 'Share my picks' })).toBeNull();
+    const more = screen.getByRole('button', { name: 'Share and export' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByRole('button', { name: 'Share my picks' })).toBeInTheDocument();
   });
 
   it('renders the Save image button when the profile has picks', async () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Share and export' }));
     expect(await screen.findByRole('button', { name: 'Save my picks as an image' })).toBeInTheDocument();
   });
 });
