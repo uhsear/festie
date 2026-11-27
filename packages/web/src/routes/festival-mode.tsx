@@ -197,8 +197,8 @@ function FestivalModeViewInner() {
               <CrewNowSection crewName={crew.name} rows={whereabouts} onOpenCrew={goCrew} />
             ) : (
               <CrewPrompt
-                title="No crew yet"
-                body="Start a crew or join one with an invite code to see each other here."
+                title={`Start a crew for ${currentFestival.name}`}
+                body="Start one or join with an invite code to see each other here. Crews of other festivals stay on the Crew tab."
                 cta="Start or join a crew"
                 onAction={goCrew}
               />

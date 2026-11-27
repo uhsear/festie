@@ -213,8 +213,8 @@ export default function FestivalModeScreen() {
             </>
           ) : (
             <CrewPrompt
-              title="No crew yet"
-              body="Start a crew or join one with an invite code to see each other here."
+              title={currentFestival ? `Start a crew for ${currentFestival.name}` : 'No crew yet'}
+              body="Start one or join with an invite code to see each other here. Crews of other festivals stay on the Crew tab."
               cta="Start or join a crew"
               onPress={() => router.push(CREW_MEET_HREF)}
             />
