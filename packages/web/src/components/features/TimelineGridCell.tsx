@@ -99,12 +99,12 @@ function TimelineGridCell({
         'px-2 py-1 rounded-sm',
         'overflow-hidden',
         'flex flex-col justify-start',
-        'z-[2] opacity-[0.88]',
+        'z-[2]',
         // Press & hover feedback
         'transition-[scale,box-shadow] duration-(--duration-med)',
         'ease-out',
         'press-scale',
-        'hover:opacity-100 hover:shadow-[0_2px_10px_rgba(0,0,0,0.28)]',
+        'hover:shadow-[0_2px_10px_rgba(0,0,0,0.28)]',
         // Enter animation via data-day attribute on parent grid. No will-change:
         // it kept ~100 compositor layers alive after the 260ms animation ended.
         // content-visibility skips style/layout/paint for blocks scrolled out of
@@ -124,7 +124,9 @@ function TimelineGridCell({
           marginTop: `${(topSlot - rowStart) * rowHeight}px`,
           height: `${Math.max(1, blockPx - 2)}px`,
           gridColumn: columnIndex + 2,
-          background: `color-mix(in srgb, ${stageColor} 12%, transparent)`,
+          // Tint over an opaque base: the now line runs behind the blocks and must show only in the gaps between them.
+          backgroundColor: 'var(--color-bg-primary)',
+          backgroundImage: `linear-gradient(color-mix(in srgb, ${stageColor} 12%, transparent), color-mix(in srgb, ${stageColor} 12%, transparent))`,
           '--tl-stagger': `${staggerDelay(columnIndex)}ms`,
         } as React.CSSProperties
       }

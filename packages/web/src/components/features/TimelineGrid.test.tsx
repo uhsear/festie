@@ -102,4 +102,16 @@ describe('TimelineGrid', () => {
     expect(track.style.gridColumn).toBe('2 / -1');
     expect((track.firstElementChild as HTMLElement).style.top).toBe('75%');
   });
+
+  it('draws the now line behind the set blocks and the NOW pill above the gutter', () => {
+    const { getByTestId } = renderGrid(1024, 75);
+    const line = getByTestId('now-line');
+    const lineTrack = line.parentElement as HTMLElement;
+    expect(lineTrack.className).toContain('z-[1]');
+    expect(line.style.top).toBe('75%');
+    // Blocks are z-[2], gutter labels z-5: the pill track must beat the labels, the line must lose to the blocks.
+    expect(getByTestId('now-track').className).toContain('z-[8]');
+    expect(getByTestId('now-track').querySelector('.timeline-now-label')).not.toBeNull();
+    expect(line.classList.contains('timeline-now-label')).toBe(false);
+  });
 });

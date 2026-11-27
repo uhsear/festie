@@ -346,8 +346,22 @@ export default function TimelineGrid({
         });
       })}
 
-      {/* Now-indicator line — thicker, brighter, and ringed so the NOW moment
-          stands out clearly against the dense grid. */}
+      {/* Now line, drawn behind the set blocks (z-[1] < their z-[2]) so it shows only in the gaps and never cuts a title or badge. */}
+      {nowIndicator !== null && (
+        <div
+          aria-hidden="true"
+          className="relative z-[1] pointer-events-none"
+          style={{ gridColumn: '2 / -1', gridRow: `2 / span ${timeBounds.totalSlots}` }}
+        >
+          <div
+            data-testid="now-line"
+            className="absolute left-0 right-0 h-[2px] opacity-80 bg-[var(--color-live-fill)] shadow-[0_0_12px_var(--color-live-ring)]"
+            style={{ top: `${nowIndicator}%` }}
+          />
+        </div>
+      )}
+
+      {/* NOW pill and dot: above the gutter labels (z-[8] > their z-5), so the pill stays in the time gutter. */}
       {nowIndicator !== null && (
         // Spans exactly the time rows (below the auto-height sticky header), so
         // the percentage is of the rows' height and no header offset is needed.
@@ -356,15 +370,7 @@ export default function TimelineGrid({
           className="relative z-[8] pointer-events-none"
           style={{ gridColumn: '2 / -1', gridRow: `2 / span ${timeBounds.totalSlots}` }}
         >
-          <div
-            className={cn(
-              'timeline-now-label',
-              'absolute left-0 right-0 h-[2px] opacity-80',
-              'bg-[var(--color-live-fill)]',
-              'shadow-[0_0_12px_var(--color-live-ring)]',
-            )}
-            style={{ top: `${nowIndicator}%` }}
-          >
+          <div className="timeline-now-label absolute left-0 h-[2px]" style={{ top: `${nowIndicator}%` }}>
             <div
               className={cn(
                 'absolute -left-[5px] -top-[4px]',

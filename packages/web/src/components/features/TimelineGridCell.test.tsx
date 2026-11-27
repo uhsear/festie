@@ -328,3 +328,12 @@ describe('TimelineGridCell badge layout', () => {
     expect(el.querySelector('.tl-pick-row')).toBeNull();
   });
 });
+
+describe('TimelineGridCell base', () => {
+  it('paints its tint over an opaque ground so the now line behind it cannot show through', () => {
+    const el = renderCell('opaque', 0, 4);
+    expect(el.style.backgroundColor).toBe('var(--color-bg-primary)');
+    expect(el.style.backgroundImage).toContain('linear-gradient');
+    expect(el.className).not.toMatch(/(^|\s)opacity-/);
+  });
+});
