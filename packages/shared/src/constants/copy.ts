@@ -54,6 +54,9 @@ export const COPY = {
     one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes',
     gridHint: 'Clashes with another of your picks',
     tight: 'Tight change', suggested: 'Suggested', split: 'Split',
+    chooseKeep: 'Choose which to keep',
+    /** Header meta for a clash of three or more sets: the overlap is the longest pair, not the whole group. */
+    manyOverlap: (count: number, longest: string) => `${count} sets overlap, up to ${longest}`,
     splitPlanned: 'Split planned', clearPlan: 'Clear plan', undo: 'Undo',
     failed: "Couldn't update your picks. Try again.",
     noneBody: "None of your picks clash. You're all set.",
