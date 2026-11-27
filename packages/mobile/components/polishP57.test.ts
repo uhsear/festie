@@ -13,6 +13,7 @@ describe('DP-57 polish', () => {
 
   it('the no-crew join button reads "Join with code"', () => {
     expect(read('components/crew/CrewNoCrewView.tsx')).toContain('label="Join with code"');
+    expect(read('components/crew/CrewNoCrewView.tsx')).toContain('<Text style={styles.formLabel}>Join with code</Text>');
   });
 
   it('a leading icon takes 2px less padding on the icon side than the text side', () => {
