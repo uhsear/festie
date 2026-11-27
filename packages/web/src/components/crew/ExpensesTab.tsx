@@ -370,8 +370,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           options={EXPENSE_VIEWS}
           value={view}
           onChange={setView}
-          className="flex gap-1 rounded-xl bg-bg-card"
-          tabClassName="flex-1 rounded-md capitalize"
+          className="flex gap-1 bg-bg-card"
+          tabClassName="flex-1 capitalize"
         />
       )}
 

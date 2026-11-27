@@ -403,12 +403,12 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         ]}
         value={view}
         onChange={setView}
-        className="inline-flex gap-1 rounded-xl bg-bg-card"
+        className="inline-flex gap-1 bg-bg-card"
         tabClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md"
       />
       <Link
         to="/map"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
       >
         <Maximize2 className="w-4 h-4" aria-hidden="true" /> Open full map
       </Link>

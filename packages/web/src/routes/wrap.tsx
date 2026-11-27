@@ -167,8 +167,8 @@ function WrapPageInner() {
         value={tab}
         onChange={setTab}
         tone="solid"
-        className="grid grid-cols-2 gap-1 rounded-lg bg-bg-card"
-        tabClassName="min-h-[40px] rounded-xl text-sm transition-colors"
+        className="grid grid-cols-2 gap-1 bg-bg-card"
+        tabClassName="min-h-[40px] text-sm transition-colors"
       />
     </div>
   );

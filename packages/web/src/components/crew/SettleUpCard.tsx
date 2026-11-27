@@ -59,8 +59,8 @@ export default function SettleUpCard({
         options={SETTLE_VIEWS}
         value={settleView}
         onChange={onSettleViewChange}
-        className="flex gap-1 rounded-xl bg-bg-secondary"
-        tabClassName="px-2.5 py-1 rounded-md"
+        className="flex gap-1 bg-bg-secondary"
+        tabClassName="px-2.5 py-1"
       />
     </div>
 
