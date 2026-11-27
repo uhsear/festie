@@ -157,17 +157,38 @@ describe('NowHero lead object', () => {
     onBrowse: vi.fn(),
   };
 
-  it('draws the live set name in its stage colour with a tabular display-xl countdown', () => {
-    const sel = {
+  const liveSel = (end: number, priority: 'must' | null = null) =>
+    ({
       phase: 'during',
-      current: [{ set: { id: 's1', artist: 'Ann', stageId: 'main', startTime: '17:00', endTime: '18:00' }, start: NOW - 30 * 60_000, end: NOW + 30 * 60_000 }],
+      current: [{ set: { id: 's1', artist: 'Ann', stageId: 'main', startTime: '17:00', endTime: '18:00' }, start: NOW - 30 * 60_000, end, priority }],
       upcoming: [],
       todayCount: 1,
       startsAt: null,
-    } as unknown as NowNextSelection;
-    render(<NowHero {...props} selection={sel} getStageColor={() => 'rgb(1, 2, 3)'} />);
-    expect(screen.getByText('Ann').closest('[style]')).toHaveStyle({ color: 'rgb(1, 2, 3)' });
-    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('type-display-xl', 'tabular-nums');
+    }) as unknown as NowNextSelection;
+
+  it('sets the live name in ink and carries the stage colour on a rail, so contrast does not depend on the stage hue', () => {
+    render(<NowHero {...props} selection={liveSel(NOW + 30 * 60_000)} getStageColor={() => 'rgb(1, 2, 3)'} />);
+    expect(screen.getByText('Ann').closest('[style]')).toBeNull();
+    expect(screen.getByText('Ann').parentElement).toHaveClass('text-text-primary');
+    expect(screen.getByTestId('fm-stage-rail')).toHaveStyle({ background: 'rgb(1, 2, 3)' });
+  });
+
+  it('keeps one fixed row per live card: stage and end time left, countdown right', () => {
+    render(<NowHero {...props} selection={liveSel(NOW + 30 * 60_000, 'must')} />);
+    const card = screen.getByTestId('fm-now-card');
+    expect(card).toHaveTextContent(`Main · until ${fmtZonedClock(NOW + 30 * 60_000, 'UTC')}`);
+    expect(card).toHaveTextContent('Must');
+    const countdown = screen.getByTestId('fm-lead-countdown');
+    expect(countdown).toHaveClass('type-heading', 'tabular-nums', 'shrink-0');
+    expect(countdown.parentElement).toContainElement(screen.getByText(/until/));
+  });
+
+  it('turns the countdown amber in the last ten minutes of a set', () => {
+    const { unmount } = render(<NowHero {...props} selection={liveSel(NOW + 9 * 60_000)} />);
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('text-accent-amber');
+    unmount();
+    render(<NowHero {...props} selection={liveSel(NOW + 11 * 60_000)} />);
+    expect(screen.getByTestId('fm-lead-countdown')).not.toHaveClass('text-accent-amber');
   });
 
   it('leads with a display-lg countdown before the festival', () => {

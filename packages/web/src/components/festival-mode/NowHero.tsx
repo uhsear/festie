@@ -14,15 +14,18 @@ import {
   festivalTint,
   type StageWalk,
 } from '@festie/shared/utils';
-import { COPY } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
+import PriorityIcon from '../ui/PriorityIcon';
 import { cn } from '@/lib/utils';
 import ArtistName, { RowOpenButton } from '../features/ArtistName';
 
 // Countdown turns amber and bold when a set is this close, so "go now" reads
 // at a glance in a crowd.
 const IMMINENT_MIN = 5;
+// A live set this close to its end gets the same amber, so the one to leave for stands out among concurrent cards.
+const ENDING_SOON_MIN = 10;
 
 interface Props {
   selection: NowNextSelection;
@@ -32,7 +35,7 @@ interface Props {
   /** True when NOW/NEXT come from the whole lineup (guest). */
   lineupMode: boolean;
   getStageName: (stageId: string) => string | undefined;
-  /** Resolved CSS colour for a stage; the lead set name is drawn in it. */
+  /** Resolved CSS colour for a stage; drawn as the card's leading rail, never as text. */
   getStageColor?: (stageId: string) => string;
   /** Tints the Wrap thumbnail once the festival is over. Never rendered as text. */
   festivalName?: string;
@@ -58,8 +61,14 @@ function startsInWords(startsAt: number, nowMs: number, timeZone: string | undef
   return `In ${days} day${days === 1 ? '' : 's'}.`;
 }
 
-// The lead object: the set name at display-lg in its stage colour, set on the element that holds the name.
-const LEAD_NAME = 'block type-display-lg text-text-primary break-words';
+// The lead object: the set name in ink. The stage colour rides a rail, never the text, because the raw stage hues fail contrast on both themes.
+const LEAD_NAME = 'block type-heading text-text-primary break-words';
+
+/** The stage colour as a 6px rail on the card's leading edge. Decorative: the stage name is always written out. */
+function StageRail({ color }: { color?: string }) {
+  if (!color) return null;
+  return <span aria-hidden="true" data-testid="fm-stage-rail" className="absolute inset-y-0 left-0 w-1.5" style={{ background: color }} />;
+}
 
 /** Small stand-in for the Wrap poster (9:16, festival tint). Decorative; the Wrap button carries the action. */
 function WrapThumb({ festivalName }: { festivalName?: string }) {
@@ -125,27 +134,39 @@ export default function NowHero({
   if (live) {
     body = (
       <div className="flex flex-col gap-2">
-        {current.map(({ set, end }: DayOfSet) => {
+        {current.map(({ set, end, priority }: DayOfSet) => {
           const stage = getStageName(set.stageId) || '';
+          const endingSoon = end - nowMs <= ENDING_SOON_MIN * 60_000;
           return (
             <div
               key={set.id}
               data-testid="fm-now-card"
-              className={cn(card, 'border-live-fill/60 bg-[var(--color-live-ring)] shadow-[0_6px_24px_-8px_var(--color-live-ring)]')}
+              className={cn(card, 'overflow-hidden pl-5 border-live-fill/60 shadow-[0_6px_24px_-8px_var(--color-live-ring)]')}
             >
+              <StageRail color={getStageColor?.(set.stageId)} />
               <RowOpenButton
                 onClick={() => onOpenSet(set)}
                 label={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
               />
-              <span className={LEAD_NAME} style={{ color: getStageColor?.(set.stageId) }}>
+              <span className={LEAD_NAME}>
                 <ArtistName set={set} separator={b2bSeparator} />
               </span>
-              {stage && <span className="block type-label text-text-secondary mt-1">{stage}</span>}
-              <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
-                <span className="type-display-xl tabular-nums text-text-primary" data-testid="fm-lead-countdown">
+              <span className="flex items-baseline justify-between gap-3 mt-1">
+                <span className="min-w-0 type-label text-text-secondary">
+                  {stage ? `${stage} · ` : ''}until {fmtZonedClock(end, timeZone)}
+                  {priority && (
+                    <span className="inline-flex items-center gap-1 ml-2 align-middle text-text-primary">
+                      <PriorityIcon priority={priority} className="w-3.5 h-3.5" />
+                      {PRIORITY_SYMBOLS[priority].short}
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={cn('shrink-0 type-heading tabular-nums', endingSoon ? 'text-accent-amber' : 'text-text-primary')}
+                  data-testid="fm-lead-countdown"
+                >
                   {fmtTimeLeft(end, nowMs)}
                 </span>
-                <span className="type-numeral font-semibold text-text-secondary">until {fmtZonedClock(end, timeZone)}</span>
               </span>
             </div>
           );
@@ -203,13 +224,14 @@ export default function NowHero({
     // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
     const relative = startsInIsRelative(next.start, nowMs);
     body = (
-      <div key={next.set.id} data-testid="fm-next-hero" className={cn(card, 'border-border')}>
+      <div key={next.set.id} data-testid="fm-next-hero" className={cn(card, 'overflow-hidden pl-5 border-border')}>
+        <StageRail color={getStageColor?.(next.set.stageId)} />
         <RowOpenButton
           onClick={() => onOpenSet(next.set)}
           label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
         />
         <span className="block type-micro text-text-secondary">Next</span>
-        <span className={cn(LEAD_NAME, 'mt-1')} style={{ color: getStageColor?.(next.set.stageId) }}>
+        <span className={cn(LEAD_NAME, 'mt-1')}>
           <ArtistName set={next.set} separator={b2bSeparator} />
         </span>
         <span className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 mt-3">

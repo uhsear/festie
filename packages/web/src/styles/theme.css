@@ -131,7 +131,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--color-accent-coral);
+  background: var(--color-live-fill);
   vertical-align: middle;
   margin-right: 6px;
   margin-bottom: 2px;
@@ -141,7 +141,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: var(--color-accent-coral);
+    background: var(--color-live-fill);
     will-change: transform, opacity;
     animation: fm-live-pulse 2s ease-out infinite;
     pointer-events: none;
