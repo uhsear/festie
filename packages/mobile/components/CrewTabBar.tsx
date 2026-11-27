@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, type ScrollViewInstance } fro
 import { Ionicons } from '@expo/vector-icons';
 import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
+import EndFade, { useScrollMore } from './EndFade';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
@@ -47,6 +48,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
   const largeText = useLargeText();
   const scrollRef = useRef<ScrollViewInstance>(null);
   const xs = useRef<Record<string, number>>({});
+  const { more, scrollProps } = useScrollMore();
 
   // Keep the active tab in view when it changes (narrow phones / large text).
   useEffect(() => {
@@ -70,6 +72,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.bar}
         accessibilityRole="tablist"
+        {...scrollProps}
       >
         {CREW_TABS.map((tab) => {
           const active = tab.key === activeTab;
@@ -119,6 +122,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
           );
         })}
       </ScrollView>
+      <EndFade visible={more} bottom={t.spacing[2]} />
     </View>
   );
 }
@@ -131,19 +135,20 @@ const useStyles = makeStyles((t) => ({
   },
   bar: {
     flexDirection: 'row',
-    gap: t.spacing[2],
+    gap: t.spacing[1],
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[2],
-    // Fill the viewport when the four tabs fit (the common phone case) so the
-    // bar has no dead horizontal scroll; it still scrolls on narrow screens.
+    // Fill the viewport when the four tabs fit (a 393dp phone at normal text) so the
+    // bar has no dead horizontal scroll; narrower screens scroll and show EndFade.
     flexGrow: 1,
   },
   tab: {
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: t.spacing[1],
-    paddingHorizontal: t.spacing[3],
+    paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[2],
     minHeight: 44, // WCAG 2.5.5 / Apple HIG minimum touch target
     minWidth: 44, // icon-only tabs under large text are ~42pt wide without this
