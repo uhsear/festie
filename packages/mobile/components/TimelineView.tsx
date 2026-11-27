@@ -237,7 +237,8 @@ function StageColumn({
                   right: 2,
                   borderLeftColor: pickColor ?? stageColor,
                   borderLeftWidth: myPick ? 4 : 3,
-                  backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card,
+                  // Opaque base (the column's own fill) under the card tint: the NOW line cannot show through.
+                  backgroundColor: t.colors.bg.secondary,
                 },
               ]}
               onPress={() => onSetPress(s)}
@@ -249,6 +250,10 @@ function StageColumn({
               accessibilityRole="button"
               accessibilityLabel={label}
             >
+              <View
+                style={[styles.setBlockTint, { backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card }]}
+                pointerEvents="none"
+              />
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
               <View style={styles.titleRow}>
@@ -795,6 +800,14 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     overflow: 'hidden',
+    zIndex: 1,
+  },
+  setBlockTint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   // The 6 pt clash hatch runs down the left edge; this leaves a clear gap before the title.
   setBlockClashed: {
@@ -858,7 +871,8 @@ const useStyles = makeStyles((t) => ({
     position: 'absolute',
     right: 0,
     height: 2,
-    zIndex: 8,
+    // Below set blocks (zIndex 1): the opaque card hides the line instead of striking through its text.
+    zIndex: 0,
   },
   nowDot: {
     position: 'absolute',

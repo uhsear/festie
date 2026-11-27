@@ -63,6 +63,21 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(src).toContain('const textScale = Math.min(fontScale, MAX_FONT_SCALE)');
   });
 
+  it('the NOW line sits behind opaque set tiles on the grid and the timeline, with its label in the gutter', () => {
+    const grid = read('app/grid.tsx');
+    const nowLine = grid.slice(grid.indexOf('  nowLine: {'), grid.indexOf('  nowLabel: {'));
+    expect(nowLine).not.toContain('zIndex');
+    expect(grid).toContain('backgroundColor: t.colors.bg.primary,');
+    expect(grid).toContain('styles.cellTint');
+    expect(grid).toContain('style={[styles.nowLabel, { top: nowPx - nowLabelH / 2 }]}');
+    const tl = read('components/TimelineView.tsx');
+    const block = tl.slice(tl.indexOf('  setBlock: {'), tl.indexOf('  setBlockTint: {'));
+    expect(block).toContain('zIndex: 1');
+    const line = tl.slice(tl.indexOf('  nowLine: {'), tl.indexOf('  nowDot: {'));
+    expect(line).toContain('zIndex: 0');
+    expect(tl).toContain('styles.setBlockTint');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

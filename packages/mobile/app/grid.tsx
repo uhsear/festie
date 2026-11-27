@@ -50,7 +50,7 @@ import {
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
-import { cellTitleLines } from '../lib/gridCellText';
+import { cellTitleLines, microLineHeight } from '../lib/gridCellText';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -120,6 +120,7 @@ export default function GridScreen() {
   const reduceMotion = useReduceMotion();
   const { width: windowW, fontScale } = useWindowDimensions(); // re-render on rotation so the body re-measures.
   const textScale = Math.min(fontScale, MAX_FONT_SCALE);
+  const nowLabelH = microLineHeight(textScale);
   const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W;
   const colW = twoUpColumnWidth(windowW, gutterW);
   const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
@@ -546,10 +547,12 @@ export default function GridScreen() {
           const showAvatars = !!crew && colW >= AVATAR_MIN_COL_W && height >= 48;
           const mark = marks.get(set.id);
 
+          // The cell is opaque (tint layered over the screen bg) so the hour lines and the NOW line stay behind its text.
+          const tint = pickColor ? withAlpha(t, pickColor, 0.28) : withAlpha(t, stageColor, 0.14);
           const cellStyle = {
             top,
             height,
-            backgroundColor: pickColor ? withAlpha(t, pickColor, 0.28) : withAlpha(t, stageColor, 0.14),
+            backgroundColor: t.colors.bg.primary,
             borderColor: cellColor,
             borderWidth: 1,
           };
@@ -560,6 +563,7 @@ export default function GridScreen() {
           // but we avoid the press handler / accessibility on the clone).
           const inner = (
             <>
+              <View style={[styles.cellTint, { backgroundColor: tint }]} pointerEvents="none" />
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
               <View style={styles.titleRow}>
@@ -742,11 +746,20 @@ export default function GridScreen() {
           style={[styles.gutterStrip, { width: gutterW }]}
           contentContainerStyle={[styles.gutter, { width: gutterW, height: totalH }]}
         >
-          {hours.map(({ m, px }) => (
-            <Text key={m} style={[styles.hourLabel, { top: px }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {fmtHour(m)}
+          {hours.map(({ m, px }) =>
+            // The NOW label takes the gutter slot an hour label would overlap.
+            nowPx != null && px - nowPx > -1.5 * nowLabelH && px - nowPx < nowLabelH / 2 ? null : (
+              <Text key={m} style={[styles.hourLabel, { top: px }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {fmtHour(m)}
+              </Text>
+            ),
+          )}
+          {/* In the gutter, not on the columns: a set tile's title never sits under it. */}
+          {nowPx != null ? (
+            <Text style={[styles.nowLabel, { top: nowPx - nowLabelH / 2 }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE} aria-hidden>
+              NOW
             </Text>
-          ))}
+          ) : null}
         </ScrollView>
         <ScrollView
           ref={bodyScrollRef}
@@ -783,12 +796,7 @@ export default function GridScreen() {
             <View style={styles.colsRow}>
               {/* Absolute NOW line spanning all columns. */}
               {nowPx != null ? (
-                <View style={[styles.nowLine, { top: nowPx, width: colW * visibleStages.length }]} pointerEvents="none">
-                  <Text style={styles.nowLabel} aria-hidden>
-                    NOW
-                  </Text>
-                  <View style={styles.nowRule} />
-                </View>
+                <View style={[styles.nowLine, { top: nowPx - 1, width: colW * visibleStages.length }]} pointerEvents="none" />
               ) : null}
               {visibleStages.map((st, i) =>
                 i >= firstCol - 1 && i <= lastCol + 1 ? (
@@ -1037,6 +1045,13 @@ const useStyles = makeStyles((t: Tokens) => ({
     overflow: 'hidden',
     gap: 2,
   },
+  cellTint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   // The 6 pt clash hatch runs down the left edge; this leaves a clear gap before the title.
   cellClashed: {
     paddingLeft: t.spacing[3],
@@ -1093,23 +1108,19 @@ const useStyles = makeStyles((t: Tokens) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.aqua,
   },
+  // No zIndex: the line sits behind the opaque set tiles that come after it.
   nowLine: {
     position: 'absolute',
     left: 0,
-    zIndex: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nowLabel: {
-    ...typeStyle('micro'),
-    color: t.colors.live.text,
-    paddingHorizontal: 4,
-  },
-  nowRule: {
-    flex: 1,
     height: 2,
     backgroundColor: t.colors.live.fill,
     opacity: 0.8,
+  },
+  nowLabel: {
+    position: 'absolute',
+    right: t.spacing[2],
+    ...typeStyle('micro'),
+    color: t.colors.live.text,
   },
   poster: {
     position: 'absolute',
