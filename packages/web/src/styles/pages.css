@@ -155,6 +155,14 @@
   min-height: 0;
   overflow: auto !important;
 }
+/* The grid is its own scroller, so it runs to the bottom of the page and keeps the SOS band as padding inside
+   the scroll area: the last row still scrolls clear of the dock, with no empty strip under the grid. */
+.main-content:has(.timeline-view) {
+  margin-bottom: 0;
+}
+.timeline-view [data-scroll-sentinel] {
+  padding-bottom: var(--sos-band-h, 0px);
+}
 
 /* ── Viewport-fill routes (mobile) ───────────────────────────────────── */
 @media (max-width: 768px) {

@@ -84,4 +84,10 @@ describe('SosDock', () => {
     expect(pages).toMatch(/\n\.main-content \{[^}]*margin-bottom: var\(--sos-band-h, 0px\);/);
     expect(pages).toMatch(/\.main-content:has\(\.map-page\) \{[^}]*margin-bottom: 0;/);
   });
+
+  it('lets the grid scroller run to the page bottom and keeps the band as padding inside it', () => {
+    const pages = readFileSync(resolve(process.cwd(), 'src/styles/pages.css'), 'utf8');
+    expect(pages).toMatch(/\.main-content:has\(\.timeline-view\) \{[^}]*margin-bottom: 0;/);
+    expect(pages).toMatch(/\.timeline-view \[data-scroll-sentinel\] \{[^}]*padding-bottom: var\(--sos-band-h, 0px\);/);
+  });
 });
