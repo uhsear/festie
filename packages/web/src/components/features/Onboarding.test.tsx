@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const h = vi.hoisted(() => ({
@@ -171,5 +171,23 @@ describe('Onboarding sequencing', () => {
     render(<Onboarding />);
     await toStep(user, 'Going with friends?');
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('puts first-load focus on the card so mouse and touch users see no close-button ring', async () => {
+    render(<Onboarding />);
+    const dialog = screen.getByRole('dialog', { name: 'Welcome to Festie' });
+    const card = dialog.querySelector<HTMLElement>('[data-focus-sink]')!;
+    await waitFor(() => expect(document.activeElement).toBe(card));
+    expect(card).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('button', { name: 'Dismiss onboarding' })).not.toHaveFocus();
+  });
+
+  it('lets keyboard users Tab from the card to the close button', async () => {
+    const user = userEvent.setup();
+    render(<Onboarding />);
+    const card = screen.getByRole('dialog').querySelector<HTMLElement>('[data-focus-sink]')!;
+    await waitFor(() => expect(document.activeElement).toBe(card));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Dismiss onboarding' })).toHaveFocus();
   });
 });
