@@ -129,9 +129,11 @@ export function NowHero({
   const next = upcoming[0];
   const name = (set: FestivalSet) => artistDisplayName(set, b2bSeparator);
   const heading = lineupMode ? 'Now on the lineup' : 'Now';
-  const stageColor = (stageId: string) => {
+  // The stage colour is server supplied and can fail 3:1 on the live fill, so it marks the stage with a
+  // dot and never colours text.
+  const stageDot = (stageId: string) => {
     const color = getStageColor?.(stageId);
-    return color ? { color } : null;
+    return color ? <View style={[s.dot, { backgroundColor: color }]} /> : null;
   };
 
   let body: ReactNode;
@@ -147,10 +149,15 @@ export function NowHero({
           accessibilityLabel={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
           {...artistOpenActions(set, b2bSeparator)}
         >
-          <Text style={[s.artist, stageColor(set.stageId)]}>
+          <Text style={s.artist}>
             <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
           </Text>
-          {stage ? <Text style={s.secondary}>{stage}</Text> : null}
+          {stage ? (
+            <View style={s.stageRow}>
+              {stageDot(set.stageId)}
+              <Text style={s.secondary}>{stage}</Text>
+            </View>
+          ) : null}
           <View style={s.metaRow}>
             <Text style={s.leadCountdown} testID="fm-lead-countdown">
               {fmtTimeLeft(end, nowMs)}
@@ -237,13 +244,14 @@ export function NowHero({
         {...artistOpenActions(next.set, b2bSeparator)}
       >
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
-        <Text style={[s.artist, stageColor(next.set.stageId)]}>
+        <Text style={s.artist}>
           <ArtistNameRuns set={next.set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
         </Text>
         <View style={s.nextRow}>
           {stage ? (
             <View style={s.walk}>
               <Ionicons name="walk-outline" size={iconSize.sm} color={t.colors.accent.aqua} />
+              {stageDot(next.set.stageId)}
               <Text style={s.walkText}>{walk ? `Head to ${stage} · ${walk.label}` : `Head to ${stage}`}</Text>
             </View>
           ) : null}
@@ -535,6 +543,7 @@ const useStyles = makeStyles((t) => ({
   },
   artist: { ...typeStyle('display-lg'), color: t.colors.text.primary },
   secondary: { ...typeStyle('label'), color: t.colors.text.secondary },
+  stageRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[2] },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: t.spacing[3], rowGap: t.spacing[1] },
   leadCountdown: { ...typeStyle('display-xl', undefined, { tabular: true }), color: t.colors.text.primary },
   leadCountdownLg: { ...typeStyle('display-lg', undefined, { tabular: true }), color: t.colors.text.primary },
