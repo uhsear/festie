@@ -7,8 +7,7 @@ const src = readFileSync(join(__dirname, '..', 'app/crew-plan.tsx'), 'utf8');
 describe('crew-plan hub source guards', () => {
   it.each([
     'useCrewHub(',
-    'useCrewFestival(',
-    'useActiveCrew(',
+    'useFestivalCrew(',
     'How the crew did',
     'Crew mix',
     'Where everyone is',

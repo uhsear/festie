@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useActiveCrew, useCrewFestival, useFestivalCrew, useMapCrew } from '../useActiveCrew';
+import { useActiveCrew, useFestivalCrew, useMapCrew } from '../useActiveCrew';
 import { useCrewStore } from '../../stores/crewStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useFestivalDataStore } from '../../stores/festivalDataStore';
@@ -182,57 +182,5 @@ describe('useFestivalCrew', () => {
     expect(result.current.crew).toBeNull();
     expect(result.current.otherFestivalName).toBe('Two');
     expect(selectFestival).not.toHaveBeenCalled();
-  });
-});
-
-describe('useCrewFestival', () => {
-  it('never switches when the ids match, and keeps selectedDay', () => {
-    const { result } = renderHook(() => useCrewFestival(crew('c1', 'f1')));
-    expect(result.current.state).toBe('match');
-    expect(selectFestival).not.toHaveBeenCalled();
-    expect(useFestivalUIStore.getState().selectedDay).toBe(2);
-  });
-
-  it('is a match for a crew with no festivalId', () => {
-    const { result } = renderHook(() => useCrewFestival(crew('c1')));
-    expect(result.current.state).toBe('match');
-    expect(selectFestival).not.toHaveBeenCalled();
-  });
-
-  it('switches once to the crew festival and names it', async () => {
-    selectFestival.mockImplementation(async (id: string) => {
-      await Promise.resolve();
-      useFestivalDataStore.setState({ currentFestival: { id, name: 'Two' } as never });
-    });
-    const { result, rerender } = renderHook(() => useCrewFestival(crew('c1', 'f2')));
-    expect(result.current.state).toBe('switching');
-    expect(result.current.festivalName).toBe('Two');
-    await waitFor(() => expect(result.current.state).toBe('match'));
-    rerender();
-    expect(selectFestival).toHaveBeenCalledTimes(1);
-  });
-
-  it('reports failed on rejection and retries once more', async () => {
-    selectFestival.mockRejectedValueOnce(new Error('x'));
-    const { result } = renderHook(() => useCrewFestival(crew('c1', 'f2')));
-    await waitFor(() => expect(result.current.state).toBe('failed'));
-    act(() => result.current.retry());
-    await waitFor(() => expect(selectFestival).toHaveBeenCalledTimes(2));
-  });
-
-  it('retries once, then fails, when a newer selectFestival call supersedes the switch', async () => {
-    // A superseded selectFestival resolves without changing currentFestival.
-    const { result } = renderHook(() => useCrewFestival(crew('c1', 'f2')));
-    await waitFor(() => expect(result.current.state).toBe('failed'));
-    expect(selectFestival).toHaveBeenCalledTimes(2);
-  });
-
-  it('settles on match when the retry after a superseded switch lands', async () => {
-    selectFestival.mockResolvedValueOnce(undefined).mockImplementationOnce(async () => {
-      useFestivalDataStore.setState({ currentFestival: { id: 'f2', name: 'Two' } as never });
-    });
-    const { result } = renderHook(() => useCrewFestival(crew('c1', 'f2')));
-    await waitFor(() => expect(result.current.state).toBe('match'));
-    expect(selectFestival).toHaveBeenCalledTimes(2);
   });
 });
