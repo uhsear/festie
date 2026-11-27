@@ -108,6 +108,7 @@ export const COPY = {
   },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
   session: { signedOut: 'You were signed out on this device. Sign in again to continue.' },
+  boot: { offline: 'Opening your saved plan', restoring: 'Restoring your saved data', waiting: 'Getting Festie ready' },
 } as const;
 
 export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {

@@ -2,7 +2,7 @@
 // (and thus before zustand-persist hydrates). See bootstrap.ts.
 import '../bootstrap';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View, ActivityIndicator, StyleSheet, Appearance, useColorScheme } from 'react-native';
+import { AppState, View, StyleSheet, Appearance, useColorScheme } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigationState, router as globalRouter } from 'expo-router';
@@ -35,6 +35,7 @@ import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
 import LiveSharePublisher from '../components/LiveSharePublisher';
 import AnnouncementBanner from '../components/AnnouncementBanner';
+import BootOverlay from '../components/BootOverlay';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -668,22 +669,13 @@ function AuthGate() {
       )}
       {!loading && <Toaster />}
       <ArtistSheetHost />
-      {loading && (
-        <View style={[StyleSheet.absoluteFill, styles.splash, { backgroundColor: colors.bg.primary }]} pointerEvents="auto">
-          <ActivityIndicator size="large" color={colors.accent.aqua} />
-        </View>
-      )}
+      {loading && <BootOverlay hydrated={hydrated && uiHydrated} />}
       {introShowing && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   appShell: {
     flex: 1,
   },
