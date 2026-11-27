@@ -58,27 +58,34 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
       : null;
   const showReminder = remindAt !== null && Date.now() >= remindAt;
 
+  const button = (
+    <button
+      type="button"
+      onClick={() => void download()}
+      disabled={busy}
+      aria-busy={busy || undefined}
+      className={cn(
+        PILL,
+        'min-h-11 shrink-0 hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+      )}
+    >
+      <Download className="w-4 h-4" aria-hidden="true" />
+      {label}
+    </button>
+  );
+
+  // The reminder and its button are one neutral row. Amber is for a real fault, and this is a plain to-do.
   return (
     <div className={cn('flex flex-wrap items-center gap-2 text-xs tabular-nums', className)}>
       {showReminder ? (
-        <p className="basis-full rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
-          {offlineReminderText(hasMap)}
-        </p>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => void download()}
-        disabled={busy}
-        aria-busy={busy || undefined}
-        className={cn(
-          PILL,
-          'min-h-11 hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-        )}
-      >
-        <Download className="w-4 h-4" aria-hidden="true" />
-        {label}
-      </button>
+        <div className="flex basis-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-border bg-bg-secondary px-3 py-1">
+          <p className="min-w-0 flex-1 text-sm text-text-secondary">{offlineReminderText(hasMap)}</p>
+          {button}
+        </div>
+      ) : (
+        button
+      )}
     </div>
   );
 }
