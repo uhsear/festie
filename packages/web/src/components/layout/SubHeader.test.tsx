@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SubHeader from './SubHeader';
 
@@ -117,6 +117,13 @@ describe('SubHeader layout density', () => {
     const tabs = screen.getByRole('group', { name: 'Festival days' });
     expect(tabs.className).toContain('gap-[var(--space-3)]');
     expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
+  });
+
+  it('paints the active day with a fill and no glow, because the scroller clips a shadow to a rectangle', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const active = within(screen.getByRole('group', { name: 'Festival days' })).getAllByRole('button').find((b) => b.getAttribute('aria-pressed') === 'true')!;
+    expect(active.className).toContain('bg-day-tab-active');
+    expect(active.className).not.toMatch(/shadow-/);
   });
 
   it('hides day tabs and search when festivalOnly is set (behavior preserved)', () => {

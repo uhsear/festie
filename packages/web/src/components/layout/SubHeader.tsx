@@ -303,8 +303,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                         ? [
                             'active',
                             // Accent rule: aqua = selection/primary, dark ink = text.onLightAccent.
+                            // No glow: the scroller clips a shadow into a hard-edged rectangle, and the fill already marks the day.
                             'bg-day-tab-active text-[var(--text-on-light-accent)] border-day-tab-active font-bold',
-                            'shadow-[0_0_0_1px_var(--color-aqua-a4),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
                           ]
                         : 'bg-bg-card border border-border-light text-text-secondary',
                     )}
