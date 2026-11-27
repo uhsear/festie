@@ -10,29 +10,159 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Merged to `main` but not yet deployed to production.
 
 ### Added
-- **Mobile**: the theme follows the OS when Match system is chosen.
-- A public `/delete-account` page explains how to delete an account, for the App Store and Google Play.
-- Every marketing email carries a signed one-click unsubscribe link (`List-Unsubscribe` and `List-Unsubscribe-Post`). These emails are not sent while `EMAIL_POSTAL_ADDRESS` is unset.
-- The Spotify logo and a link to the artist's Spotify page show next to Spotify photos and genres, on web and mobile.
-- Stored Spotify photos and genres are re-read after 30 days (`scripts/spotify-refresh-stale.ts`, admin route `POST /api/v1/admin/artists/spotify-refresh-stale`, migration 122).
+- Design tokens for colour, type, motion and spacing, with drift guards in CI so web and mobile cannot stray from them.
+- A brand guide, and a fictional demo festival for store screenshots.
+
+### Changed
+- The server-rendered pages, email and the shared primitives use the new brand tokens, and the email header uses the new lockup.
+- Share posters (Wrap, crew Wrap, schedule), link previews and notifications use the brand. Posters have one dominant object, a time column and one festival-colour band that falls back to the stage colour when it would read as danger or as the accent. The Wrap push uses the Festival Wrap name.
+- The Now & Next widget and Live Activity show one lead object per state.
+- SOS is one press-and-hold control on web and mobile, and the incoming SOS banner floats over the page instead of pushing it down. Keyboard and screen-reader users open the same confirm without the hold.
+- The donation pill and the shrinking header are gone; support stays under Account help. The connection dot shows only when offline.
+- Motion is complete for reduced-motion users, ambient loops pause in low-power mode and hidden tabs, and Now & Next plays a short entrance when the live set changes.
+- Load errors share one error state with a single Retry on web and mobile, empty lists show product-shaped placeholder rows, and a festival without a lineup shows it as a flyer.
+- Web and mobile first-run teach the same picks and clash with one scripted lineup.
+- The mobile top banners are compact strips that float over the page, and the SOS control keeps clear of the tab bar.
+- The Play listing describes background location sharing correctly: opt-in, while the phone is locked, until the time you pick.
+- The web app's first load is smaller: modules used only by lazy screens stay out of the shared chunk.
+
+### Docs
+- The README says the apps are in testing and links CI, uptime, privacy and support.
+- App Review notes, release notes and the store privacy answers live in `packages/mobile/store/`, with tests that tie each claim to code.
+- ARCHITECTURE.md, CONTEXT.md, GETTING_STARTED.md and AGENTS.md match the code again.
+
+## [2026-11-24] deploy-20261124-025224
+
+This deploy carried the 11-21 to 11-24 work: the full UI sweep and pre-deploy device test fixes, the offline map, legal compliance code and the legal page dates. It ran migrations 121 to 123.
+
+### Added
+- **Offline map**: self-hosted PMTiles archives for true offline festival maps, with no 24 MiB limit and range reads. The app checks free space before saving a map and recovers a map whose first load failed.
 - **Admin**: an Artist review tab. Import a JSON batch of researched link, merge and rename proposals, then approve or reject each one. An approval uses the same edit and merge code as the Artists tab.
+- A public `/delete-account` page explains how to delete an account, for the App Store and Google Play. A DMCA page joins the legal pages, and the Privacy and Terms pages carry effective dates. Signed-out visitors see links to Privacy, Terms and Help.
+- Every marketing email carries a signed one-click unsubscribe link (`List-Unsubscribe` and `List-Unsubscribe-Post`). These emails are not sent while `EMAIL_POSTAL_ADDRESS` is unset.
+- The Spotify logo and a link to the artist's Spotify page show next to Spotify photos and genres, on web and mobile. Stored Spotify photos and genres are re-read after 30 days (`scripts/spotify-refresh-stale.ts`, admin route `POST /api/v1/admin/artists/spotify-refresh-stale`, migration 122).
+- **Mobile**: the theme follows the OS when Match system is chosen.
+- Email confirmation by button, guest export of picks, My day filters, and a warning that shows what leaving or removing a crew member forgives before it happens.
+- Deploys are smoke-checked, and Sentry releases and source maps are wired in.
 
 ### Changed
 - `GET /profiles/:festivalId` lists only your own profile and the profiles of people who share a crew with you for that festival. Other attendees are not in that list; their picks show only as the anonymous per-set counts in `meta.pickCounts`. The socket events `presence:update`, `profile:created` and `profile:identity` follow the same rule: you receive them only for yourself and your crew mates, not for the whole festival room.
 - A set reminder due in quiet hours now lands in the inbox without a push, once.
 - Announcements, schedule-change alerts, crew pick updates and re-engagement messages write their inbox rows even when no push provider is configured.
-- Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
+- Login failures are counted per account and IP, and a reused refresh token revokes its whole family.
+- Log retention is 14 days across log rotation and log cleanup.
 - Space Grotesk is self-hosted on web; no page loads fonts from Google any more.
 - Pending organization invitations expire after 90 days and are deleted after 120, so an owner still sees them as expired in between.
 - On-host database dumps are GPG-encrypted with `BACKUP_GPG_PASSPHRASE`, and nothing in the backup directory outlives 13 weeks. `backup-pg.sh` refuses to run without the passphrase.
-- The accepted Terms version comes from one `TOS_VERSION` constant.
+- The accepted Terms version comes from one `TOS_VERSION` constant, and the legal pages match the code.
 - Festival profiles are paged in SQL, and page parameters are parsed with Zod.
+- The artists-per-set limit is 8.
+- The artist sheet opens from every artist name on web and mobile. The schedule shows its real age when a cached response is served.
+- The first-run intro reads well with VoiceOver and TalkBack, and content stays visible with animations off.
 
 ### Fixed
+- Sweep and pre-deploy test fixes across sign-in and account, lineup, grid and artist sheet, picks, plan sharing, ratings and Wrap, crew real-time updates, crew Plan, Money and compare, map and offline, admin and organizer, inbox, public pages, accessibility and Android and iOS device issues.
+- Unannounced artist names no longer cross organizations through a shared creator.
+- The crew's festival is selected after sign-in when none is selected.
+- Email delivery, unsubscribe and calendar issues from the email sweep.
 - The push budget check is atomic per user, and Redis presence entries stay alive while a user is online.
 - Role grants and revokes reach every worker through the cache bus.
 - A bulk add undo keeps picks that were changed by hand, and guest picks merge per set on rehydrate.
 - Local reminder titles show `1h 30m` instead of `2h`.
+- API input, log, rating and Sentry hardening from the security sweep.
+
+## [2026-11-21] deploy-20261121-112919
+
+Gap batches 1 to 10 and the organizer platform. It ran migrations 108 to 110.
+
+### Added
+- **Organizer platform**: organizations, a `/manage` area, review and held alerts.
+- Web and mobile parity gaps are closed, and festival editions are grouped by series.
+- Web shows a reload message when the app fails to boot, and explains crew-tab load failures.
+- Avatars are backed up, and restored dumps are boot-checked.
+
+### Changed
+- Ratings, Wrap, lifetime and expense views run through shared code on web and mobile.
+- Input contrast and touch targets are larger, and more routes are audited with Lighthouse.
+- The deprecated Button aliases are gone.
+
+### Fixed
+- Time-zone and after-midnight ordering in exports, polls and reminders.
+- Deleting a provider-only account works, and the password meter and account copy are shared.
+
+## [2026-11-20] deploy-20261120-172533
+
+Artist sheet and photo fill.
+
+### Added
+- Photos and genres of linked artists are filled from Spotify.
+- Attendees open announced artists and mark interest on mobile.
+
+### Fixed
+- Replacing an artist's Spotify link drops its old Spotify photo and genres.
+
+## [2026-11-20] deploy-20261120-124118
+
+### Added
+- An anonymous web load smoke test runs every 30 minutes.
+
+### Changed
+- Ops scripts take the server user, hosts and backup repo from the environment.
+- `lib/schemas.ts` is split into per-domain modules.
+
+### Fixed
+- Lifetime stats no longer run concurrent queries on one database client.
+- The Android CI version code offset sits above the last published code.
+
+## [2026-11-20] deploy-20261120-115031
+
+Hotfix for an 11-hour web outage where the app stayed on "Loading Festie...".
+
+### Fixed
+- Motion's internal packages stay in the same chunk as the animation library, so the web app boots again.
+- The metrics listener port is read from `METRICS_PORT`.
+
+## [2026-11-20] deploy-20261120-085335
+
+### Changed
+- The default festival room capacity is 2000.
+- Every socket failure carries an error and a stable code, and poll, status and meeting-point events carry `crewId`.
+- Live-location socket cap, expiry and rate limits are enforced, and session revokes reach every socket, not only local ones.
+- Email dedupe and per-email limiters moved to Redis, and migration runs are keyed per pool.
+- Retention cleanup purges notification log rows and orphan crew rows.
+- Artist search, deleted-user email lookup and per-user audit list use indexes.
+- Internal typing, store and wiring cleanups across the backend.
+
+### Fixed
+- Hard-deleting a user keeps the expenses that user paid.
+
+## [2026-11-20] deploy-20261120-001221
+
+Security hotfix and the tech-debt train. It ran migrations 113, 114 and 118.
+
+### Security
+- Password sign-in is rejected for accounts that have no password hash.
+- Idempotency keys are scoped by method and path, rate-limit entries evict by least recent use, and rotated tokens share a per-IP global cap.
+- Session revoke and user update are single atomic statements, and socket handshake tokens are validated in middleware.
+
+### Added
+- An admin-only, idempotent policy-notice email sender.
+- A staging build profile for the staging update channel.
+
+### Changed
+- The offline queue expires after 7 days, queued temporary ids are remapped in bodies and URLs, and the web offline queue uses a shared registry.
+- Realtime sync, crew helpers and offline-queue classification are shared between web and mobile.
+- Reminder dedup is seeded from the notification log so a restart cannot re-send, and notification rows are once per event.
+- Artist lookups use indexes, and artist sync and merge updates are batched.
+- Deploys install with `npm ci`, take a lock and require a CI-green ref.
+- Health monitors have one role each, and `/ready` returns an error envelope on 503.
+- Dependency upgrades: Sentry on web to 11, motion to 14.13, and patched transitive advisories.
+
+### Fixed
+- Presence teardown and email send failures are logged instead of swallowed.
+- A crew hard delete skips soft-deleted members when it picks a new owner.
+- Expired device tokens are purged, and live-location cleanup runs when the server forces a disconnect.
+- The terms minimum age matches the enforced 18+ check.
 
 ## [2026-11-19]
 
@@ -179,7 +309,7 @@ Entries below this one describe the earlier JavaScript layout (`server.js`, `lib
 - **Rate Limiting**: Multi-tier per-endpoint and per-user limiting to prevent abuse
 - **GDPR Compliance**: Data export, account self-deletion with 30-day grace period, ToS acceptance tracking
 - **Database Migrations**: Full migration chain (004-008) with 20+ optimized tables
-- **Production Deployment**: PM2 cluster mode, nginx reverse proxy, Let's Encrypt TLS integration
+- **Production Deployment**: nginx reverse proxy, Let's Encrypt TLS integration
 - **Health Endpoints**: `/health/live` for liveness and `/api/health` for readiness probes
 - **Comprehensive Documentation**: README, deployment guide, configuration reference, and security policies
 
@@ -252,60 +382,13 @@ Entries below this one describe the earlier JavaScript layout (`server.js`, `lib
 
 ---
 
-## Upgrade Guide
-
-### From 1.8.0 to 1.9.0
-
-No breaking changes. Optional enhancements available:
-
-```bash
-# 1. Pull latest code
-git pull origin main
-
-# 2. Install dependencies
-npm install
-
-# 3. Run database migrations (idempotent)
-npm run migrate:up
-
-# 4. Deploy with PM2
-pm2 restart ecosystem.config.js
-
-# 5. Verify
-curl https://festie.us/api/health
-```
-
-### From 1.7.3 to 1.8.0
-
-Breaking changes in token format:
-
-```bash
-# 1. Backup database
-pg_dump festival_planner_prod > backup_1.7.3.sql
-
-# 2. Pull latest code
-git pull origin main
-
-# 3. Install dependencies
-npm install
-
-# 4. Run migrations
-npm run migrate:up
-
-# 5. Restart all instances
-pm2 restart ecosystem.config.js
-
-# 6. Verify sessions are valid
-npm run test:integration
-```
-
 ## Version Numbering
 
 - **MAJOR**: Breaking API or database changes
 - **MINOR**: New features (backward compatible)
 - **PATCH**: Bug fixes and security updates
 
-Festie follows continuous deployment practices. All releases are tagged in Git and correspond to Docker image tags.
+Festie follows continuous deployment practices. All releases are tagged in Git.
 
 ## Security Updates
 
@@ -319,8 +402,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for information on reporting issues and c
 
 For version-specific support:
 - Open an issue on [GitHub](https://github.com/uhsear/festie/issues)
-- Check [Discussions](https://github.com/uhsear/festie/discussions) for Q&A
 
 ---
 
-**Latest documented version**: 1.10.2 (March 22, 2026). Current release: see `package.json` (v3.0.0). Changes after 1.10.2 — the `packages/` monorepo split (web + mobile + shared), the TypeScript migration, and the Express 5 upgrade — are tracked in git history rather than back-filled here.
+**Current version**: see `package.json`.
