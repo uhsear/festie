@@ -14,7 +14,12 @@ const VIEW_OPTIONS: readonly { value: ScheduleView; label: string }[] = SCHEDULE
   (v) => v.key !== 'grid',
 ).map((v) => ({ value: v.key, label: v.label }));
 
+// The lineup flyer renders only in Cards, so Timeline is inert while it shows.
+const FLYER_OPTIONS = VIEW_OPTIONS.map((o) => ({ ...o, disabled: o.value === 'timeline' }));
+
 interface ScheduleViewSwitcherProps {
+  /** The lineup flyer shows (no set has a time): only Cards can render it, so Timeline is disabled. */
+  flyerShowing: boolean;
   festivalHasTimedSets: boolean;
   filtersActive: boolean;
   filtersOpen: boolean;
@@ -29,6 +34,7 @@ interface ScheduleViewSwitcherProps {
 }
 
 export default function ScheduleViewSwitcher({
+  flyerShowing,
   festivalHasTimedSets,
   filtersActive,
   filtersOpen,
@@ -51,7 +57,7 @@ export default function ScheduleViewSwitcher({
         NowNextStrip above (shown only when a pick is actually live). */}
     <View style={styles.switcherFlex}>
       <SegmentedControl
-        options={VIEW_OPTIONS}
+        options={flyerShowing ? FLYER_OPTIONS : VIEW_OPTIONS}
         value={viewMode}
         onChange={setScheduleView}
         accessibilityLabel="Schedule view"

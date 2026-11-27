@@ -16,6 +16,8 @@ const SEGMENT_FONT_SCALE = 1.2;
 export interface SegmentOption<T extends string> {
   value: T;
   label: string;
+  /** Dims the segment and makes it inert, for a view the screen cannot show right now. */
+  disabled?: boolean;
 }
 
 interface SegmentedControlProps<T extends string> {
@@ -43,10 +45,11 @@ function Segment<T extends string>({ option, active, onPress }: SegmentProps<T>)
   return (
     <PressableScale
       testID={`segment-${option.value}`}
-      style={s.segment}
+      style={[s.segment, option.disabled && s.segmentDisabled]}
       onPress={() => onPress(option.value)}
+      disabled={option.disabled}
       accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
+      accessibilityState={{ selected: active, disabled: !!option.disabled }}
       accessibilityLabel={option.label}
     >
       <Text
@@ -192,6 +195,9 @@ const useStyles = makeStyles((t) => ({
     minWidth: 44,
     borderRadius: t.radii.pill,
     minHeight: 44, // WCAG 2.5.5 / Apple HIG minimum touch target
+  },
+  segmentDisabled: {
+    opacity: 0.4,
   },
   label: {
     ...typeStyle('label'),

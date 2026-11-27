@@ -25,6 +25,9 @@ import AppPressable from './AppPressable';
 /** Same hold as the web banner: two flashes, then two seconds, before it shrinks to a one-line strip. */
 const FULL_WIDTH_MS = duration.slow * 2 + 2_000;
 
+/** The strip's own line is 16 pt, so it grows to this; the header below pads by the overlay height. */
+const MIN_TAP_TARGET = 44;
+
 interface SosBannerProps {
   /** Pad for the status bar. False when a bar above (OfflineBanner) already does. */
   padTop: boolean;
@@ -41,8 +44,8 @@ interface SosBannerProps {
  * per change in who raised an SOS, not on every minute tick. It slides in at the medium spatial
  * duration and flashes coral twice for each new raiser; Reduce Motion shows it with neither.
  * It floats over the screen from the root overlay, so its arrival never moves the content below.
- * After FULL_WIDTH_MS it shrinks to a one-line strip that ends inside the screen header's top padding,
- * so it never covers a header title or its right-hand controls.
+ * After FULL_WIDTH_MS it shrinks to a one-line strip with a 44 pt tap target. The root overlay reports its height
+ * (TopBannerContext), so a screen header pads below it and no header title or control is covered.
  */
 export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const t = useTokens();
@@ -88,6 +91,7 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
 
   if (!active) return null;
   if (!newest) return null;
+  const topInset = padTop ? insets.top : 0;
   const own = newest.userId === selfId;
   const href = sosBannerHref(entries, selfId);
   const toCompass = typeof href !== 'string' && href.pathname === '/compass';
@@ -96,8 +100,7 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   return (
     <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(durationSpatial.med)}>
       <AppPressable
-        style={compact ? [s.strip, { paddingTop: padTop ? insets.top : 0 }] : [s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
-        hitSlop={compact ? { bottom: t.spacing[2] } : undefined}
+        style={compact ? [s.strip, { paddingTop: topInset, minHeight: topInset + MIN_TAP_TARGET }] : [s.banner, { paddingTop: topInset + t.spacing[2] }]}
         onPress={() => router.push(href)}
         accessibilityRole="button"
         accessibilityLabel={`${headline}, ${when}. ${toCompass ? 'Open the compass to find them' : 'Open crew to find them'}`}
