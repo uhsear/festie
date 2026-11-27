@@ -73,9 +73,17 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.ok(html.includes('<p>Test Crew</p>'), 'the crew name stays on the page');
   });
 
-  it('shows no faces row content without initials, and no countdown once the festival is over', () => {
-    const html = renderInviteJoinPage({ ...defaultArgs, now: new Date('2026-12-01T00:00:00Z') });
-    assert.ok(!html.includes('iv-face"') && !html.includes('iv-when">'));
+  it('shows no faces row content without initials', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, now: NOW });
+    assert.ok(!html.includes('iv-face"'));
+  });
+
+  it('says Happening now for a running festival and Ended after it', () => {
+    const args = { ...defaultArgs, festivalTimeZone: 'America/New_York' };
+    const live = renderInviteJoinPage({ ...args, now: new Date('2026-11-06T15:30:00Z') });
+    assert.ok(live.includes('<p class="iv-when">Happening now</p>') && !live.includes('Starts today'));
+    const over = renderInviteJoinPage({ ...args, now: new Date('2026-12-01T00:00:00Z') });
+    assert.ok(over.includes('<p class="iv-when">Ended</p>'));
   });
 
   it('returns valid HTML document', () => {

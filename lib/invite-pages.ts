@@ -56,7 +56,7 @@ function inviteStateLine(memberCount: number, spotsLeft: number): string {
 type InviteJoinPageArgs = Pick<
   InvitePreview,
   'crewName' | 'ownerName' | 'memberCount' | 'spotsLeft' | 'festivalName' | 'startDate' | 'endDate'
-> & { inviteCode: string; origin: string; memberInitials?: string[]; now?: Date };
+> & { inviteCode: string; origin: string; memberInitials?: string[]; festivalTimeZone?: string | null; now?: Date };
 
 export function renderInviteJoinPage({
   crewName,
@@ -69,11 +69,12 @@ export function renderInviteJoinPage({
   inviteCode,
   origin,
   memberInitials = [],
+  festivalTimeZone = null,
   now,
 }: InviteJoinPageArgs) {
   const dates = formatInviteDateRange(startDate, endDate);
   const stateLine = inviteStateLine(memberCount, spotsLeft);
-  const countdown = inviteCountdown(startDate, endDate, now);
+  const countdown = inviteCountdown(startDate, endDate, now, festivalTimeZone);
   const description = `${[festivalName, dates, stateLine].filter(Boolean).join(' · ')}. Plan your sets together on Festie.`;
   const title = escapeHtml(`Join ${crewName} on Festie`);
   const code = encodeURIComponent(inviteCode);

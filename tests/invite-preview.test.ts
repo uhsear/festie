@@ -51,6 +51,7 @@ describe('loadInvitePreview', () => {
     assert.deepEqual(result, {
       status: 'ok',
       memberInitials: ['D', 'X'],
+      festivalTimeZone: null,
       preview: {
         crewName: 'Bass Gang',
         ownerName: 'DJ Dana',
@@ -64,6 +65,16 @@ describe('loadInvitePreview', () => {
         expiresAt: '2026-12-01T00:00:00.000Z',
       },
     });
+  });
+
+  it('carries the festival time zone beside, not inside, the public preview', async () => {
+    const { deps } = makeDeps({
+      crew: CREW,
+      festival: { id: 'fest-1', name: 'EDC', publishedAt: '2026-01-01T00:00:00.000Z', timeZone: 'America/New_York', days: [{ date: '2026-11-06' }] },
+    });
+    const result = await loadInvitePreview(deps, 'ABC123');
+    assert.equal(result.status === 'ok' && result.festivalTimeZone, 'America/New_York');
+    assert.equal(result.status === 'ok' && 'timeZone' in result.preview, false);
   });
 
   it('upper-cases and trims a lower-case code', async () => {
@@ -133,16 +144,25 @@ describe('formatInviteDateRange', () => {
 });
 
 describe('inviteCountdown', () => {
+  const NY = 'America/New_York';
   const at = (day: string) => new Date(`${day}T15:30:00Z`);
   it('counts days to the first day with its weekday', () => {
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-10-28')), 'Fri in 9 days');
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-05')), 'Fri tomorrow');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-10-28'), NY), 'Fri in 9 days');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-05'), NY), 'Fri tomorrow');
   });
-  it('says today, on now, then nothing once it is over', () => {
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-06')), 'Starts today');
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-07')), 'On now');
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-08')), 'On now');
-    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-09')), null);
+  it('says Happening now from the first day, including a festival already running', () => {
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-06'), NY), 'Happening now');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-07'), NY), 'Happening now');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', at('2026-11-08'), NY), 'Happening now');
+  });
+  it('says Ended once the last night is over', () => {
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', new Date('2026-11-09T12:00:00Z'), NY), 'Ended');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', new Date('2026-11-09T10:00:00Z'), NY), 'Happening now');
+  });
+  it('places now in the festival zone, not in UTC', () => {
+    // 03:00 UTC on Nov 6 is 22:00 on Nov 5 in New York: the festival has not started.
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', new Date('2026-11-06T03:00:00Z'), NY), 'Fri tomorrow');
+    assert.equal(inviteCountdown('2026-11-06', '2026-11-08', new Date('2026-11-06T06:00:00Z'), NY), 'Happening now');
   });
   it('returns null without usable dates', () => {
     assert.equal(inviteCountdown(null, '2026-11-08'), null);

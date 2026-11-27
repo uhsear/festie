@@ -47,7 +47,7 @@ export default function createPageRoutes(deps: RouteDeps) {
     try {
       const result = await loadInvitePreview({ stores, getFestivalById }, code);
       if (result.status === 'ok') {
-        return res.status(200).send(renderInviteJoinPage({ ...result.preview, memberInitials: result.memberInitials, inviteCode: code, origin }));
+        return res.status(200).send(renderInviteJoinPage({ ...result.preview, memberInitials: result.memberInitials, festivalTimeZone: result.festivalTimeZone, inviteCode: code, origin }));
       }
       return res
         .status(INVITE_ERROR_STATUS[result.status])
