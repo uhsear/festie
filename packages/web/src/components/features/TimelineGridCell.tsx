@@ -73,6 +73,20 @@ function TimelineGridCell({
   const rowStart = Math.floor(topSlot);
   const rowEnd = Math.max(rowStart + 1, Math.ceil(topSlot + spanSlots));
   const isShort = blockPx < 44;
+  // A bottom row (crew avatars left, pick buttons right) needs the room; below it the count joins the title row.
+  const tall = blockPx >= 72;
+  const showPickRow = canPick && !compact && tall;
+  const showAvatars = !compact && !!crew && crew.shown.length > 0;
+  const countInline = !!crew && !tall;
+  const crewCount = crew && (
+    <span
+      className="flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua tabular-nums"
+      aria-hidden="true"
+    >
+      <Users className="w-3 h-3" aria-hidden="true" />
+      {crew.total}
+    </span>
+  );
   const tabIndex = tabbable ? 0 : -1;
 
   return (
@@ -84,7 +98,7 @@ function TimelineGridCell({
         // Set block base
         'px-2 py-1 rounded-sm',
         'overflow-hidden',
-        'flex flex-col justify-center',
+        'flex flex-col justify-start',
         'z-[2] opacity-[0.88]',
         // Press & hover feedback
         'transition-[scale,box-shadow] duration-(--duration-med)',
@@ -126,16 +140,6 @@ function TimelineGridCell({
           style={{ top: `${seg.from * 100}%`, height: `${(seg.to - seg.from) * 100}%` }}
         />
       ))}
-      {clash && (
-        <span
-          data-clash-minutes
-          className="absolute top-0.5 right-1 z-[2] pointer-events-none text-[length:var(--font-size-10)] font-bold leading-none tabular-nums text-[var(--color-clash)]"
-          aria-hidden="true"
-        >
-          {clashMinutes(clash.overlapMin)}
-        </span>
-      )}
-
       {/* Open-detail control: a real button that fills the cell, so the artist name and the pick buttons
           are siblings of it, not nested inside it. Its name is the sr-only text. */}
       <button
@@ -151,7 +155,7 @@ function TimelineGridCell({
         }}
         onKeyDown={(e) => onNavKey(e, set.id)}
         tabIndex={tabIndex}
-        // The numeral above is pointer-events-none, so hovering it lands here and shows this tooltip.
+        // The clash numeral is pointer-events-none, so hovering it lands here and shows this tooltip.
         title={clash?.text}
         data-open
       >
@@ -163,33 +167,55 @@ function TimelineGridCell({
           }${clash ? `, ${clash.text}` : ''}`}
         </span>
       </button>
-      <div className="relative flex min-h-0 w-full flex-1 flex-col justify-center pointer-events-none">
-        <span
-          className={cn(
-            'block line-clamp-2 break-words [overflow-wrap:anywhere] [hyphens:auto] min-w-0',
-            'text-[length:var(--font-size-12)] font-bold leading-[1.15] tracking-[0.1px]',
-            'text-[var(--color-text-primary)]',
-            '[text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_1px_rgba(0,0,0,0.7)]',
-            'in-data-[theme=daylight]:[text-shadow:none]',
-            // Short blocks: single line ellipsis
-            isShort && 'line-clamp-1 whitespace-nowrap text-ellipsis',
+      <div className="relative flex min-h-0 w-full flex-col pointer-events-none">
+        {/* Title row: the clash minutes, pick glyph and (on short blocks) the crew count sit beside the title, never over it. */}
+        <div className="flex items-start gap-1">
+          <span
+            className={cn(
+              'block min-w-0 flex-1 line-clamp-2 break-words [overflow-wrap:anywhere] [hyphens:auto]',
+              'text-[length:var(--font-size-12)] font-bold leading-[1.15] tracking-[0.1px]',
+              'text-[var(--color-text-primary)]',
+              '[text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_1px_rgba(0,0,0,0.7)]',
+              'in-data-[theme=daylight]:[text-shadow:none]',
+              // Short blocks: single line ellipsis
+              isShort && 'line-clamp-1 whitespace-nowrap text-ellipsis',
+            )}
+            title={dn}
+          >
+            {compact || isShort ? (
+              // A short or compact tile is mostly name. The cell button is its only target; the name opens from the set sheet.
+              dn
+            ) : (
+              <ArtistName
+                set={set}
+                separator={festival?.b2bSeparator}
+                slop={false}
+                tabIndex={tabIndex}
+                onKeyDown={(e) => onNavKey(e, set.id)}
+                onFocus={() => onActivate(set.id)}
+              />
+            )}
+          </span>
+          {(clash || myPick || (crew && countInline)) && (
+            <span className="flex shrink-0 items-center gap-0.5 pt-px">
+              {crew && countInline && crewCount}
+              {clash && (
+                <span
+                  data-clash-minutes
+                  className="text-[length:var(--font-size-10)] font-bold leading-none tabular-nums text-[var(--color-clash)]"
+                  aria-hidden="true"
+                >
+                  {clashMinutes(clash.overlapMin)}
+                </span>
+              )}
+              {myPick && (
+                <span data-pick-glyph aria-hidden="true">
+                  <PriorityIcon priority={myPick} filled className={cn('w-3.5 h-3.5', PICK_ICON_COLOR[myPick])} />
+                </span>
+              )}
+            </span>
           )}
-          title={dn}
-        >
-          {compact || isShort ? (
-            // A short or compact tile is mostly name. The cell button is its only target; the name opens from the set sheet.
-            dn
-          ) : (
-            <ArtistName
-              set={set}
-              separator={festival?.b2bSeparator}
-              slop={false}
-              tabIndex={tabIndex}
-              onKeyDown={(e) => onNavKey(e, set.id)}
-              onFocus={() => onActivate(set.id)}
-            />
-          )}
-        </span>
+        </div>
         {/* Time label: compact format so the end time fits; wraps between start and end, never clips. */}
         <span
           className={cn(
@@ -204,92 +230,77 @@ function TimelineGridCell({
         </span>
       </div>
 
-      {/* Priority pick buttons */}
-      {canPick && !compact && !isShort && blockPx >= 60 && (
-        <div className="tl-pick-row flex gap-[var(--space-1)] mt-0.5">
-          {PICK_BUTTONS.map((p) => {
-            const active = myPick === p;
-            return (
-              <button
-                key={p}
-                className={cn(
-                  'relative',
-                  'bg-[var(--color-overlay-2)] border border-[var(--color-border)]',
-                  'rounded-xs',
-                  'text-[var(--color-text-secondary)] cursor-pointer',
-                  'text-[length:var(--font-size-12)] px-1.5 py-[3px] leading-none',
-                  'transition-[color,border-color,background-color] duration-(--duration-slow) ease-(--ease-standard)',
-                  'hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-overlay-4)]',
-                  'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
-                  // Hit-slop pseudo-element for 44x44 tap target
-                  'after:content-[""] after:absolute after:inset-[-4px]',
-                  'min-[380px]:min-w-10 min-[380px]:min-h-10',
-                  'min-[380px]:after:inset-[-2px]',
-                  // Active priority states
-                  active &&
-                    p === 'must' &&
-                    'bg-[var(--color-accent-coral-strong)] text-[var(--color-text-on-accent)] border-[var(--color-accent-coral-strong)] opacity-100',
-                  active &&
-                    p === 'want-to-see' &&
-                    'bg-[var(--color-priority-want)] text-[var(--text-on-light-accent)] border-[var(--color-priority-want)] opacity-100',
-                  active &&
-                    p === 'maybe' &&
-                    'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)] border-[var(--color-priority-maybe)] opacity-100',
-                )}
-                type="button"
-                onKeyDown={(e) => onNavKey(e, set.id)}
-                tabIndex={tabIndex}
-                aria-pressed={active ? 'true' : 'false'}
-                aria-label={`${pickLabel(p)}: ${dn}`}
-                title={pickLabel(p)}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onActivate(set.id);
-                  onSavePick(set.id, active ? null : p);
-                }}
-              >
-                <PriorityIcon priority={p} className="w-4 h-4" filled={active} />
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Compact cells have no pick buttons: show the pick as an icon (picking happens in the set sheet) */}
-      {compact && myPick && (
-        <span className={cn('absolute top-[3px] pointer-events-none', clash ? 'right-[30px]' : 'right-[5px]')} aria-hidden="true">
-          <PriorityIcon priority={myPick} filled className={cn('w-4 h-4', PICK_ICON_COLOR[myPick])} />
-        </span>
-      )}
-
-      {/* Count marker: people glyph plus count, on compact cells and when there is no active crew (no avatars to draw) */}
-      {crew && (compact || crew.shown.length === 0) && (
-        <span
-          className="absolute bottom-[3px] right-[5px] flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua pointer-events-none tabular-nums"
-          aria-hidden="true"
-        >
-          <Users className="w-4 h-4" aria-hidden="true" />
-          {crew.total}
-        </span>
-      )}
-
-      {/* Crew avatars (the shared Avatar, up to 3, then +N). Pointer-transparent, so a tap opens the set like the rest of the tile; names are in the button's sr-only text */}
-      {!compact && crew && crew.shown.length > 0 && (
-        <div className="absolute top-[3px] right-[3px] flex items-center pointer-events-none" aria-hidden="true">
-          {crew.shown.map((o, i) => (
-            <Avatar
-              key={o.key}
-              name={o.name}
-              image={o.avatarUrl ?? undefined}
-              size="xxs"
-              className={cn('ring-[1.5px] ring-[var(--color-bg-primary)] rounded-full', i > 0 && '-ml-1')}
-            />
-          ))}
-          {crew.overflow > 0 && (
-            <span className="ml-0.5 text-[length:var(--font-size-10)] font-bold text-[var(--color-text-secondary)] tabular-nums">
-              +{crew.overflow}
-            </span>
+      {/* Bottom row: crew avatars (the shared Avatar, up to 3, then +N) on the left, pick buttons on the right.
+          Pointer-transparent except the buttons, so a tap on the avatars opens the set like the rest of the tile; names are in the open button's sr-only text. */}
+      {tall && (crew || showPickRow) && (
+        <div className="relative mt-auto flex items-end justify-between gap-1 pt-0.5 pointer-events-none">
+          {showAvatars ? (
+            <div className="flex min-w-0 items-center overflow-hidden" aria-hidden="true">
+              {crew.shown.map((o, i) => (
+                <Avatar
+                  key={o.key}
+                  name={o.name}
+                  image={o.avatarUrl ?? undefined}
+                  size="xxs"
+                  className={cn('ring-[1.5px] ring-[var(--color-bg-primary)] rounded-full', i > 0 && '-ml-1')}
+                />
+              ))}
+              {crew.overflow > 0 && (
+                <span className="ml-0.5 text-[length:var(--font-size-10)] font-bold text-[var(--color-text-secondary)] tabular-nums">
+                  +{crew.overflow}
+                </span>
+              )}
+            </div>
+          ) : (
+            crewCount
+          )}
+          {showPickRow && (
+            <div className="tl-pick-row pointer-events-auto ml-auto flex shrink-0 gap-[var(--space-1)]">
+              {PICK_BUTTONS.map((p) => {
+                const active = myPick === p;
+                return (
+                  <button
+                    key={p}
+                    className={cn(
+                      'relative',
+                      'bg-[var(--color-overlay-2)] border border-[var(--color-border)]',
+                      'rounded-xs',
+                      'text-[var(--color-text-secondary)] cursor-pointer',
+                      'text-[length:var(--font-size-12)] px-1.5 py-[3px] leading-none',
+                      'transition-[color,border-color,background-color] duration-(--duration-slow) ease-(--ease-standard)',
+                      'hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-overlay-4)]',
+                      'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
+                      // Hit-slop pseudo-element for 44x44 tap target
+                      'after:content-[""] after:absolute after:inset-[-4px]',
+                      // Active priority states
+                      active &&
+                        p === 'must' &&
+                        'bg-[var(--color-accent-coral-strong)] text-[var(--color-text-on-accent)] border-[var(--color-accent-coral-strong)] opacity-100',
+                      active &&
+                        p === 'want-to-see' &&
+                        'bg-[var(--color-priority-want)] text-[var(--text-on-light-accent)] border-[var(--color-priority-want)] opacity-100',
+                      active &&
+                        p === 'maybe' &&
+                        'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)] border-[var(--color-priority-maybe)] opacity-100',
+                    )}
+                    type="button"
+                    onKeyDown={(e) => onNavKey(e, set.id)}
+                    tabIndex={tabIndex}
+                    aria-pressed={active ? 'true' : 'false'}
+                    aria-label={`${pickLabel(p)}: ${dn}`}
+                    title={pickLabel(p)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onActivate(set.id);
+                      onSavePick(set.id, active ? null : p);
+                    }}
+                  >
+                    <PriorityIcon priority={p} className="w-4 h-4" filled={active} />
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

@@ -185,10 +185,11 @@ a:focus-visible,
 .card-pick-hint {
   display: none;
 }
-/* A grid tile with a fine pointer shows only its chosen pick at rest, so twelve tiles are not 36 identical glyphs.
-   The buttons stay focusable (opacity, not display), and hover or focus inside the tile brings the trio back. */
+/* A grid tile with a fine pointer hides its pick buttons at rest: the chosen pick already shows as a small glyph beside
+   the title, so twelve tiles are not 36 identical buttons. The buttons stay focusable (opacity, not display), and hover
+   or focus inside the tile brings the trio back. */
 @media (hover: hover) and (pointer: fine) {
-  [data-set-id]:not(:hover):not(:focus-within) .tl-pick-row > button[aria-pressed='false'] {
+  [data-set-id]:not(:hover):not(:focus-within) .tl-pick-row {
     opacity: 0;
   }
 }
