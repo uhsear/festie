@@ -113,7 +113,7 @@ function RegisterPageInner() {
     <AuthLayout phoneSample>
       <InviteBanner />
 
-      <AuthTabs active="register" variant="split" />
+      <AuthTabs active="register" />
 
       <form
         className="w-full max-w-[360px] relative z-[1] text-left"

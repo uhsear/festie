@@ -69,7 +69,7 @@ function LoginPageInner() {
     <AuthLayout phoneSample>
       <InviteBanner />
 
-      <AuthTabs active="login" variant="pill" />
+      <AuthTabs active="login" />
 
       {reset && (
         <div
