@@ -29,7 +29,6 @@ export default function NowNextStrip() {
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { getStageName } = useFestival();
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
-  const selectedDay = useFestivalStore((s) => s.selectedDay);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const nowMs = useNow();
   const timeZone = resolveFestivalTimeZone(currentFestival);

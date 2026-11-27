@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronRight } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
 import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants/inboxCopy';
