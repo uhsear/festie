@@ -711,8 +711,9 @@ export default function CrewScreen() {
   const isOwner = isCrewOwner(crew, members, user.id);
   const crewFestival = festivalForCrew(crew, currentFestival);
   const inviteExpiry = formatInviteExpiry(crew.inviteExpiresAt);
-  const countText = memberCountLabel(members.length, crew.maxMembers);
-  const headerSubtitle = crewFestival ? `${festivalLabel(crewFestival)} · ${countText}` : countText;
+  // NBSP glues the number to its noun so the 2-line subtitle wraps before "5", never between "5" and "members".
+  const countText = memberCountLabel(members.length, crew.maxMembers).replace(/(\d+) (members?)/, '$1\u00A0$2');
+  const headerSubtitle = crewFestival ? `${festivalLabel(crewFestival)} · ${countText}` : countText;
 
   const overlapEntries: CrewOverlap[] = Object.values(crewOverlap)
     .filter((o) => o.memberCount > 0)
