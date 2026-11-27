@@ -246,7 +246,7 @@ function PicksViewInner() {
   ];
   const viewTabRow =
     hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
-      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex min-w-0 flex-1 gap-2 overflow-x-auto pr-6 [mask-image:linear-gradient(to_right,#000_calc(100%-24px),transparent)]">
+      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex min-w-0 flex-1 flex-wrap gap-2">
         {viewTabs.map((tab) => (
           <button
             key={tab.id}
