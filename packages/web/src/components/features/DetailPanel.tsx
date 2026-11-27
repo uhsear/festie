@@ -349,7 +349,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 </div>
               )}
               {/* The action for this moment comes first, then any clash on a pick. */}
-              <div className="mt-3 flex flex-col gap-[var(--space-4)]">
+              <div data-testid="set-actions" className="mt-3 mb-[var(--space-4)] flex flex-col gap-[var(--space-4)] empty:hidden">
                 {ended && ratingBlock}
                 {canPick && (
                   <DetailPriorityPicker

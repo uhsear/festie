@@ -187,8 +187,8 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       isKeep && 'rounded-lg bg-accent-aqua/5',
                     )}
                   >
-                    {/* Fixed layout, the same for every row: the title (may wrap) and the details chevron, then one
-                        badge line. The badges never stack, so a suggested row is no taller than its neighbours. */}
+                    {/* Fixed layout, the same for every row at every width: the title (may wrap) with the details
+                        chevron, one time-and-stage line (the stage truncates, never wraps), then one badge line. */}
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left text-sm font-bold text-text-primary">
                         <ArtistName set={pick.set} separator={b2bSeparator} />
@@ -206,7 +206,15 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       </button>
                     </div>
 
-                    <div data-testid="clash-row-badges" className="-mt-1 flex flex-wrap items-center gap-1">
+                    <div data-testid="clash-row-time" className="-mt-1 flex flex-nowrap items-center gap-x-2 text-xs text-text-muted">
+                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="shrink-0 tabular-nums whitespace-nowrap">{timeRange}</span>
+                      <span aria-hidden="true" className="shrink-0">·</span>
+                      <span className="shrink-0 tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>
+                      <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} className="min-w-0" />
+                    </div>
+
+                    <div data-testid="clash-row-badges" className="mt-1 flex flex-wrap items-center gap-1">
                       <span
                         className={cn(
                           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 type-micro',
@@ -222,14 +230,6 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                           {COPY.clash.suggested}
                         </span>
                       )}
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="tabular-nums whitespace-nowrap">{timeRange}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>
-                      <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
                     </div>
 
                     {typeof pick.crewCount === 'number' && pick.crewCount > 0 && (

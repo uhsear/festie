@@ -385,6 +385,14 @@ describe('DetailPanel', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('spaces the pick controls and clash cards by the section token and hides an empty action column', () => {
+    render(<DetailPanel {...defaultProps} />);
+    const actions = screen.getByTestId('set-actions');
+    expect(actions.className).toContain('gap-[var(--space-4)]');
+    expect(actions.className).toContain('mb-[var(--space-4)]');
+    expect(actions.className).toContain('empty:hidden');
+  });
+
   it('renders the priority picker when user has a profile', () => {
     render(<DetailPanel {...defaultProps} />);
     expect(screen.getByTestId('priority-picker')).toBeInTheDocument();

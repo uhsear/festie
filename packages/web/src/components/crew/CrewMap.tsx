@@ -765,8 +765,11 @@ export default function CrewMap({
     // Where a member can add a location (the Meet tab), keep saying how.
     const canAddLocation = hasList || !!onMapClick;
     return (
-      <div className="px-1">
+      // On the full-page map (fill) the empty state is a panel in the content column, set near the top third:
+      // a bare centred block on an otherwise empty page read as lost. The Meet tab keeps its inline block.
+      <div data-testid="map-empty" className={fill ? 'mx-auto w-full max-w-md px-1 pt-12 sm:pt-16' : 'px-1'}>
         <EmptyState
+          className={fill ? 'rounded-xl border border-border bg-bg-secondary py-8 sm:py-8' : undefined}
           icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
           title={festival ? "This festival isn't mapped yet" : 'No mapped meeting points yet'}
           description={!festival || canAddLocation ? 'Add a location to a meeting point to see it here.' : undefined}

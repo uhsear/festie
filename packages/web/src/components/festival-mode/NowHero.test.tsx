@@ -183,6 +183,16 @@ describe('NowHero lead object', () => {
     expect(countdown.parentElement).toContainElement(screen.getByText(/until/));
   });
 
+  it('keeps "until <time>" on one line so the meta group wraps as a unit, not mid-phrase', () => {
+    render(<NowHero {...props} selection={liveSel(NOW + 30 * 60_000)} />);
+    const until = screen.getByTestId('fm-until');
+    expect(until).toHaveClass('whitespace-nowrap');
+    expect(until).toHaveTextContent(`until ${fmtZonedClock(NOW + 30 * 60_000, 'UTC')}`);
+    // The nowrap phrase sits inside the shrinkable meta group, not in the fixed countdown column.
+    expect(until.parentElement).toHaveClass('min-w-0');
+    expect(until.parentElement).not.toHaveClass('whitespace-nowrap');
+  });
+
   it('turns the countdown to the danger red, not amber, in the last ten minutes of a set', () => {
     const { unmount } = render(<NowHero {...props} selection={liveSel(NOW + 9 * 60_000)} />);
     expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('text-text-danger');

@@ -57,7 +57,11 @@ vi.mock('@festie/shared/utils', () => ({
 }));
 
 vi.mock('../ui/StageBadge', () => ({
-  default: ({ stageName }: { stageName: string }) => <span data-testid="stage-badge">{stageName}</span>,
+  default: ({ stageName, className }: { stageName: string; className?: string }) => (
+    <span data-testid="stage-badge" className={className}>
+      {stageName}
+    </span>
+  ),
 }));
 
 vi.mock('lucide-react', () => ({
@@ -197,6 +201,22 @@ describe('PickConflicts', () => {
     expect(lines.filter((l) => l.contains(suggested))).toHaveLength(1);
     // The badge line is a row of its own, not nested in the title row beside the chevron.
     expect(screen.getAllByRole('button', { name: /Open details for/ })[0]!.parentElement!.contains(lines[0]!)).toBe(false);
+  });
+
+  it('gives every row title, then one time-and-stage line that truncates the stage, then the badge line', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const times = screen.getAllByTestId('clash-row-time');
+    const badges = screen.getAllByTestId('clash-row-badges');
+    expect(times).toHaveLength(2);
+    times.forEach((line, i) => {
+      expect(line.className).toContain('flex-nowrap');
+      expect(line.className).not.toContain('flex-wrap');
+      // The stage chip shrinks and ellipsises (min-w-0 on a flex child); the time and duration never shrink.
+      expect(line.querySelector('[data-testid="stage-badge"]')!.className).toContain('min-w-0');
+      expect(line.querySelector('.whitespace-nowrap')!.className).toContain('shrink-0');
+      // Order: the time line comes before the badge line, inside the same row.
+      expect(line.nextElementSibling).toBe(badges[i]);
+    });
   });
 
   it('wraps the clash header as whole items: the meta text never breaks inside', () => {
