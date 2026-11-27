@@ -213,7 +213,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
     (hasFrame && !!day && !!time);
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       {!showForm ? (
         <Button variant="primary" onClick={openCreate} className="w-full min-h-11">
           <Plus className="w-4 h-4" aria-hidden="true" /> Post a ride

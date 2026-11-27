@@ -289,14 +289,14 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
 
   if (isLoading)
     return (
-      <SkeletonGroup className="px-4 space-y-2">
+      <SkeletonGroup className="space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </SkeletonGroup>
     );
   if (isError && expenses.length === 0)
     return (
-      <div className="px-4">
+      <div>
         <EmptyState
           icon={<DollarSign className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load expenses"
@@ -307,7 +307,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     );
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Currency label. A label only: changing it never converts amounts. */}
       <div className="p-3 rounded-xl bg-bg-card border border-border space-y-1">

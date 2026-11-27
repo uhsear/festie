@@ -354,7 +354,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   if (isLoading) {
     return (
-      <SkeletonGroup className="px-4 space-y-2">
+      <SkeletonGroup className="space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </SkeletonGroup>
@@ -362,7 +362,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   }
   if (isError && points.length === 0) {
     return (
-      <div className="space-y-3 px-4">
+      <div className="space-y-3">
         {/* The safety controls do not depend on the list, so a failed list never hides SOS. */}
         <LiveLocationControls crewId={crewId} currentUserId={currentUserId} />
         <div className="h-px bg-border" />
@@ -377,7 +377,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   }
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Live Location + SOS (ephemeral, always visible so the share toggle / SOS /
           active-SOS banner are reachable in both list & map views). First on the

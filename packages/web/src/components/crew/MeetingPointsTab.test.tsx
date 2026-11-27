@@ -213,7 +213,9 @@ describe('MeetingPointsTab', () => {
     const { container } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     // No "Add meeting point" button while loading.
     expect(screen.queryByRole('button', { name: /add meeting point/i })).not.toBeInTheDocument();
-    expect(container.querySelector('.px-4')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    // The tab sits on the page gutter: no extra inset of its own.
+    expect(container.querySelector('.px-4')).not.toBeInTheDocument();
   });
 
   it('renders the error state with a Retry action', async () => {
