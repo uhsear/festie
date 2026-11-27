@@ -6,7 +6,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTo
 import DisplayWords from './DisplayWords';
 import AppPressable from './AppPressable';
 import InboxBell from './InboxBell';
-import { headerTopPadding, useTopBannerHeight } from '../contexts/TopBannerContext';
+import { headerTopPadding, useRegisterPaddedHeader, useTopBannerHeight } from '../contexts/TopBannerContext';
 
 interface ScreenHeaderProps {
   /** Primary heading text. */
@@ -61,6 +61,7 @@ export default function ScreenHeader({
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const bannerHeight = useTopBannerHeight();
+  useRegisterPaddedHeader();
   const titleText = (
     <Text
       style={styles.title}

@@ -17,14 +17,22 @@ describe('headerTopPadding (FU-P56)', () => {
 });
 
 describe('top banner tap targets (FU-P56)', () => {
-  it('grows the compact SOS strip and the failed-sync bar to 44 pt, with no hitSlop', () => {
+  it('grows the compact SOS strip and the failed-sync bar to 44 pt only over a header that pads below them, with no hitSlop', () => {
     const sos = read('components/SosBanner.tsx');
-    expect(sos).toContain('minHeight: topInset + MIN_TAP_TARGET');
+    expect(sos).toContain('headerPadsBelow && { minHeight: topInset + MIN_TAP_TARGET }');
     expect(sos).toContain('const MIN_TAP_TARGET = 44');
     expect(sos).not.toContain('hitSlop');
     const offline = read('components/OfflineBanner.tsx');
-    expect(offline).toContain('minHeight: insets.top + 44');
+    expect(offline).toContain('headerPadsBelow && { minHeight: insets.top + 44 }');
     expect(offline).not.toContain('hitSlop');
+  });
+});
+
+describe('native stack headers (FU-P56)', () => {
+  it('only ScreenHeader registers as padding below the overlay', () => {
+    expect(read('components/ScreenHeader.tsx')).toContain('useRegisterPaddedHeader()');
+    expect(read('components/SosBanner.tsx')).toContain('useHeaderPadsBelowBanner()');
+    expect(read('components/OfflineBanner.tsx')).toContain('useHeaderPadsBelowBanner()');
   });
 });
 

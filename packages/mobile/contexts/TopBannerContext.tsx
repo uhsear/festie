@@ -1,8 +1,12 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 // Two contexts so the root, which only writes, does not re-render when the height changes.
 const HeightContext = createContext(0);
 const SetHeightContext = createContext<(height: number) => void>(() => {});
+// How many focused screen headers pad below the overlay; the native stack headers never do.
+const HeaderCountContext = createContext(0);
+const SetHeaderCountContext = createContext<(delta: number) => void>(() => {});
 
 /**
  * Height of the root top overlay (OfflineBanner, SosBanner, AnnouncementBanner), status-bar
@@ -11,9 +15,15 @@ const SetHeightContext = createContext<(height: number) => void>(() => {});
  */
 export function TopBannerProvider({ children }: { children: ReactNode }) {
   const [height, setHeight] = useState(0);
+  const [headerCount, setHeaderCount] = useState(0);
+  const addHeaders = useCallback((delta: number) => setHeaderCount((n) => n + delta), []);
   return (
     <SetHeightContext.Provider value={setHeight}>
-      <HeightContext.Provider value={height}>{children}</HeightContext.Provider>
+      <SetHeaderCountContext.Provider value={addHeaders}>
+        <HeightContext.Provider value={height}>
+          <HeaderCountContext.Provider value={headerCount}>{children}</HeaderCountContext.Provider>
+        </HeightContext.Provider>
+      </SetHeaderCountContext.Provider>
     </SetHeightContext.Provider>
   );
 }
@@ -24,6 +34,26 @@ export function useTopBannerHeight(): number {
 
 export function useSetTopBannerHeight(): (height: number) => void {
   return useContext(SetHeightContext);
+}
+
+/**
+ * A screen header calls this: while its screen is focused, the overlay may grow to a 44 pt tap
+ * target, because this header starts below the overlay. A native stack header starts at the status-bar
+ * inset and does not call it, so the overlay stays one line there and covers only a sliver of the bar.
+ */
+export function useRegisterPaddedHeader(): void {
+  const addHeaders = useContext(SetHeaderCountContext);
+  useFocusEffect(
+    useCallback(() => {
+      addHeaders(1);
+      return () => addHeaders(-1);
+    }, [addHeaders]),
+  );
+}
+
+/** True while a focused screen header pads below the overlay (see useRegisterPaddedHeader). */
+export function useHeaderPadsBelowBanner(): boolean {
+  return useContext(HeaderCountContext) > 0;
 }
 
 /**

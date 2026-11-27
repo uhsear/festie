@@ -9,6 +9,7 @@ import type { FailedSyncItem } from '@festie/shared/stores';
 import * as offlineQueue from '@festie/shared/services/offlineQueue';
 import { timeAgo } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { useHeaderPadsBelowBanner } from '../contexts/TopBannerContext';
 
 /**
  * Retry a single failed mutation via the shared queue helper, which re-enqueues
@@ -49,6 +50,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const headerPadsBelow = useHeaderPadsBelowBanner();
 
   const offlineMode = useUIStore((s) => s.offlineMode);
   const theme = useUIStore((s) => s.theme);
@@ -80,7 +82,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
     if (showFailed) {
       return (
         <TouchableOpacity
-          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top, minHeight: insets.top + 44 }]}
+          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top }, headerPadsBelow && { minHeight: insets.top + 44 }]}
           onPress={() => setSheetOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync — review`}
