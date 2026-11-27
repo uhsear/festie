@@ -47,6 +47,8 @@ export const lineHeight = {
  */
 export const letterSpacing = {
   display: -0.02,
+  /** Clash Display below 48px: at -0.02em neighbouring glyphs touch ("ch", "rc"), so the 24px and 32px roles track at zero. */
+  displaySmall: 0,
   caps: 0.08,
   body: -0.01,
 } as const;
@@ -79,14 +81,14 @@ export const typeRoles = {
     family: fontFamily.display,
     size: fontSize[32],
     lineHeight: lineHeight.tight,
-    letterSpacing: letterSpacing.display,
+    letterSpacing: letterSpacing.displaySmall,
     weight: 700,
   },
   heading: {
     family: fontFamily.display,
     size: fontSize[24],
     lineHeight: lineHeight.tight,
-    letterSpacing: letterSpacing.display,
+    letterSpacing: letterSpacing.displaySmall,
     weight: 700,
   },
   title: {

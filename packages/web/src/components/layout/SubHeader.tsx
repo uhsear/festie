@@ -13,11 +13,13 @@ import {
   spotifyAttributionFor,
   visibleDayIndexes,
   festivalTimeLabel,
+  fmtZonedClock,
   formatDayChip,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
   resolveStageColor,
   SCHEDULE_GROUP_BYS,
+  setTimesPending,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import type { FestivalDay } from '@festie/shared/types/domain';
@@ -30,6 +32,7 @@ import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/sh
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
+import LowPowerIndicator from '../features/LowPowerIndicator';
 import ScheduleStatusLine from '../features/ScheduleStatusLine';
 import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
@@ -40,7 +43,7 @@ const FESTIVAL_MODE_PATH = '/festival-mode';
 
 // Routes that carry the festival/day/stage controls. Anything else (admin, 404)
 // gets no schedule chrome; AppShell already hides it on account/crew; /festival-mode gets a title only.
-const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan'];
+const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan', '/map', '/caught', '/rate'];
 
 interface SubHeaderProps {
   /** Show only day tabs (no stage chips or search). Used on /picks and /compare. */
@@ -166,10 +169,22 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // Now & Next carries no controls: the festival name is its page title, so the lead object owns the surface.
   if (pathname === FESTIVAL_MODE_PATH) {
     return currentFestival ? (
-      <div className="px-[var(--space-3)] sm:px-6 py-2 border-b border-border bg-[var(--color-bg-chrome)] shrink-0 min-w-0">
-        <h1 className="type-title text-text-primary break-words" data-testid="festival-mode-title">
-          {currentFestival.name}
-        </h1>
+      <div className="px-6 py-2 border-b border-border bg-[var(--color-bg-chrome)] shrink-0 min-w-0">
+        {/* Same column as the page below (festival-mode PAGE), so the title and the content share one left edge. */}
+        <div className="flex w-full min-w-0 max-w-[560px] lg:max-w-5xl mx-auto items-center justify-between gap-3">
+          <h1 className="type-title text-text-primary break-words min-w-0" data-testid="festival-mode-title">
+            {currentFestival.name}
+          </h1>
+          <div className="flex items-center gap-2 shrink-0">
+            <LowPowerIndicator />
+            <div className="flex flex-col items-end">
+              <span className="type-numeral text-text-secondary" aria-label="Festival time">
+                {fmtZonedClock(nowMs, timeZone)}
+              </span>
+              {timeLabel && <span className="type-caption text-text-muted">{timeLabel}</span>}
+            </div>
+          </div>
+        </div>
       </div>
     ) : null;
   }
@@ -181,14 +196,16 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
       <nav
         className={cn(
           'sub-header',
-          // Density: compact (tighter) on <640px, comfortable on desktop.
-          'flex items-center px-[var(--space-3)] py-2 gap-[var(--space-3)]',
-          'sm:px-6 sm:py-3 sm:gap-[var(--space-6)]',
+          // Density: compact (tighter) on <640px, comfortable on desktop. px-6 is the page gutter, so the chrome and the content below share one left edge.
+          'flex items-center px-6 py-2 gap-[var(--space-3)]',
+          'sm:py-3 sm:gap-[var(--space-6)]',
           'bg-[var(--color-bg-chrome)] backdrop-saturate-150 backdrop-blur-sm',
           'border-b border-border flex-wrap shrink-0',
           // --space-9 never existed in the scale (invalid var -> column-gap
           // silently dropped); --space-8 (2rem) is the nearest real step.
           'sm:[column-gap:var(--space-8)]',
+          // md up the rows are planned (see the breaks below), so the gaps tighten to fit.
+          'md:[column-gap:var(--space-4)] md:[row-gap:var(--space-2)]',
           '[backdrop-filter:saturate(150%)_blur(12px)]',
           '[box-shadow:0_1px_0_var(--color-overlay-1)]',
         )}
@@ -202,11 +219,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {currentStatus && (
           <span
             className={cn(
-              'type-micro inline-block shrink-0 rounded-full px-2 py-1',
+              // 12px, because the 10px micro role is unreadable for a status the user needs.
+              'type-micro !text-[length:var(--font-size-12)] inline-block shrink-0 rounded-full px-2 py-1',
               // Live reads the `live` token group (OD-3).
               currentStatus === 'ongoing' && 'bg-live-fill text-[var(--text-on-light-accent)]',
               currentStatus === 'upcoming' && 'border border-[var(--color-aqua-a4)] text-accent-aqua',
-              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-muted',
+              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-secondary',
             )}
             data-testid="festival-status-pill"
           >
@@ -214,16 +232,17 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </span>
         )}
 
-        {onSchedulePath && <ScheduleViewSwitcher className="md:ml-0" />}
+        {onSchedulePath && <ScheduleViewSwitcher className="ml-0 max-md:order-3" />}
 
-        {/* Below md the Filters button and the day rail share the second row; md:contents leaves the desktop row as it was. */}
-        <div className="flex min-w-0 items-center gap-[var(--space-3)] max-md:order-3 max-md:w-full md:contents empty:hidden">
+        {/* No box of its own: the day rail and the Filters button join the nav's flex lines, so `order` can place each one. */}
+        <div className="contents">
         {showFold && (
           <>
             <button
               type="button"
               className={cn(
-                'relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+                // Row 2 from md up, beside Search, so row 1 keeps its width for the day chips; with the view switch below md.
+                'relative order-2 inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
                 !hasWideFold && 'md:hidden',
                 'cursor-pointer border-2 border-border text-text-secondary',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
@@ -231,13 +250,14 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               aria-expanded={filtersOpen}
               aria-controls="subheader-filters"
               aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              title="Filters"
               onClick={() => {
                 selectHaptic();
                 setFiltersOpen((v) => !v);
               }}
             >
               <Filter className="w-4 h-4" aria-hidden="true" />
-              <span className="max-sm:hidden" aria-hidden="true">Filters</span>
+              <span className="max-sm:hidden md:hidden" aria-hidden="true">Filters</span>
               {filterCount > 0 && (
                 <span
                   className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold text-[var(--text-on-light-accent)]"
@@ -253,7 +273,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* Day tabs */}
         {showDaySkeleton && (
           <div
-            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:flex-1"
+            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:order-1 max-md:w-full md:flex-[1_1_auto]"
             aria-hidden="true"
           >
             {Array.from({ length: 3 }).map((_, i) => (
@@ -267,8 +287,11 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             className={cn(
               // The time-zone label wraps under the chips on a narrow row instead of being cut off.
               'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
-              // Below md the day rail shares the second chrome row with the Filters button.
-              'max-md:flex-1',
+              // Below md the day rail owns the second chrome row.
+              'max-md:order-1 max-md:w-full',
+              // From md up the rail asks for the width of its whole chip set, so it wraps to a row of its own before a chip is cut,
+              // and scrolls (with a fade) only when the set is wider than the nav itself.
+              'md:flex-[1_1_auto]',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -295,7 +318,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     className={cn(
                       'day-tab-underline',
                       'py-2 px-4 rounded-full text-[length:var(--font-size-14)] font-semibold cursor-pointer',
-                      'whitespace-nowrap snap-center min-h-[44px] inline-flex items-center gap-1.5',
+                      'shrink-0 whitespace-nowrap snap-center min-h-[44px] inline-flex items-center gap-1.5',
                       'transition-[background,color,border-color,box-shadow,scale] duration-(--duration-med) ease-(--ease-out)',
                       'press-scale',
                       'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 focus-visible:border-accent-aqua',
@@ -303,8 +326,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                         ? [
                             'active',
                             // Accent rule: aqua = selection/primary, dark ink = text.onLightAccent.
+                            // No glow: the scroller clips a shadow into a hard-edged rectangle, and the fill already marks the day.
                             'bg-day-tab-active text-[var(--text-on-light-accent)] border-day-tab-active font-bold',
-                            'shadow-[0_0_0_1px_var(--color-aqua-a4),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
                           ]
                         : 'bg-bg-card border border-border-light text-text-secondary',
                     )}
@@ -337,7 +360,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   type="button"
                   className={cn(
                     'py-2 px-4 rounded-full text-[length:var(--font-size-14)] font-semibold cursor-pointer',
-                    'whitespace-nowrap snap-center min-h-[44px] inline-flex items-center',
+                    'shrink-0 whitespace-nowrap snap-center min-h-[44px] inline-flex items-center',
                     'bg-bg-card border border-border-light text-text-secondary',
                     'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                   )}
@@ -358,13 +381,32 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         </div>
 
         {(currentProfile || onSchedulePath) && (
-          <ScheduleStatusLine showFreshness={onSchedulePath} className="max-md:order-3" />
+          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-4 md:order-3 md:max-xl:order-5" />
+        )}
+
+        {/* md up: a full-width zero-height line between row 1 (picker, status pill, view, day chips, and from xl Group by) and row 2 (Filters, search, My picks, Group by below xl, and from xl the stage chips and status; below xl those two take row 3). A flex line never shrinks below zero, so the two row gaps around it stay. */}
+        {/* Only when there is a row 2: festival-only and day-only pages have just the status line there, which sits on row 1. */}
+        {!dayOnly && !festivalOnly && (
+          <>
+            <div
+              aria-hidden="true"
+              data-testid="subheader-row-break"
+              className="hidden md:order-1 md:block md:h-0 md:basis-full"
+            />
+
+            {/* Below xl the stage chips and the status line take a third row of their own, so a long stage list never runs into the status. */}
+            <div
+              aria-hidden="true"
+              data-testid="subheader-row-break-2"
+              className="hidden md:max-xl:order-3 md:max-xl:block md:max-xl:h-0 md:max-xl:basis-full"
+            />
+          </>
         )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div
           id="subheader-filters"
-          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-4 empty:hidden', showFold && !filtersOpen && 'max-md:hidden')}
+          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-5 empty:hidden', showFold && !filtersOpen && 'max-md:hidden')}
         >
         {/* Artist search. Inside the filters wrapper: below md it folds behind Filters; from md up the wrapper is `contents`, so it shares the day-tab row. */}
         {showSearch && (
@@ -372,12 +414,13 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
+              // From md up a fixed width of at least 15rem, which shows the whole placeholder; below md it folds behind Filters.
+              'search-box w-full min-w-0 sm:w-auto sm:flex-1 md:order-2 md:flex-none md:w-[clamp(15rem,18vw,16.25rem)]',
             )}
             role="search"
           >
             {/* Sized so the full placeholder fits from 640px up. */}
-            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] lg:max-w-none">
+            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] md:max-w-none">
               <Input
                 variant="search"
                 className={cn('min-h-[44px] w-full text-[length:var(--font-size-14)]', searchQuery !== '' && 'pr-11')}
@@ -408,7 +451,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showGroupBy && (
-          <div className="flex items-center gap-2" role="group" aria-labelledby="cards-group-by">
+          <div className="flex items-center gap-2 md:order-2 xl:order-none" role="group" aria-labelledby="cards-group-by">
             <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
               Group by
             </span>
@@ -450,7 +493,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             aria-disabled={!canFilterMine || undefined}
             aria-label={canFilterMine ? 'Show only my picks' : undefined}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:order-2',
               'border-2 transition-[border-color,background-color,color] duration-(--duration-med)',
               'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               !canFilterMine
@@ -466,12 +509,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showMyPicksSkeleton && (
-          <div className="skeleton-shimmer h-[44px] w-[104px] rounded-full shrink-0" aria-hidden="true" />
+          <div className="skeleton-shimmer h-[44px] w-[104px] rounded-full shrink-0 md:order-2" aria-hidden="true" />
         )}
 
         {/* Stage filter chips */}
         {showStageSkeleton && (
-          <div className="stage-filter-scroll relative min-w-0 w-full" aria-hidden="true">
+          <div className="stage-filter-scroll relative min-w-0 w-full md:order-2 md:max-xl:order-4 md:w-auto md:flex-[1_1_8rem]" aria-hidden="true">
             <div className="filter-stage flex gap-[var(--space-3)] flex-nowrap overflow-x-auto scrollbar-hide">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="skeleton-shimmer h-[44px] w-[76px] rounded-full shrink-0" />
@@ -483,7 +526,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showStageFilter && (
           <div
             className={cn(
-              'stage-filter-scroll relative min-w-0 w-full',
+              'stage-filter-scroll relative min-w-0 w-full md:order-2 md:max-xl:order-4 md:w-auto md:flex-[1_1_8rem]',
               canScrollLeft && 'fade-left',
               canScrollRight && 'fade-right',
             )}
@@ -546,7 +589,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showGenreFilter && (
           <div
             className={cn(
-              'genre-filter-scroll relative min-w-0 w-full md:flex md:items-center md:gap-[var(--space-3)]',
+              'genre-filter-scroll relative min-w-0 w-full md:order-6 md:flex md:items-center md:gap-[var(--space-3)]',
               !filtersOpen && 'md:hidden',
             )}
           >
@@ -606,7 +649,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <div
             role="group"
             aria-label="Days I'm going"
-            className={cn('flex items-center gap-[var(--space-3)] flex-wrap w-full', !filtersOpen && 'md:hidden')}
+            className={cn('flex items-center gap-[var(--space-3)] flex-wrap w-full md:order-6', !filtersOpen && 'md:hidden')}
           >
             <span className="type-micro text-text-muted">Days I'm going</span>
             {days.map((day, i) => {

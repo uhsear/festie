@@ -185,6 +185,14 @@ a:focus-visible,
 .card-pick-hint {
   display: none;
 }
+/* A grid tile with a fine pointer hides its pick buttons at rest: the chosen pick already shows as a small glyph beside
+   the title, so twelve tiles are not 36 identical buttons. The buttons stay focusable (opacity, not display), and hover
+   or focus inside the tile brings the trio back. */
+@media (hover: hover) and (pointer: fine) {
+  [data-set-id]:not(:hover):not(:focus-within) .tl-pick-row {
+    opacity: 0;
+  }
+}
 /* The set card's pick control is compact at rest: it shows the chosen state, and the full trio
    appears on hover or focus. The buttons stay in the DOM, so a keyboard reaches each one in a Tab step. */
 @media (hover: hover) and (pointer: fine) {
@@ -279,6 +287,12 @@ a:focus-visible,
 [role='dialog']:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: -2px;
+}
+/* A container that only receives programmatic focus (Onboarding's card) is
+   not a keyboard stop; a ring on it would show on first load. */
+[data-focus-sink]:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 /* Disabled + placeholder contrast. Pairs the muted text with an explicit

@@ -16,6 +16,8 @@ interface SegmentedTablistProps<T extends string> {
   tabClassName?: string;
 }
 
+// The tab radius is the container radius (rounded-xl, 12px) minus its p-1 padding (4px): one
+// 8px curve all round, so the selected tab sits concentric inside the strip.
 const ACTIVE = {
   soft: 'bg-accent-aqua/15 text-accent-aqua',
   solid: 'bg-accent-aqua text-[var(--text-on-light-accent)]',
@@ -34,7 +36,7 @@ export default function SegmentedTablist<T extends string>({
   const ref = useRef<HTMLDivElement>(null);
   useRovingTabs(ref);
   return (
-    <div ref={ref} role="tablist" aria-label={label} className={cn('p-1 border border-border', className)}>
+    <div ref={ref} role="tablist" aria-label={label} className={cn('p-1 border border-border rounded-xl', className)}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -44,7 +46,7 @@ export default function SegmentedTablist<T extends string>({
           aria-controls={panelId}
           onClick={() => onChange(o.value)}
           className={cn(
-            'min-h-11 text-xs font-medium',
+            'min-h-11 rounded-lg text-xs font-medium',
             tabClassName,
             value === o.value ? ACTIVE[tone] : 'text-text-secondary hover:text-text-primary',
           )}

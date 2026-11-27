@@ -14,9 +14,8 @@ describe('CrewStatus empty roster (C3)', () => {
 
 describe('NowSurface untimed start', () => {
   it('uses the weekday, not an invented clock time, when startsAtTimed is false', () => {
-    const src = read('NowSurface.tsx');
-    expect(src).toMatch(/startsAtTimed\s*\?\s*`Starts \$\{fmtZonedDayClock/);
-    expect(src).toContain('`Starts ${fmtZonedWeekday(startsAt, timeZone)}`');
+    // The weekday-only rule lives in the shared festivalStartCopy (covered by its own tests); the screen must use it.
+    expect(read('NowSurface.tsx')).toContain('festivalStartCopy(startsAt, startsAtTimed, nowMs, timeZone)');
   });
 });
 

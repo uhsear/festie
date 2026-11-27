@@ -1,4 +1,4 @@
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { Outlet, useLocation } from '@tanstack/react-router';
 import { Loader } from 'lucide-react';
 import { useAuthStore, useFestivalModeStore } from '@festie/shared';
@@ -11,7 +11,6 @@ import { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
 import RouteAnnouncer from './RouteAnnouncer';
 import GuestFooter from './GuestFooter';
-import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
 import IOSInstallDrawer from '../features/IOSInstallDrawer';
@@ -39,6 +38,12 @@ import { useThemeSync } from '../../lib/theme';
 
 const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password', '/verify-email'];
 
+// The set sheet only mounts once a set is picked, so it stays out of the entry chunk. React.lazy is avoided on
+// purpose: it suspends on first render even with the chunk cached, and React then holds the sheet back ~300 ms.
+type DetailPanelComponent = typeof import('../features/DetailPanel').default;
+let loadedDetailPanel: DetailPanelComponent | null = null;
+const loadDetailPanel = () => import('../features/DetailPanel').then((m) => (loadedDetailPanel = m.default));
+
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
 function RouteFallback() {
@@ -58,14 +63,15 @@ function RouteFallback() {
 // Routes where the global festival/day/stage sub-header has no purpose.
 // The first-visit walkthrough shows on the lineup only, never over a deep link (/set/:id, /join, /u/:username).
 const onboardingRoutes = ['/', '/cards'];
-const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan'];
+const noSubHeaderRoutes = ['/account', '/crew'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
 // /picks has its own filters (T20); /grid gets the full schedule filters (T17).
 const dayOnlySubHeaderRoutes = ['/compare'];
 
 // Routes that keep ONLY the festival selector.
-const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
+// Every screen scoped to one festival carries the picker, so the festival it shows is never a guess.
+const festivalOnlySubHeaderRoutes = ['/wrap', '/picks', '/map', '/caught', '/rate', '/crew-plan'];
 
 // Routes whose content fills the shell (grid, timeline, map); a footer would shrink them.
 const FILL_SHELL_PATHS = ['/grid', '/timeline', '/map'];
@@ -127,6 +133,24 @@ export default function AppShell() {
   useEffect(() => {
     prefetchMainRoutes();
   }, []);
+
+  // Fetch the set sheet on idle so the first tap does not wait on the network, or at once if a set is tapped first.
+  const [DetailPanel, setDetailPanel] = useState<DetailPanelComponent | null>(() => loadedDetailPanel);
+  const wantsDetailPanel = detailSet !== null;
+  useEffect(() => {
+    if (DetailPanel) return;
+    const load = () => void loadDetailPanel().then((c) => setDetailPanel(() => c), (err) => console.error('Set sheet failed to load:', err));
+    if (wantsDetailPanel) {
+      load();
+      return;
+    }
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(load, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(load, 1000);
+    return () => clearTimeout(id);
+  }, [DetailPanel, wantsDetailPanel]);
 
   // Auth routes don't use app shell layout
   if (isAuthRoute) {
@@ -197,7 +221,8 @@ export default function AppShell() {
 
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
-          {isSchedulePath(location.pathname) && <NowNextStrip />}
+          {/* The grid has its own now line and Jump to now, and cannot spare the height. */}
+          {isSchedulePath(location.pathname) && location.pathname !== '/grid' && <NowNextStrip />}
 
           <main
             id="main-content"
@@ -221,7 +246,7 @@ export default function AppShell() {
         <SosDock />
         <ArtistSheetHost />
 
-        {detailSet && (
+        {detailSet && DetailPanel && (
           <DetailPanel
             key={detailSet.id}
             set={detailSet}

@@ -32,6 +32,8 @@ interface SetCardProps {
     initials?: string;
   }>;
   clashLabel?: string | null;
+  /** Other clashing sets beyond the one `clashLabel` names; shown as its own chip so truncation never cuts it. */
+  clashMore?: number;
   b2bSeparator?: string;
 }
 
@@ -54,6 +56,7 @@ function SetCard({
   stageColor = 'var(--color-stage-fallback)',
   friendProfiles = [],
   clashLabel,
+  clashMore = 0,
   b2bSeparator,
 }: SetCardProps) {
   const myPick = useMyPick(set.id);
@@ -77,6 +80,12 @@ function SetCard({
   // Dim ended sets only while the festival is running; before/after, every set reads the same.
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
   const cardRef = useRef<HTMLDivElement | null>(null);
+  // Live, soon and upcoming carry their countdown. An ended set says so too while the festival runs.
+  const statusChip = ['live', 'soon', 'upcoming'].includes(setStatus.status)
+    ? { status: setStatus.status, label: setStatus.label }
+    : dimmed
+      ? { status: setStatus.status, label: 'Ended' }
+      : null;
 
   // R12: spotlight follows the pointer. Writes CSS vars straight to the node
   // (no React state, so no render per mousemove), one write per frame, and
@@ -249,35 +258,35 @@ function SetCard({
       )}
 
       {/* Decorative: the artist, stage and time are already announced by the click-target
-          button's aria-label, so these visible copies are aria-hidden to avoid double-announcing. */}
+          button's aria-label, so these visible copies are aria-hidden to avoid double-announcing.
+          The artist is the largest line. Time stays first as the spine (DP-35) but is a quiet 14px
+          label with the stage beside it. */}
       <div
         className={cn(
-          'card-time',
-          'relative z-[2] pointer-events-none flex items-baseline gap-2 flex-wrap',
-          'type-title tabular-nums',
+          'relative z-[2] pointer-events-none flex items-baseline gap-x-2 flex-wrap mb-1',
           primarySpotifyArtist(set) && 'pr-11',
-          dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
         aria-hidden="true"
       >
-        <span>{formatSetTimeRange(set) || 'TBA'}</span>
-        {isAfterMidnight(set, days) && (
-          <span className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wide text-text-muted">
-            Late
-          </span>
-        )}
-      </div>
-
-      <div
-        className={cn(
-          'card-stage',
-          'relative z-[2] pointer-events-none max-w-full truncate mb-2',
-          'type-caption font-semibold',
-          dimmed ? 'text-text-secondary' : 'text-text-primary',
-        )}
-        aria-hidden="true"
-      >
-        {stageName}
+        <div
+          className={cn('card-time', 'type-label font-semibold tabular-nums', 'text-text-secondary')}
+        >
+          <span>{formatSetTimeRange(set) || 'TBA'}</span>
+          {isAfterMidnight(set, days) && (
+            <span className="ml-2 text-[length:var(--font-size-12)] font-semibold uppercase tracking-wide text-text-muted">
+              Late
+            </span>
+          )}
+        </div>
+        <div
+          className={cn(
+            'card-stage',
+            'max-w-full truncate type-caption font-semibold',
+            dimmed ? 'text-text-secondary' : 'text-text-primary',
+          )}
+        >
+          {stageName}
+        </div>
       </div>
 
       {/* Artist name */}
@@ -285,7 +294,9 @@ function SetCard({
         className={cn(
           'card-artist',
           'relative z-[2] pointer-events-none',
-          'type-title font-bold leading-[1.15] mb-1 break-words',
+          // 24px display role: the artist is the largest line on the card. (The container-query sizes in
+          // components.css have no container ancestor here, so they never applied.)
+          'type-heading mb-1 break-words',
           dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
       >
@@ -307,9 +318,10 @@ function SetCard({
         </div>
       )}
 
-      {/* Indicators: note, clash and move. Only mounted when there is one. */}
-      {(myNote || hasConflict || move) && (
+      {/* One status row: state chip, clash, move, note. Only mounted when there is one. */}
+      {(myNote || hasConflict || move || statusChip) && (
         <div className={cn('card-indicators', 'relative z-[2] pointer-events-none', 'flex items-center gap-2 flex-wrap', 'type-caption text-text-secondary mt-1')}>
+          {statusChip && <LiveBadge status={statusChip.status} label={statusChip.label} />}
           {myNote && (
             <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
               <StickyNote className="w-4 h-4" aria-hidden="true" />
@@ -318,14 +330,22 @@ function SetCard({
           {hasConflict && (
             <span
               className={cn(
-                'inline-flex items-center gap-1 max-w-full',
+                'inline-flex items-center gap-1 min-w-0 max-w-full',
                 'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
                 'bg-[var(--color-clash-tint)] text-text-primary',
               )}
-              title={clashLabel}
+              title={clashMore > 0 ? `${clashLabel} +${clashMore} more` : clashLabel}
             >
-              <ClashHatch className="h-4 w-1.5" />
-              <span className="max-w-full truncate">{clashLabel}</span>
+              <ClashHatch className="h-4 w-1.5 shrink-0" />
+              <span className="min-w-0 truncate">{clashLabel}</span>
+            </span>
+          )}
+          {hasConflict && clashMore > 0 && (
+            <span
+              data-testid="clash-more-chip"
+              className="inline-flex shrink-0 items-center text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight bg-[var(--color-clash-tint)] text-text-primary"
+            >
+              +{clashMore} more
             </span>
           )}
           {move && (
@@ -342,14 +362,24 @@ function SetCard({
         </div>
       )}
 
-      {/* Live badge */}
-      {['live', 'soon', 'upcoming'].includes(setStatus.status) && (
-        <LiveBadge status={setStatus.status} label={setStatus.label} />
-      )}
-
       {/* Footer with the pick control and crew overlap */}
       <div className={cn('card-footer', 'relative z-[2]', 'flex flex-wrap gap-y-2 items-center justify-between mt-3')}>
-        {showPicks && (
+        {showPicks && dimmed && myPick && (
+          // An ended pick is over: the action now is the rating, which lives on the set page.
+          <button
+            type="button"
+            className="card-rate-btn h-11 min-w-11 px-4 rounded-full border border-border-light bg-[var(--color-overlay-3)] text-sm font-semibold text-text-primary cursor-pointer press-scale focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-[-2px]"
+            aria-label={`Rate ${artistName}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              tap();
+              onTap();
+            }}
+          >
+            Rate
+          </button>
+        )}
+        {showPicks && !(dimmed && myPick) && (
           <SetPickControl
             artistName={artistName}
             myPick={myPick}
@@ -431,7 +461,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
     if (pf.profileId !== nf.profileId || pf.priority !== nf.priority) return false;
   }
 
-  if (prev.clashLabel !== next.clashLabel) return false;
+  if (prev.clashLabel !== next.clashLabel || prev.clashMore !== next.clashMore) return false;
 
   return true;
 }

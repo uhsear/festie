@@ -271,4 +271,69 @@ describe('TimelineGridCell keyboard', () => {
     expect(onActivate).toHaveBeenCalledTimes(2);
     expect(onActivate).toHaveBeenLastCalledWith('a');
   });
+  it('marks the pick row so a fine pointer shows only the chosen pick until the tile is hovered or focused', () => {
+    const cell = renderCell('pickrow', 0, 4, 'want-to-see', { canPick: true });
+    const row = cell.querySelector('.tl-pick-row');
+    expect(row).not.toBeNull();
+    // Opacity, not display: every button stays focusable by keyboard.
+    expect(row!.querySelectorAll('button[aria-pressed]')).toHaveLength(3);
+  });
+});
+
+describe('TimelineGridCell badge layout', () => {
+  const clash: ClashMark = { segments: [{ from: 0, to: 1 }], withIds: ['b'], overlapMin: 50, text: 'Clashes with B' };
+  const crew: GridCrewAvatars = {
+    total: 2,
+    overflow: 0,
+    label: '2 crew members picked this',
+    shown: [
+      { key: 'u1', name: 'Amy Lee', priority: 'must' },
+      { key: 'u2', name: 'Bo', priority: 'want-to-see' },
+    ],
+  };
+  const AVATAR = '[class*="ring-[1.5px]"]';
+  const absolute = (el: Element | null) => {
+    for (let n = el; n; n = n.parentElement) if (n.className?.toString().split(' ').includes('absolute')) return true;
+    return false;
+  };
+
+  it('puts the clash minutes and the pick glyph in the title row, beside the title and not over it', () => {
+    const el = renderCell('a', 0, 4, 'want-to-see', { clash });
+    const minutes = el.querySelector('[data-clash-minutes]')!;
+    const row = minutes.closest('div')!;
+    expect(row.contains(el.querySelector('[title="a"]'))).toBe(true);
+    expect(row.contains(el.querySelector('[data-pick-glyph]'))).toBe(true);
+    expect(absolute(minutes)).toBe(false);
+  });
+
+  it('keeps the crew avatars out of the title row, in the bottom row', () => {
+    const el = renderCell('a', 0, 4, null, { clash, crew });
+    const avatar = el.querySelector(AVATAR)!;
+    expect(el.querySelector('[data-clash-minutes]')!.closest('div')!.contains(avatar)).toBe(false);
+    expect(absolute(avatar)).toBe(false);
+  });
+
+  it('shows the pick as a small glyph, and the pick buttons are not the 40px tile', () => {
+    const el = renderCell('a', 0, 4, 'want-to-see');
+    expect(el.querySelector('[data-pick-glyph] svg')!.getAttribute('class')).toContain('w-3.5');
+    for (const b of el.querySelectorAll('button[aria-pressed]')) expect(b.className).not.toContain('min-w-10');
+    expect(absolute(el.querySelector('.tl-pick-row'))).toBe(false);
+  });
+
+  it('moves the crew count into the title row on a block too short for a bottom row', () => {
+    const el = renderCell('a', 0, 1.5, null, { crew });
+    expect(el.querySelectorAll(AVATAR)).toHaveLength(0);
+    expect(el.querySelector('[data-clash-minutes]')).toBeNull();
+    expect(el.querySelector('svg.lucide-users')!.closest('div')!.contains(el.querySelector('[title="a"]'))).toBe(true);
+    expect(el.querySelector('.tl-pick-row')).toBeNull();
+  });
+});
+
+describe('TimelineGridCell base', () => {
+  it('paints its tint over an opaque ground so the now line behind it cannot show through', () => {
+    const el = renderCell('opaque', 0, 4);
+    expect(el.style.backgroundColor).toBe('var(--color-bg-primary)');
+    expect(el.style.backgroundImage).toContain('linear-gradient');
+    expect(el.className).not.toMatch(/(^|\s)opacity-/);
+  });
 });

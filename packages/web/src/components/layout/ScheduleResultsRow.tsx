@@ -37,7 +37,7 @@ export default function ScheduleResultsRow() {
   });
 
   return (
-    <div className="flex items-center gap-[var(--space-3)] px-[var(--space-3)] sm:px-6 type-micro text-text-muted">
+    <div className="flex items-center gap-[var(--space-3)] px-6 type-micro text-text-muted">
       <span aria-live="polite">{summary}</span>
       <button
         type="button"

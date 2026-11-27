@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
-import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
-import { memberSummary, resolveStageColor, formatDayChip } from '@festie/shared/utils';
+import { useFestivalCrew, useCrewCompare, useFestival, usePicks } from '@festie/shared/hooks';
+import {
+  festivalStatus,
+  formatDayChip,
+  memberSummary,
+  noFestivalCrewCopy,
+  pickDefaultFestival,
+  resolveStageColor,
+} from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import GuestTeaser from '../components/features/GuestTeaser';
 import CrewSuggestionStrip from '../components/features/CrewSuggestionStrip';
@@ -33,14 +40,15 @@ function CompareViewInner() {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const [sort, setSort] = useState<'time' | 'mix'>('time');
 
-  const { status, crew, retry: retryCrew } = useActiveCrew();
-  const { state: festivalState, festivalName, retry: retryFestival } = useCrewFestival(crew);
-  const ready = festivalState === 'match' && status === 'ready';
+  const { status, crew, festivalName, hasCrews, retry: retryCrew } = useFestivalCrew();
+  const ready = status === 'ready';
   const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, error, refresh } = useCrewCompare(
     sort,
     ready,
   );
   const days = useFestivalStore((s) => s.days);
+  const festivals = useFestivalStore((s) => s.festivals);
+  const selectFestival = useFestivalStore((s) => s.selectFestival);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { savePick } = usePicks();
   const { toast, toastError } = useToast();
@@ -104,36 +112,15 @@ function CompareViewInner() {
   }
 
   if (status === 'none' || !crew) {
+    const forFestival = hasCrews ? noFestivalCrewCopy(festivalName) : null;
     return (
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
           headingLevel={1}
-          title="No crew yet"
-          description="Make a crew or join one with a code to plan together."
+          title={forFestival?.title ?? 'No crew yet'}
+          description={forFestival?.description ?? 'Make a crew or join one with a code to plan together.'}
           cta={{ label: 'Create or join a crew', onClick: () => navigate({ to: '/crew' }).catch(() => {}) }}
-        />
-      </div>
-    );
-  }
-
-  if (festivalState === 'switching') {
-    return (
-      <div className="max-w-2xl mx-auto py-8 text-center text-sm text-text-secondary" role="status">
-        Opening {festivalName}…
-      </div>
-    );
-  }
-
-  if (festivalState === 'failed') {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <EmptyState
-          icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          headingLevel={1}
-          title={`Couldn't open ${festivalName}`}
-          description={`${crew.name} is planning ${festivalName}. Connect to the internet, then try again.`}
-          cta={{ label: 'Try again', onClick: retryFestival }}
         />
       </div>
     );
@@ -149,12 +136,26 @@ function CompareViewInner() {
 
   // With everyone else Not going, keep the screen so the day selector can reach another day.
   if (alone) {
+    const past = festivalStatus(currentFestival, days) === 'past';
+    const live = pickDefaultFestival(festivals);
+    const liveElsewhere = past && live && live.id !== currentFestival?.id ? live : null;
     return (
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title="No crew picks yet"
-          description="Once your crewmates save picks for this festival, their schedules show up here side by side."
+          title={past ? `Nothing was compared at ${festivalName}` : 'Invite a crewmate to compare'}
+          description={
+            past
+              ? 'Your crew saved no picks to compare before it ended.'
+              : "Compare lines up your crew's picks side by side. Once a crewmate joins and saves picks, their schedule shows up here."
+          }
+          cta={
+            liveElsewhere
+              ? { label: `Open ${liveElsewhere.name}`, onClick: () => void selectFestival(liveElsewhere.id).catch(() => {}) }
+              : past
+                ? undefined
+                : { label: 'Invite a crewmate', onClick: () => navigate({ to: '/crew' }).catch(() => {}) }
+          }
         />
       </div>
     );

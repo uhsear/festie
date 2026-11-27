@@ -43,7 +43,7 @@ export default function FestivalDayBanner() {
 
   return (
     <div
-      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,var(--color-aqua-a15),var(--color-aqua-a06))] border border-[var(--color-aqua-a3)] rounded-lg py-2.5 px-4 mx-3 my-2 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
+      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,var(--color-aqua-a15),var(--color-aqua-a06))] border border-[var(--color-aqua-a3)] rounded-lg py-1 px-4 mx-3 my-1 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
       role="status"
       data-testid="festival-day-banner"
     >

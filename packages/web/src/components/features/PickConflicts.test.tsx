@@ -57,11 +57,16 @@ vi.mock('@festie/shared/utils', () => ({
 }));
 
 vi.mock('../ui/StageBadge', () => ({
-  default: ({ stageName }: { stageName: string }) => <span data-testid="stage-badge">{stageName}</span>,
+  default: ({ stageName, className }: { stageName: string; className?: string }) => (
+    <span data-testid="stage-badge" className={className}>
+      {stageName}
+    </span>
+  ),
 }));
 
 vi.mock('lucide-react', () => ({
   CalendarClock: () => <span data-testid="calendar-clock-icon" />,
+  ChevronRight: () => <span />,
   Loader: () => <span />,
   Star: () => <span />,
   Heart: () => <span />,
@@ -165,6 +170,61 @@ describe('PickConflicts', () => {
     overlapMin: 30,
     pairs: [],
     tight: false,
+  });
+
+  it('says how many sets overlap when a group has more than two, so the longest pair is not the whole group', () => {
+    const base = twoPickGroup();
+    const third = { ...base.picks[0]!, set: makeSet('s3', { artist: 'Third' }) as never };
+    render(<PickConflicts groups={[{ ...base, picks: [...base.picks, third], overlapMin: 50 }]} />);
+    expect(screen.getByText('3 sets overlap, up to 50 min')).toBeInTheDocument();
+    expect(screen.getByText('Choose which to keep')).toBeInTheDocument();
+  });
+
+  it('puts Details on a 44px chevron after a fixed badge column, and outlines Suggested', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const details = screen.getAllByRole('button', { name: /Open details for/ })[0]!;
+    expect(details).toHaveTextContent('');
+    expect(details.className).toContain('min-h-11');
+    expect(screen.getByText('Suggested').className).toContain('border-accent-aqua');
+  });
+
+  it('lays every row out the same: the priority and Suggested badges share one wrapping line, never a column', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const lines = screen.getAllByTestId('clash-row-badges');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(line.className).toContain('flex-wrap');
+      expect(line.className).not.toContain('flex-col');
+      expect(line.querySelector('.type-micro')).not.toBeNull();
+    }
+    const suggested = screen.getByText('Suggested');
+    expect(lines.filter((l) => l.contains(suggested))).toHaveLength(1);
+    // The badge line is a row of its own, not nested in the title row beside the chevron.
+    expect(screen.getAllByRole('button', { name: /Open details for/ })[0]!.parentElement!.contains(lines[0]!)).toBe(false);
+  });
+
+  it('gives every row title, then one time-and-stage line that truncates the stage, then the badge line', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const times = screen.getAllByTestId('clash-row-time');
+    const badges = screen.getAllByTestId('clash-row-badges');
+    expect(times).toHaveLength(2);
+    times.forEach((line, i) => {
+      expect(line.className).toContain('flex-nowrap');
+      expect(line.className).not.toContain('flex-wrap');
+      // The stage chip shrinks and ellipsises (min-w-0 on a flex child); the time and duration never shrink.
+      expect(line.querySelector('[data-testid="stage-badge"]')!.className).toContain('min-w-0');
+      expect(line.querySelector('.whitespace-nowrap')!.className).toContain('shrink-0');
+      // Order: the time line comes before the badge line, inside the same row.
+      expect(line.nextElementSibling).toBe(badges[i]);
+    });
+  });
+
+  it('wraps the clash header as whole items: the meta text never breaks inside', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const header = screen.getByRole('heading', { level: 2 }).parentElement!;
+    expect(header.className).toContain('flex-wrap');
+    const meta = screen.getByText(/overlap/);
+    expect(meta.className).toContain('whitespace-nowrap');
   });
 
   it('renders the groups prop without calling buildPickConflicts', () => {

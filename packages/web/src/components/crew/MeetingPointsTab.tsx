@@ -43,6 +43,7 @@ import { meetingPointsQuery } from '../../lib/queryPersist';
 import CrewStatus from './CrewStatus';
 import LiveLocationControls from './LiveLocationControls';
 import SegmentedTablist from '@/components/ui/SegmentedTablist';
+import { sectionHeading } from '../../lib/styles';
 
 // Lazy: CrewMap pulls in maplibre-gl (~200 kB gzip) at runtime. Keeping it behind
 // lazy() puts it in its own chunk so it never lands in the main bundle (mirrors
@@ -73,9 +74,13 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   // festival so CrewMap can plot stage pins (+ amenities/camera from mapConfig).
   const festivalStages = useFestivalStore((s) => s.stages);
   const festivalTimeZone = resolveFestivalTimeZone(currentFestival);
+  // The stages in the store belong to the festival on screen. A crew of another festival gets no
+  // stage pins (and no "this festival isn't mapped" claim about the wrong festival).
+  const crewFestivalId = useCrewStore((s) => s.activeCrew?.festivalId);
+  const festivalFitsCrew = !crewFestivalId || crewFestivalId === currentFestival?.id;
   const mapFestival = useMemo(
-    () => (currentFestival ? { ...currentFestival, stages: festivalStages } : null),
-    [currentFestival, festivalStages],
+    () => (currentFestival && festivalFitsCrew ? { ...currentFestival, stages: festivalStages } : null),
+    [currentFestival, festivalFitsCrew, festivalStages],
   );
   const [showForm, setShowForm] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -354,7 +359,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   if (isLoading) {
     return (
-      <SkeletonGroup className="px-4 space-y-2">
+      <SkeletonGroup className="space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </SkeletonGroup>
@@ -362,7 +367,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   }
   if (isError && points.length === 0) {
     return (
-      <div className="space-y-3 px-4">
+      <div className="space-y-3">
         {/* The safety controls do not depend on the list, so a failed list never hides SOS. */}
         <LiveLocationControls crewId={crewId} currentUserId={currentUserId} />
         <div className="h-px bg-border" />
@@ -377,7 +382,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   }
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Live Location + SOS (ephemeral, always visible so the share toggle / SOS /
           active-SOS banner are reachable in both list & map views). First on the
@@ -403,12 +408,12 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         ]}
         value={view}
         onChange={setView}
-        className="inline-flex gap-1 rounded-xl bg-bg-card"
+        className="inline-flex gap-1 bg-bg-card"
         tabClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md"
       />
       <Link
         to="/map"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 min-w-11 text-accent-aqua hover:text-text-primary"
       >
         <Maximize2 className="w-4 h-4" aria-hidden="true" /> Open full map
       </Link>
@@ -450,7 +455,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           variant="secondary"
           aria-pressed={placing}
           onClick={() => setPlacing((v) => !v)}
-          className="w-full min-h-11"
+          className="w-full min-h-11 text-accent-aqua hover:text-text-primary"
         >
           {placing ? (
             'Cancel'
@@ -484,6 +489,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
       {view === 'list' && (
         <>
+          <h3 className={sectionHeading}>Meeting points</h3>
           {/* With no points the empty state carries the only Add button. */}
           {!showForm && (current.length > 0 || past.length > 0) && (
             <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
@@ -494,6 +500,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           {current.length === 0 && past.length === 0 ? (
             !showForm && <EmptyState
               illustration="emptyList"
+              compact
               title="No meeting points yet"
               description="Drop a pin so your crew knows where to meet."
               cta={{ label: 'Add meeting point', onClick: () => setShowForm(true) }}

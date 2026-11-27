@@ -6,7 +6,7 @@
 // chat apps show a rich preview, and one Join button into the app. Every value
 // is escaped here, inside the renderer, so no caller can forget.
 
-import { fontFamily } from '../packages/shared/src/tokens/typography';
+import { fontFamily, letterSpacing, wordSpacing } from '../packages/shared/src/tokens/typography';
 import { baseCss, ctaCss, daylightCss, designCss, fontFaceCss, festieLockupHtml, headSnippet, stageRootCss } from './design-css.js';
 import { addDaysCompact, buildVCalendar } from './helpers/ics-builder.js';
 import { escapeHtml } from './helpers/sanitize.js';
@@ -31,6 +31,8 @@ const THEME_COLOR_META = headSnippet
 
 const SHARED_CSS = [stageRootCss, daylightCss, ...CLASH_FACE, baseCss, ctaCss].join('\n');
 
+// The 32px and 24px display text tracks at zero (at -0.02em its glyphs touch), and the face's narrow space gets the
+// display word spacing, so "Moonlit Orchard Fest" reads as three words. Same tokens as the web app.
 const PAGE_STYLE = `
 main { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
 .iv { width: 100%; max-width: 26rem; padding: 2rem 1.5rem; border: 1px solid var(--ds-border); border-radius: 0.75rem; background: var(--ds-card); }
@@ -39,8 +41,8 @@ main { min-height: 100vh; display: flex; align-items: center; justify-content: c
 .iv-face { display: inline-flex; width: 2.5rem; height: 2.5rem; margin-right: -0.5rem; align-items: center; justify-content: center; border: 2px solid var(--ds-card); border-radius: 50%; background: var(--ds-border); color: var(--ds-text); font-weight: 600; }
 .iv-faces { display: flex; flex: none; }
 .iv-state { margin-left: 1rem; }
-h1 { margin: 0 0 0.5rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; }
-.iv-when { margin: 0 0 0.5rem; font: 700 1.5rem ${fontFamily.displayWeb}; }
+h1 { margin: 0 0 0.5rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; letter-spacing: ${letterSpacing.displaySmall}em; }
+.iv-when { margin: 0 0 0.5rem; font: 700 1.5rem ${fontFamily.displayWeb}; letter-spacing: ${letterSpacing.displaySmall}em; word-spacing: ${wordSpacing.display}em; }
 .iv p { margin: 0 0 0.25rem; color: var(--ds-text-secondary); }
 .iv p.iv-when { color: var(--ds-text); }
 .iv .ds-cta { width: 100%; margin-top: 1.5rem; }
@@ -56,7 +58,7 @@ function inviteStateLine(memberCount: number, spotsLeft: number): string {
 type InviteJoinPageArgs = Pick<
   InvitePreview,
   'crewName' | 'ownerName' | 'memberCount' | 'spotsLeft' | 'festivalName' | 'startDate' | 'endDate'
-> & { inviteCode: string; origin: string; memberInitials?: string[]; now?: Date };
+> & { inviteCode: string; origin: string; memberInitials?: string[]; festivalTimeZone?: string | null; now?: Date };
 
 export function renderInviteJoinPage({
   crewName,
@@ -69,18 +71,21 @@ export function renderInviteJoinPage({
   inviteCode,
   origin,
   memberInitials = [],
+  festivalTimeZone = null,
   now,
 }: InviteJoinPageArgs) {
   const dates = formatInviteDateRange(startDate, endDate);
   const stateLine = inviteStateLine(memberCount, spotsLeft);
-  const countdown = inviteCountdown(startDate, endDate, now);
+  const countdown = inviteCountdown(startDate, endDate, now, festivalTimeZone);
   const description = `${[festivalName, dates, stateLine].filter(Boolean).join(' · ')}. Plan your sets together on Festie.`;
   const title = escapeHtml(`Join ${crewName} on Festie`);
   const code = encodeURIComponent(inviteCode);
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
-  const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}&ref=crew-invite`);
+  // In-page links stay relative so they keep the origin the visitor is on (and its session); only the
+  // tags and the calendar file, which other apps read, carry the configured public origin.
+  const joinUrl = escapeHtml(`/?joinCrew=${code}&ref=crew-invite`);
   const saveLink = dates
-    ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="iv-link" download>Save for later</a>
+    ? `      <a href="${escapeHtml(`/join/${code}/save.ics`)}" class="iv-link" download>Save for later</a>
       <p class="iv-small">Adds the festival dates and this invite to your calendar.</p>
 `
     : '';
@@ -157,7 +162,7 @@ export function renderInviteIcs({ festivalName, crewName, startDate, endDate, in
   return buildVCalendar([event], { calendarName: festivalName || 'Festie', prodId: '-//Festie//Invite//EN' });
 }
 
-export function renderInviteErrorPage(origin: string, message: string) {
+export function renderInviteErrorPage(message: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,10 +177,10 @@ export function renderInviteErrorPage(origin: string, message: string) {
 <body>
   <main>
     <div class="iv">
-      ${festieLockupHtml(`${origin}/`)}
+      ${festieLockupHtml('/')}
       <h1>This invite doesn't work</h1>
       <p>${escapeHtml(message)}</p>
-      <a href="${escapeHtml(`${origin}/`)}" class="ds-cta">Open Festie</a>
+      <a href="${escapeHtml('/')}" class="ds-cta">Open Festie</a>
     </div>
   </main>
 </body>

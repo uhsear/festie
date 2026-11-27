@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival, usePicks, useSetContext } from '@festie/shared/hooks';
@@ -7,13 +8,17 @@ import type { SetContextEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
 import ArtistName, { RowOpenButton } from './ArtistName';
 
-/** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
+/** "Also on <stage>" neighbours and "Playing at the same time". Each part hides when empty. */
+// The same preview length as the mobile section, so the sheet does not grow past the first three overlaps.
+const OVERLAP_PREVIEW_LIMIT = 3;
+
 export default function SetContextSection({ set }: { set: FestivalSet }) {
   const { before, after, overlaps } = useSetContext(set);
   const { getStageName } = useFestival();
   const separator = useFestivalStore((s) => s.currentFestival?.b2bSeparator);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getMyPick } = usePicks();
+  const [showAllOverlaps, setShowAllOverlaps] = useState(false);
 
   const stageName = (s: FestivalSet) => getStageName(s.stageId) ?? s.stageName ?? '';
 
@@ -32,7 +37,7 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
             </span>
             <span className="block text-xs text-text-muted">{lead ? e.time : `${stage} · ${e.time}`}</span>
           </span>
-          {pick && <span className="text-xs text-accent-aqua">{PRIORITY_LABELS[pick]}</span>}
+          {pick && <span className="text-sm font-medium text-accent-aqua">{PRIORITY_LABELS[pick]}</span>}
         </div>
       </li>
     );
@@ -64,7 +69,19 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
           >
             {COPY.setContext.overlapHeading}
           </h3>
-          <ul className="space-y-1">{overlaps.map((e) => row(e))}</ul>
+          <ul className="space-y-1">
+            {(showAllOverlaps ? overlaps : overlaps.slice(0, OVERLAP_PREVIEW_LIMIT)).map((e) => row(e))}
+          </ul>
+          {!showAllOverlaps && overlaps.length > OVERLAP_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              className="mt-1 min-h-11 px-3 text-sm font-semibold text-accent-aqua cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+              aria-label={COPY.setContext.overlapSeeAllA11y(overlaps.length)}
+              onClick={() => setShowAllOverlaps(true)}
+            >
+              {COPY.setContext.overlapSeeAll(overlaps.length)}
+            </button>
+          )}
         </section>
       )}
     </>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock, ChevronRight } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -131,11 +131,16 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
         const first = group.pairs[0];
         const walk = group.picks.length === 2 ? first?.walkMinutes : null;
         const walkText = walk && walk > 0 ? `${walk} min walk` : null;
+        // Three or more sets share one group, so the longest overlap alone would read as the whole group's.
+        const overlapText =
+          group.overlapMin > 0
+            ? group.picks.length > 2
+              ? COPY.clash.manyOverlap(group.picks.length, fmtDurationMinutes(group.overlapMin))
+              : `${fmtDurationMinutes(group.overlapMin)} overlap`
+            : null;
         const meta = group.tight
           ? [first?.gapMinutes ? `${first.gapMinutes} min gap` : 'Back to back', walkText].filter(Boolean).join(' · ')
-          : [group.overlapMin > 0 ? `${fmtDurationMinutes(group.overlapMin)} overlap` : null, walkText]
-              .filter(Boolean)
-              .join(' · ');
+          : [overlapText, walkText].filter(Boolean).join(' · ');
 
         const dayIndex = group.picks[0]?.set.dayIndex ?? 0;
         const dayLabel = days.length > 1 ? days[dayIndex]?.label || days[dayIndex]?.date : undefined;
@@ -145,7 +150,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
             key={`${group.recommendedKeepId}-${gi}`}
             className="rounded-lg border border-border bg-bg-card p-3"
           >
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <ClashHatch className="h-4 w-1.5" />
               <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
@@ -156,11 +161,11 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                 </span>
               )}
               {meta && (
-                <span className="ml-auto text-xs font-semibold text-text-muted tabular-nums">{meta}</span>
+                <span className="ml-auto whitespace-nowrap text-xs font-semibold text-text-muted tabular-nums">{meta}</span>
               )}
             </div>
 
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col divide-y divide-border">
               {group.picks.map((pick) => {
                 const isKeep = pick.set.id === group.recommendedKeepId;
                 const dn = artistDisplayName(pick.set, b2bSeparator);
@@ -175,30 +180,44 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                   <li
                     key={pick.set.id}
                     className={cn(
-                      'rounded-xl border px-3 py-2',
-                      // Recommended keep uses the aqua accent (NOT coral — coral is
-                      // danger/SOS only). A faint aqua wash + ring marks it.
-                      isKeep ? 'border-accent-aqua/60 bg-accent-aqua/5' : 'border-border bg-bg-card',
+                      // The card already has the border; rows are split by a divider, not boxed again.
+                      // Recommended keep uses the aqua accent (NOT coral: coral is danger/SOS only):
+                      // a faint aqua wash marks it.
+                      'px-1 py-2 first:pt-0 last:pb-0',
+                      isKeep && 'rounded-lg bg-accent-aqua/5',
                     )}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="break-words [overflow-wrap:anywhere] line-clamp-2 text-left text-sm font-bold text-text-primary">
+                    {/* Fixed layout, the same for every row at every width: the title (may wrap) with the details
+                        chevron, one time-and-stage line (the stage truncates, never wraps), then one badge line. */}
+                    <div className="flex items-start gap-2">
+                      <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left text-sm font-bold text-text-primary">
                         <ArtistName set={pick.set} separator={b2bSeparator} />
                       </span>
                       <button
                         type="button"
                         className={cn(
-                          'min-h-[44px] shrink-0 px-2 text-xs font-semibold text-text-secondary hover:text-accent-aqua',
+                          '-my-2 -mr-1 flex min-h-11 min-w-11 shrink-0 items-center justify-center text-text-secondary hover:text-accent-aqua',
                           'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                         )}
                         aria-label={`Open details for ${dn}`}
                         onClick={() => openSet(pick)}
                       >
-                        Details
+                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
                       </button>
+                    </div>
+
+                    <div data-testid="clash-row-time" className="-mt-1 flex flex-nowrap items-center gap-x-2 text-xs text-text-muted">
+                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="shrink-0 tabular-nums whitespace-nowrap">{timeRange}</span>
+                      <span aria-hidden="true" className="shrink-0">·</span>
+                      <span className="shrink-0 tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>
+                      <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} className="min-w-0" />
+                    </div>
+
+                    <div data-testid="clash-row-badges" className="mt-1 flex flex-wrap items-center gap-1">
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 type-micro',
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 type-micro',
                           chip.className,
                         )}
                       >
@@ -206,18 +225,11 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                         {PRIORITY_SYMBOLS[pick.priority].short}
                       </span>
                       {isKeep && (
-                        <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 type-micro text-accent-aqua">
+                        // Outlined, so it reads as advice and not as a second priority tint.
+                        <span className="rounded-full border border-accent-aqua px-2 py-0.5 type-micro text-accent-aqua">
                           {COPY.clash.suggested}
                         </span>
                       )}
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="tabular-nums whitespace-nowrap">{timeRange}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>
-                      <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
                     </div>
 
                     {typeof pick.crewCount === 'number' && pick.crewCount > 0 && (
@@ -234,6 +246,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
               <p className="mt-2 text-xs text-text-secondary">{planned ?? plan?.sentence}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
+              <p className="basis-full text-xs font-semibold text-text-secondary">{COPY.clash.chooseKeep}</p>
               {catchOpt && (
                 <Button
                   variant="primary"

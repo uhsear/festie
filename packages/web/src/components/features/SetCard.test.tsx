@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { SetStatusResult } from '@festie/shared/utils';
@@ -421,6 +421,26 @@ describe('SetCard', () => {
       expect(screen.getByTestId('set-card').className).not.toContain('has-conflict');
     });
 
+    it('shows the extra clash count in its own chip, so the label truncation never cuts it', () => {
+      render(<SetCard {...defaultProps} clashLabel="Clashes with Marsh Choir Collective (45 min)" clashMore={2} />);
+      const chip = screen.getByTestId('clash-more-chip');
+      expect(chip.textContent).toBe('+2 more');
+      expect(screen.getByText('Clashes with Marsh Choir Collective (45 min)').className).toContain('truncate');
+      expect(screen.getByText('Clashes with Marsh Choir Collective (45 min)').textContent).not.toContain('+');
+      expect(chip.className).toContain('shrink-0');
+    });
+
+    it('has no count chip when there is a single clash', () => {
+      render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={0} />);
+      expect(screen.queryByTestId('clash-more-chip')).toBeNull();
+    });
+
+    it('re-renders when only clashMore changes', () => {
+      const { rerender } = render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={1} />);
+      rerender(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={3} />);
+      expect(screen.getByTestId('clash-more-chip').textContent).toBe('+3 more');
+    });
+
     it('re-renders when only clashLabel changes', () => {
       const { rerender } = render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" />);
       rerender(<SetCard {...defaultProps} clashLabel="Clashes with B (20 min)" />);
@@ -616,6 +636,13 @@ describe('SetCard', () => {
     order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
   });
 
+  it('makes the artist the largest line: 24px heading over a 14px time label', () => {
+    render(<SetCard {...defaultProps} />);
+    expect(document.querySelector('.card-artist')).toHaveClass('type-heading');
+    expect(document.querySelector('.card-time')).toHaveClass('type-label');
+    expect(document.querySelector('.card-time')).not.toHaveClass('type-title');
+  });
+
   it('keeps Listen an icon button with its name', () => {
     const spotify = makeSet({ artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }] } as unknown as Partial<FestivalSet>);
     render(<SetCard {...defaultProps} set={spotify} />);
@@ -645,6 +672,21 @@ describe('SetCard', () => {
       expect(artist).toHaveClass('text-text-secondary');
       expect(stage).toHaveClass('text-text-secondary');
       expect(screen.getByTestId('set-card-rail').style.background).toBe('var(--color-overlay-3)');
+    });
+
+    it('marks an ended set with an Ended chip and swaps a pick for Rate while the festival is live', () => {
+      setPhase(-1, 1);
+      mockPicks('must');
+      renderPast();
+      expect(within(screen.getByTestId('set-card')).getByText('Ended')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Rate Daft Punk' })).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /Priority for/ })).not.toBeInTheDocument();
+    });
+
+    it('shows no Ended chip when the festival is not live', () => {
+      setPhase(-3, -2);
+      renderPast();
+      expect(screen.queryByText('Ended')).not.toBeInTheDocument();
     });
 
     it.each([

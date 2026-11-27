@@ -30,6 +30,7 @@ import { useReturnFocus } from '../../hooks/useReturnFocus';
 import { useToast } from '../../lib/toastContext';
 import { useUndoNotifier } from '../../hooks/useUndoNotifier';
 import { MapPin, Share2 } from 'lucide-react';
+import LiveBadge from './LiveBadge';
 import Button from '../ui/Button';
 import { CHIP_TINT_ALPHA, inactiveChipTextColor } from '../ui/StageBadge';
 
@@ -213,6 +214,28 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
     navigate({ to: '/map', search: { focusStage: set.stageId } });
   }, [onClose, navigate, set.stageId]);
 
+  // The labelled scale says what to tap, so the 'Tap to rate' caption would only repeat the heading.
+  const ratingBlock =
+    currentProfile && currentFestival && hasSetStarted(set, currentFestival, festivalDays) ? (
+      <div className="mx-0 text-center">
+        <div className="mb-2 text-[length:var(--font-size-12)] uppercase tracking-wide text-text-muted">
+          Rate this set
+        </div>
+        <RatingButtons setId={set.id} festivalId={currentFestival.id} showCaption={false} />
+      </div>
+    ) : null;
+  // Ended sets lead with the rating. A live set leads with its pick, and rating follows.
+  const ended = status?.status === 'past';
+  // Live, soon and upcoming carry their own countdown chip; an ended set says Ended. A later set has none.
+  const statusChip =
+    status?.status === 'live'
+      ? { status: status?.status, label: 'Live now' }
+      : status?.status === 'soon' || status?.status === 'upcoming'
+        ? { status: status?.status, label: status.label }
+        : status?.status === 'past'
+          ? { status: status?.status, label: 'Ended' }
+          : null;
+
   return (
     <Drawer.Root
       open
@@ -232,15 +255,20 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             detail-glass utility owns all four glass properties; rounded-* owns radii. */}
         <Drawer.Content
           aria-label="Set detail panel"
+          data-focus-sink
           className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] h-[96dvh] flex flex-col
                      rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua
                      lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh
                      lg:w-[420px] lg:max-w-full
                      lg:rounded-none lg:rounded-l-[16px]"
           onOpenAutoFocus={(e: Event) => {
+            const hadOpener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body;
             returnFocus.onOpenAutoFocus();
             e.preventDefault();
-            closeBtnRef.current?.focus();
+            // A deep link has no opener and no prior input, so a focused button would draw the keyboard ring for a
+            // mouse or touch user. The panel itself takes focus then; opened from a control, the close button does.
+            const target = hadOpener ? closeBtnRef.current : closeBtnRef.current?.closest<HTMLElement>('[data-focus-sink]');
+            target?.focus();
           }}
           onCloseAutoFocus={returnFocus.onCloseAutoFocus}
         >
@@ -274,7 +302,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             {'×'}
           </button>
           <div
-            className={`min-h-0 flex flex-col gap-[var(--space-4)] ${isLg || snap === 1 ? 'overflow-y-auto' : 'overflow-hidden'} overscroll-contain p-7 pt-[72px] pb-[max(12px,env(safe-area-inset-bottom))]`}
+            className={`min-h-0 flex flex-col gap-[var(--space-4)] ${isLg || snap === 1 ? 'overflow-y-auto' : 'overflow-hidden'} overscroll-contain p-7 pt-3 lg:pt-[72px] pb-[max(12px,env(safe-area-inset-bottom))]`}
             ref={panelRef}
             // The peeking sheet runs past the viewport, so keyboard focus on a control below the fold must open it fully.
             // Pointer taps focus controls too, and must not re-expand a sheet the user just collapsed.
@@ -283,8 +311,9 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             }}
           >
             <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
               <div
-                className="relative inline-block self-start px-3 py-1 rounded-full type-micro mb-3 overflow-hidden"
+                className="relative inline-block self-start px-3 py-1 rounded-full type-micro !text-[length:var(--font-size-12)] overflow-hidden"
                 // Opaque ground under the tint: the panel is translucent glass, so the text is solved
                 // against bg-primary plus the tint, not against whatever shows through the panel.
                 style={{ color: inactiveChipTextColor(stageColor, theme), background: 'var(--color-bg-primary)' }}
@@ -296,6 +325,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                   aria-hidden="true"
                 />
                 <span className="relative">{stageName}</span>
+              </div>
+              {statusChip && <LiveBadge status={statusChip.status} label={statusChip.label} />}
               </div>
 
               <DetailArtistHeader
@@ -310,13 +341,38 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               {spotifyAttribution && <SpotifyAttribution href={spotifyAttribution.href} />}
 
               <div className="text-base text-text-secondary tabular-nums" data-testid="set-when">
-                {formatSetWhen(set, festivalDays, status)}
+                {formatSetWhen(set, festivalDays, null)}
               </div>
               {move && (
                 <div data-testid="set-moved" className="type-caption text-text-secondary" aria-label={move.a11y}>
                   {move.line}
                 </div>
               )}
+              {/* The action for this moment comes first, then any clash on a pick. */}
+              <div data-testid="set-actions" className="mt-3 mb-[var(--space-4)] flex flex-col gap-[var(--space-4)] empty:hidden">
+                {ended && ratingBlock}
+                {canPick && (
+                  <DetailPriorityPicker
+                    setId={set.id}
+                    myPick={myPick || null}
+                    priorityBusy={priorityBusy}
+                    onPriorityClick={handlePriorityClick}
+                  />
+                )}
+                {currentProfile && (
+                  <ClashPrompt
+                    currentSet={set}
+                    conflicts={conflicts}
+                    b2bSeparator={b2bSeparator}
+                    days={festivalDays}
+                    timeZone={resolveFestivalTimeZone(currentFestival)}
+                    stages={stages}
+                    getPriority={getMyPick}
+                    onClear={handleClashClear}
+                  />
+                )}
+                {!ended && ratingBlock}
+              </div>
               {coord && (
                 <Button
                   variant="secondary"
@@ -332,14 +388,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               <SetContextSection set={set} />
             </div>
 
-            {canPick && (
-              <DetailPriorityPicker
-                setId={set.id}
-                myPick={myPick || null}
-                priorityBusy={priorityBusy}
-                onPriorityClick={handlePriorityClick}
-              />
-            )}
             {user ? (
               <DetailReminderNotePanel
                 myReminder={myReminder}
@@ -382,28 +430,6 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
               </>
             )}
 
-            {currentProfile && (
-              <ClashPrompt
-                currentSet={set}
-                conflicts={conflicts}
-                b2bSeparator={b2bSeparator}
-                days={festivalDays}
-                timeZone={resolveFestivalTimeZone(currentFestival)}
-                stages={stages}
-                getPriority={getMyPick}
-                onClear={handleClashClear}
-              />
-            )}
-
-
-            {currentProfile && set && currentFestival && hasSetStarted(set, currentFestival, festivalDays) && (
-              <div className="mx-0 text-center">
-                <div className="mb-2 text-[length:var(--font-size-12)] uppercase tracking-wide text-text-muted">
-                  Rate this set
-                </div>
-                <RatingButtons setId={set.id} festivalId={currentFestival.id} />
-              </div>
-            )}
 
             <DetailArtistLinks artistLinks={artistLinks} isB2B={isB2B} genres={allGenres} hideLink={spotifyArtist} />
 

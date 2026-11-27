@@ -141,6 +141,25 @@ describe('LockscreenPanel', () => {
     expect(mockBuild).toHaveBeenLastCalledWith(expect.objectContaining({ onePage: false }));
   });
 
+  it('uses switches for the two toggles, labels the groups in caps, and fills the selected chip', () => {
+    setup();
+    expect(screen.getByRole('switch', { name: 'Only sets still to come' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Full day' }));
+    expect(screen.getByRole('switch', { name: 'Split long days into 2 images' })).toBeInTheDocument();
+    expect(screen.getByText('Show').className).toContain('uppercase');
+    expect(screen.getByRole('button', { name: 'Full day' }).className).toContain('bg-accent-aqua');
+    expect(screen.getByRole('button', { name: 'My picks' }).className).not.toContain('bg-accent-aqua');
+  });
+
+  it('labels the priority row Include and puts the preview pane first on a phone', () => {
+    setup();
+    expect(screen.getByRole('group', { name: 'Include' })).toBeInTheDocument();
+    const preview = screen.getByRole('button', { name: /^Save/ }).closest('div.order-1');
+    expect(preview).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Full day' }).closest('div.order-2')).not.toBeNull();
+  });
+
   it('the Poster canvas hides Clock and Look and passes canvas to the model', () => {
     setup();
     expect(screen.getByRole('group', { name: 'Look' })).toBeTruthy();

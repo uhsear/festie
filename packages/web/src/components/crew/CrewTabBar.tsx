@@ -3,12 +3,13 @@ import { Users, MapPin, CalendarClock, Banknote } from 'lucide-react';
 import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
 import { cn } from '@/lib/utils';
+import CountBadge from '@/components/ui/CountBadge';
 
 const TAB_ICONS: Record<CrewTabKey, React.ReactNode> = {
-  find: <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />,
-  members: <Users className="w-4 h-4 shrink-0" aria-hidden="true" />,
-  plan: <CalendarClock className="w-4 h-4 shrink-0" aria-hidden="true" />,
-  money: <Banknote className="w-4 h-4 shrink-0" aria-hidden="true" />,
+  find: <MapPin className="w-4 h-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />,
+  members: <Users className="w-4 h-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />,
+  plan: <CalendarClock className="w-4 h-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />,
+  money: <Banknote className="w-4 h-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />,
 };
 
 interface CrewTabBarProps {
@@ -25,7 +26,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
   const tablistRef = useRef<HTMLDivElement>(null);
   useRovingTabs(tablistRef);
   return (
-    <div ref={tablistRef} className="flex gap-1 px-3 min-w-0 max-w-full" role="tablist" aria-label="Crew tabs">
+    <div ref={tablistRef} className="grid grid-cols-4 gap-1 min-w-0 w-full" role="tablist" aria-label="Crew tabs">
       {CREW_TABS.map((t) => (
         <button
           key={t.key}
@@ -35,7 +36,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
           aria-controls="crew-tab-panel"
           onClick={() => onTabChange(t.key)}
           className={cn(
-            'flex-1 min-w-0 justify-center px-2.5 max-[359px]:px-1 py-1.5 min-h-11 rounded-md flex items-center gap-1 text-xs font-medium whitespace-nowrap',
+            'min-w-0 justify-center px-1.5 py-1.5 min-h-11 rounded-md flex items-center gap-1 text-xs font-medium whitespace-nowrap',
             'transition-[scale,background-color,border-color,color] duration-(--duration-med) ease-out press-scale',
             activeTab === t.key
               ? 'bg-accent-aqua/15 text-accent-aqua border border-accent-aqua/30'
@@ -48,12 +49,9 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             const badge = badges?.[t.key];
             if (typeof badge === 'number' && badge > 0) {
               return (
-                <span
-                  className="ml-0.5 min-w-4 shrink-0 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold tabular-nums leading-none text-center"
-                  aria-label={`${badge} open`}
-                >
+                <CountBadge className="ml-0.5 shrink-0" aria-label={`${badge} open`}>
                   {badge}
-                </span>
+                </CountBadge>
               );
             }
             if (badge === true) {

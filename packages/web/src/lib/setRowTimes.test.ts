@@ -21,7 +21,7 @@ const { select, hubState } = vi.hoisted(() => {
     hubState: { value: {} as Record<string, unknown> },
   };
 });
-const activeCrew = { status: 'ready', crew: null as unknown, crews: [], retry: vi.fn() };
+const activeCrew = { status: 'ready', crew: null as unknown, festivalName: 'Fest', hasCrews: true, retry: vi.fn() };
 
 vi.mock('@festie/shared/stores', () => ({ useAuthStore: select, useCrewStore: select, useFestivalStore: select, useUIStore: select }));
 vi.mock('@festie/shared/stores/uiStore', () => ({ useUIStore: select }));
@@ -29,8 +29,7 @@ vi.mock('@festie/shared/stores/crewStore', () => ({ useCrewStore: select }));
 vi.mock('@festie/shared/stores/festivalDataStore', () => ({ useFestivalDataStore: select }));
 vi.mock('@festie/shared/services/api', () => ({ api: { get: vi.fn() } }));
 vi.mock('@festie/shared/hooks', () => ({
-  useActiveCrew: () => activeCrew,
-  useCrewFestival: () => ({ state: 'match', festivalName: 'Fest', retry: vi.fn() }),
+  useFestivalCrew: () => activeCrew,
   useCrewHub: () => hubState.value,
   usePicks: () => ({ getMyPick: () => null, savePick: vi.fn(), getMyNote: () => '' }),
   usePickSync: () => ({ sync: undefined, retry: vi.fn() }),

@@ -1,21 +1,24 @@
 import { useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { ChevronRight } from 'lucide-react';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
 import {
   selectNowNext,
   resolveFestivalTimeZone,
+  logicalDayIndexAt,
   artistDisplayName,
   fmtStartsIn,
   fmtTimeLeft,
 } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
+import { cn } from '../../lib/utils';
 import ArtistName, { RowOpenButton } from './ArtistName';
 
 /**
  * Compact "Now / Up next" strip for the schedule views (Cards, Timeline, Grid).
- * Reads the picked set playing now, else the soonest upcoming pick, and opens
- * Now & Next. Renders nothing for guests, users without picks, or when nothing
+ * Reads the picked set playing now (a "+N more live" count covers concurrent
+ * picks), else the soonest upcoming pick, and opens Now & Next. Renders nothing for guests, users without picks, or when nothing
  * is playing or upcoming. Uses the same selector as festival-mode.
  */
 export default function NowNextStrip() {
@@ -23,6 +26,7 @@ export default function NowNextStrip() {
   const user = useAuthStore((s) => s.user);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { getStageName } = useFestival();
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
@@ -37,8 +41,16 @@ export default function NowNextStrip() {
   const current = selection?.current[0];
   const focus = current ?? selection?.upcoming[0];
   if (!focus) return null;
+  // While the festival is running, the strip belongs to today: a Tomorrow tab must not announce a set playing now.
+  const todayIndex = logicalDayIndexAt(days, nowMs, timeZone);
+  if (todayIndex !== null && typeof selectedDay === 'number' && selectedDay !== todayIndex) return null;
 
   const isNow = !!current;
+  // The strip is about the clock, not the list: on another day's tab it says so rather than seem to describe that list.
+  const nowOnAnotherDay = isNow && typeof selectedDay === 'number' && selectedDay !== focus.set.dayIndex;
+  // Concurrent live picks: the lead is the set ending first (same order as the Now & Next list); the rest fold into a count.
+  const moreLive = isNow ? selection.current.length - 1 : 0;
+  const moreLabel = moreLive > 0 ? `+${moreLive} more live` : '';
   const name = artistDisplayName(focus.set, currentFestival?.b2bSeparator);
   const stage = getStageName(focus.set.stageId) ?? focus.set.stageName ?? '';
   const timing = isNow ? fmtTimeLeft(focus.end, nowMs) : fmtStartsIn(focus.start, nowMs, timeZone);
@@ -51,10 +63,13 @@ export default function NowNextStrip() {
       <div
         key={focus.set.id}
         data-testid="now-next-strip"
-        className="fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-secondary px-4 text-left"
+        className={cn(
+          'fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-card px-4 text-left',
+          isNow && 'pb-4 border-l-[3px] border-l-live-fill',
+        )}
       >
         <RowOpenButton
-          label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}
+          label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}.${moreLabel ? ` ${moreLabel}.` : ''} Open Now and Next.`}
           onClick={() => navigate({ to: '/festival-mode' })}
         />
         <span
@@ -65,22 +80,34 @@ export default function NowNextStrip() {
           }
         >
           {isNow && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-live-fill" />}
-          {isNow ? 'NOW' : 'UP NEXT'}
+          {isNow ? (nowOnAnotherDay ? 'NOW · TODAY' : 'NOW') : 'UP NEXT'}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold text-text-primary line-clamp-2 break-words">
+        <span className="min-w-0 max-w-[720px]">
+          <span className="block text-lg font-bold text-text-primary line-clamp-2 break-words">
             <ArtistName set={focus.set} separator={currentFestival?.b2bSeparator} />
           </span>
-          {stage && <span className="block truncate text-text-secondary">{stage}</span>}
+          {(stage || moreLabel) && (
+            <span className="flex items-baseline gap-2 text-text-secondary">
+              <span className="min-w-0 truncate">{stage}</span>
+              {moreLabel && (
+                <span data-testid="now-next-more" className="shrink-0 text-xs font-semibold text-live-text">
+                  {moreLabel}
+                </span>
+              )}
+            </span>
+          )}
         </span>
-        <span className="shrink-0 text-sm text-text-secondary tabular-nums">{timing}</span>
+        <span className="shrink-0 text-sm font-semibold text-text-secondary tabular-nums">{timing}</span>
+        <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-text-secondary" aria-hidden="true" />
         {isNow && (
-          <span
-            aria-hidden="true"
-            data-testid="now-next-progress"
-            className="absolute bottom-0 left-0 h-0.5 bg-live-fill"
-            style={{ width: `${progress}%` }}
-          />
+          // Inset by the card radius so the bar follows the rounded corners instead of being clipped to a hairline.
+          <span aria-hidden="true" className="absolute inset-x-3 bottom-1.5 h-1 rounded-full bg-live-ring">
+            <span
+              data-testid="now-next-progress"
+              className="block h-full rounded-full bg-live-fill"
+              style={{ width: `${progress}%` }}
+            />
+          </span>
         )}
       </div>
     </section>

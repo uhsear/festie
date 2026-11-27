@@ -37,9 +37,9 @@ describe('useFestivalMode', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('returns showDayBanner=false on /festival-mode', () => {
+  it.each(['/festival-mode', '/grid', '/picks', '/crew'])('returns showDayBanner=false at %s', (path) => {
     mockIsTodayFestivalDay = true;
-    const { result } = renderHook(() => useFestivalMode('/festival-mode'));
+    const { result } = renderHook(() => useFestivalMode(path));
     expect(result.current.showDayBanner).toBe(false);
   });
 });

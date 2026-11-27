@@ -14,6 +14,8 @@ interface CrewSelectorProps {
   onJoinCrew: () => void;
   festivals?: Festival[];
   currentFestivalId?: string | null;
+  /** Printed after the festival so the switcher also says how big the crew is. */
+  memberCount?: number;
 }
 
 export default function CrewSelector({
@@ -24,6 +26,7 @@ export default function CrewSelector({
   onJoinCrew,
   festivals = [],
   currentFestivalId,
+  memberCount,
 }: CrewSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const selectedCrew = crews.find((c) => c.id === selectedCrewId) || crews[0];
@@ -126,16 +129,23 @@ export default function CrewSelector({
           }
         }}
         className={cn(
-          'w-full px-3 py-1.5 min-h-11 rounded-xl font-semibold text-sm transition-colors',
+          'w-full px-3 py-2 min-h-11 rounded-xl font-semibold transition-colors',
           'bg-bg-card border border-border text-text-primary',
           'hover:border-border-light flex items-center justify-between',
         )}
       >
         <span className="min-w-0 text-left">
           <span className="sr-only">Select crew: </span>
-          <span className="block truncate">{selectedCrew?.name || 'Select Crew'}</span>
-          {selectedFestival && (
-            <span className="block truncate text-xs font-normal text-text-muted">{festivalLabel(selectedFestival)}</span>
+          <span className="block truncate text-xl font-display font-bold">{selectedCrew?.name || 'Select Crew'}</span>
+          {(selectedFestival || memberCount !== undefined) && (
+            <span className="block truncate text-sm font-normal text-text-secondary">
+              {[
+                selectedFestival ? festivalLabel(selectedFestival, festivals) : null,
+                memberCount === undefined ? null : `${memberCount} ${memberCount === 1 ? 'member' : 'members'}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
           )}
         </span>
         <ChevronDown className={cn('w-4 h-4 transition-transform', isOpen && 'rotate-180')} aria-hidden="true" />

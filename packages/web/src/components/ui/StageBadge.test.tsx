@@ -34,6 +34,8 @@ describe('StageBadge', () => {
     const badge = screen.getByText('Main');
     expect(badge.className).toContain('rounded-full');
     expect(badge.className).toContain('type-micro');
+    // A pick row's stage is 12px, not the 10px micro size.
+    expect(badge.className).toContain('font-size-12');
   });
 
   it('adds active styling for active chip variant', () => {

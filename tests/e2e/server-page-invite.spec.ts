@@ -20,7 +20,7 @@ const join = renderInviteJoinPage({
   memberInitials: ['D', 'A', 'B', 'C', 'E'],
   now: new Date('2026-10-28T12:00:00Z'),
 });
-const error = renderInviteErrorPage('https://example.test', "We couldn't find a crew with this code.");
+const error = renderInviteErrorPage("We couldn't find a crew with this code.");
 
 const rgbToLuminance = (rgb: string) => {
   const [r, g, b] = (rgb.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map((v) => {

@@ -213,7 +213,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
     (hasFrame && !!day && !!time);
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       {!showForm ? (
         <Button variant="primary" onClick={openCreate} className="w-full min-h-11">
           <Plus className="w-4 h-4" aria-hidden="true" /> Post a ride
@@ -326,6 +326,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
       ) : visibleOffers.length === 0 ? (
         <EmptyState
           illustration="emptyList"
+          compact
           title="No rides yet"
           description="Offer a ride so the crew can take a seat."
           cta={showForm ? undefined : { label: 'Offer a ride', onClick: openCreate }}

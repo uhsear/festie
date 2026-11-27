@@ -28,6 +28,7 @@ vi.mock('vaul', () => ({
     }: {
       children: React.ReactNode;
       'aria-label'?: string;
+      'data-focus-sink'?: boolean;
       onOpenAutoFocus?: (e: Event) => void;
       onCloseAutoFocus?: (e: Event) => void;
     }) => {
@@ -40,7 +41,7 @@ vi.mock('vaul', () => ({
         return () => close.current?.(new Event('focusScope.autoFocusOnUnmount', { cancelable: true }));
       }, []);
       return (
-        <div data-testid="drawer-content" aria-label={props['aria-label']}>
+        <div data-testid="drawer-content" aria-label={props['aria-label']} tabIndex={-1} data-focus-sink={props['data-focus-sink']}>
           {children}
         </div>
       );
@@ -280,6 +281,13 @@ describe('DetailPanel', () => {
       expect(opener).toHaveFocus();
     });
 
+    it('focuses the panel, not the close button, when opened from a deep link with no opener', () => {
+      render(<DetailPanel {...defaultProps} />);
+      const panel = screen.getByTestId('drawer-content');
+      expect(panel).toHaveAttribute('data-focus-sink');
+      expect(panel).toHaveFocus();
+    });
+
     it('falls back to the grid cell open button when the opener is gone', () => {
       const cell = document.createElement('div');
       cell.setAttribute('data-set-id', 'set-1');
@@ -375,6 +383,14 @@ describe('DetailPanel', () => {
     render(<DetailPanel {...defaultProps} onClose={onClose} />);
     await user.click(screen.getByLabelText('Close detail panel'));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('spaces the pick controls and clash cards by the section token and hides an empty action column', () => {
+    render(<DetailPanel {...defaultProps} />);
+    const actions = screen.getByTestId('set-actions');
+    expect(actions.className).toContain('gap-[var(--space-4)]');
+    expect(actions.className).toContain('mb-[var(--space-4)]');
+    expect(actions.className).toContain('empty:hidden');
   });
 
   it('renders the priority picker when user has a profile', () => {
@@ -590,13 +606,20 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
   });
 
-  it('renders Also plays between the time line and the priority picker', () => {
+  it('puts the pick control right under the time line, ahead of Also plays and the stage context', () => {
     render(<DetailPanel {...defaultProps} />);
     const when = screen.getByTestId('set-when');
-    const also = screen.getByTestId('also-plays');
     const picker = screen.getByTestId('priority-picker');
-    expect(when.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(also.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const also = screen.getByTestId('also-plays');
+    expect(when.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(picker.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('only reserves the tall top inset on the side panel, where the share and close buttons sit above the content', () => {
+    render(<DetailPanel {...defaultProps} />);
+    const scroller = screen.getByTestId('set-when').closest('div.overflow-hidden, div.overflow-y-auto')!;
+    expect(scroller.className).toContain('pt-3');
+    expect(scroller.className).toContain('lg:pt-[72px]');
   });
 
   it('View as starts the filter, closes the sheet and stays put on a schedule path', async () => {

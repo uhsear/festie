@@ -4,9 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
-import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
+import { useFestivalCrew, useCrewCompare, useFestival, usePicks } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { artistDisplayName, formatTime, memberSummary } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, memberSummary, noFestivalCrewCopy } from '@festie/shared/utils';
 import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
@@ -34,15 +34,14 @@ export default function CrewCompareScreen() {
   const insets = useSafeAreaInsets();
 
   const user = useAuthStore((s) => s.user);
-  const { status, crew: activeCrew, retry: retryCrew } = useActiveCrew();
-  const festivalSwitch = useCrewFestival(activeCrew);
+  const { status, crew: activeCrew, festivalName, hasCrews, retry: retryCrew } = useFestivalCrew();
 
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
 
   const festivalId = currentFestival?.id;
-  const ready = festivalSwitch.state === 'match' && status === 'ready';
+  const ready = status === 'ready';
   const [sort, setSort] = useState<'time' | 'mix'>('time');
   // The hook reloads the profiles the grid reads once the crew and festival have settled.
   const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, refreshing, error, refresh } =
@@ -116,27 +115,11 @@ export default function CrewCompareScreen() {
       <Wrapper>
         <EmptyState
           icon="people-outline"
-          title="No crew yet"
-          message="Make a crew or join one with a code to plan together."
+          title={hasCrews ? noFestivalCrewCopy(festivalName).title : 'No crew yet'}
+          message={
+            hasCrews ? noFestivalCrewCopy(festivalName).description : 'Make a crew or join one with a code to plan together.'
+          }
           action={{ label: 'Create or join a crew', onPress: () => router.navigate('/(tabs)/crew') }}
-        />
-      </Wrapper>
-    );
-  }
-  if (festivalSwitch.state === 'switching') {
-    return (
-      <Wrapper>
-        <LoadingState label={`Opening ${festivalSwitch.festivalName}…`} />
-      </Wrapper>
-    );
-  }
-  if (festivalSwitch.state === 'failed') {
-    return (
-      <Wrapper>
-        <LoadErrorState
-          title={`Couldn't open ${festivalSwitch.festivalName}`}
-          message={`${activeCrew.name} is planning ${festivalSwitch.festivalName}. Connect to the internet, then try again.`}
-          action={{ label: 'Try again', onPress: festivalSwitch.retry }}
         />
       </Wrapper>
     );

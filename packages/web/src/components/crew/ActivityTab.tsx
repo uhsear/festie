@@ -52,7 +52,7 @@ export default function ActivityTab({ crewId }: Props) {
 
   if (isLoading) {
     return (
-      <SkeletonGroup className="px-4 space-y-2">
+      <SkeletonGroup className="space-y-2">
         <Skeleton variant="text" />
         <Skeleton variant="text" />
         <Skeleton variant="text" />
@@ -61,7 +61,7 @@ export default function ActivityTab({ crewId }: Props) {
   }
   if (isError && items.length === 0) {
     return (
-      <div className="px-4">
+      <div>
         <EmptyState
           icon={<Activity className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load activity"
@@ -73,9 +73,10 @@ export default function ActivityTab({ crewId }: Props) {
   }
   if (items.length === 0) {
     return (
-      <div className="px-4">
+      <div>
         <EmptyState
           icon={<Activity className="w-12 h-12" aria-hidden="true" />}
+          compact
           title="No activity yet"
           description="Crew events will appear here as they happen."
         />
@@ -84,7 +85,7 @@ export default function ActivityTab({ crewId }: Props) {
   }
 
   return (
-    <div className="space-y-2 px-4">
+    <div className="space-y-2">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {items.map((it, idx) => {
         const { verb, detail, action } = describeCrewActivity(it, timeZone, { members, activeSosUserIds });

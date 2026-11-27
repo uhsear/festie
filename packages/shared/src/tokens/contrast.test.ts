@@ -280,6 +280,14 @@ describe('DP-04 token aliases and Daylight parity', () => {
   });
 });
 
+describe('Now card ending-soon countdown', () => {
+  // NowHero paints the last-ten-minutes countdown in text.danger on bg.card. Amber is brown in Daylight, so it is not used here.
+  it('text.danger reads at 4.5:1 on the card in Stage and 7:1 in Daylight', () => {
+    expect(contrast(colors.text.danger, over(colors.bg.card, colors.bg.primary))).toBeGreaterThanOrEqual(NORMAL);
+    expect(contrast(colorsDaylight.text.danger, colorsDaylight.bg.card)).toBeGreaterThanOrEqual(7);
+  });
+});
+
 describe('switch off-track', () => {
   for (const [name, p] of [['Stage', colors], ['Daylight', colorsDaylight]] as const) {
     it(`${name} control.trackOff reaches 3:1 on bg.secondary and against the white thumb`, () => {

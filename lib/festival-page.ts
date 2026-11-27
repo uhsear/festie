@@ -227,9 +227,10 @@ export function renderFestivalPage({
   const dateRange = festivalDateRange(festival);
   const pageUrl = `${origin}/f/${slug}`;
   const ogUrl = `${pageUrl}/og.png`;
-  const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref)}`;
+  // In-page links stay relative so they keep the origin the visitor is on (and its session); the tags carry the public origin.
+  const appUrl = `/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref)}`;
   // Keeps a share tag so the follow sign-up credits the share; untagged visitors count as festival-page-follow.
-  const followUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref, 'festival-page-follow')}`;
+  const followUrl = `/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref, 'festival-page-follow')}`;
   const hasSets = (festival.days || []).some((day: any) => (day?.sets || []).length > 0);
   const description = `${hasSets ? 'Lineup and set times' : 'Lineup'} for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
   const placeLine = [dateRange, location].filter(Boolean).join(' · ');
@@ -294,7 +295,7 @@ ${PAGE_STYLE}
 <body>
   <main class="fp-container">
     <header class="fp-header">
-      ${festieLockupHtml(`${origin}/`)}
+      ${festieLockupHtml('/')}
       <h1>${escapeHtml(name)}</h1>
 ${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}      <a class="ds-cta" href="${escapeHtml(appUrl)}">Plan your days in Festie</a>
       <p class="fp-hint">Pick sets, see clashes and plan with your crew. You can start without an account.</p>
@@ -310,7 +311,7 @@ ${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}   
 }
 
 /** The one 404 page for drafts, archived festivals and unknown slugs, so a 404 reveals nothing. */
-export function renderFestivalNotFoundPage(origin: string) {
+export function renderFestivalNotFoundPage(_origin: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -325,10 +326,10 @@ ${PAGE_STYLE}
 </head>
 <body>
   <main class="fp-container fp-error">
-    ${festieLockupHtml(`${origin}/`)}
+    ${festieLockupHtml('/')}
     <h1>Festival not found</h1>
     <p>We couldn't find this festival. It may not be published yet, or the link may be wrong.</p>
-    <a class="fp-link" href="${escapeHtml(`${origin}/`)}">Open Festie</a>
+    <a class="fp-link" href="${escapeHtml('/')}">Open Festie</a>
   </main>
 </body>
 </html>`;

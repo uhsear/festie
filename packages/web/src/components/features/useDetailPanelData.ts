@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { usePicks, useFestival, useCrew } from '@festie/shared/hooks';
+import { usePicks, useFestival, useCrew, useCurrentFestivalCrew } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
-import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useNotificationPrefsStore } from '@festie/shared/stores';
 import {
   artistDisplayName,
@@ -31,7 +30,8 @@ export function useDetailPanelData(set: FestivalSet) {
   const currentProfile = useFestivalStore((s) => s.currentProfile);
   const allProfiles = useFestivalStore((s) => s.allProfiles);
   const sets = useFestivalStore((s) => s.sets);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
+  // Another festival's crew has no say about this set; its name must not head the list.
+  const activeCrew = useCurrentFestivalCrew();
 
   const { getMyPick, savePick, saveNote, getOtherPicks, getPickCount, saveReminder } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();

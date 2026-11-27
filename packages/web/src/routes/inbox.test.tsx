@@ -66,13 +66,30 @@ describe('InboxView', () => {
     await waitFor(() => expect(order).toEqual(['load', 'markAllSeen']));
   });
 
-  it('names the festival under the time and in the row label, without a doubled period', () => {
+  it('names the festival on the same meta line as the time and in the row label, without a doubled period', () => {
     setState({
       items: [{ id: 'c', type: 'announcement', title: 'Third', body: 'Bloom.', festivalName: 'EDC Orlando', createdAt: '2026-11-01T10:00:00.000Z', data: {} }],
     });
     render(<InboxView />);
-    expect(screen.getByText('EDC Orlando')).toBeTruthy();
+    expect(screen.getByText(/ · EDC Orlando$/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Third\. Bloom\. [^.]*\. EDC Orlando\.$/ })).toBeTruthy();
+  });
+
+  it('gives every row the same three lines: title, body, then time and festival, with a chevron', () => {
+    const { container } = render(<InboxView />);
+    for (const row of container.querySelectorAll('li > button')) {
+      const lines = row.querySelectorAll('.min-w-0 > .block');
+      expect(lines).toHaveLength(3);
+      expect(lines[0]).toHaveClass('font-semibold');
+      expect(lines[1]).not.toHaveClass('font-semibold');
+      expect(lines[1]).toHaveClass('text-sm');
+      expect(row.querySelector('svg')).toBeTruthy();
+    }
+  });
+
+  it('sits on the page gutter with no inset of its own', () => {
+    const { container } = render(<InboxView />);
+    expect(container.firstElementChild!.className).not.toMatch(/\bpx-\d/);
   });
 
   it('opens a set row', () => {

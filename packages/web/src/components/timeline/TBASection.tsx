@@ -42,8 +42,9 @@ export default function TBASection({
   return (
     <div
       className={cn(
-        'mt-5 p-[var(--space-8)]',
-        'bg-[var(--color-bg-card)] rounded-sm',
+        // Below md the grid shell drops its side padding (pages.css), so the card brings the 24px gutter itself.
+        'mt-5 max-md:mx-6 p-[var(--space-6)]',
+        'bg-[var(--color-bg-card)] rounded-lg',
         'border border-[var(--color-border)]',
         // fade-in animation kept via keyframe reference
         'animate-[timeline-legend-fade_var(--duration-med)_var(--ease-out)_both]',
@@ -62,12 +63,13 @@ export default function TBASection({
           TBA — Times Not Yet Announced
         </div>
       )}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-[var(--space-4)]">
+      {/* Columns flex from 220px and share the card width, so they start at the heading's edge instead of being centred in from it. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[var(--space-4)]">
         {groups.map((g) => (
           <div key={g.stage?.id ?? 'unknown-stage'}>
             <div
               data-stage-header
-              className="mb-2 border-t-[3px] pt-1.5 text-[length:var(--font-size-12)] font-bold text-[var(--color-text-primary)]"
+              className="mb-2 border-t-[3px] pt-1.5 text-[length:var(--font-size-14)] font-bold text-[var(--color-text-primary)]"
               style={{ borderTopColor: g.stage ? getStageColor(g.stage.id) : 'var(--color-border)' }}
             >
               {g.stage?.name ?? COPY.grid.stageUnknown}{' '}
@@ -116,7 +118,7 @@ export default function TBASection({
 
               {/* Priority pick buttons */}
               {canPick && (
-                <div className="relative z-[2] flex gap-[var(--space-1)] mt-1.5">
+                <div className="relative z-[2] flex flex-wrap gap-[var(--space-2)] mt-1.5">
                   {(['must', 'want-to-see', 'maybe'] as const).map((p) => {
                     const active = myPick === p;
                     return (
@@ -127,14 +129,10 @@ export default function TBASection({
                           'bg-[var(--color-overlay-2)] border border-[var(--color-border)]',
                           'rounded-xs',
                           'text-[var(--color-text-secondary)] cursor-pointer',
-                          'text-[length:var(--font-size-12)] px-1.5 py-[3px] leading-none',
+                          'inline-flex items-center gap-1 min-h-11 px-2.5 text-[length:var(--font-size-12)] font-semibold leading-none',
                           'transition-[color,border-color,background-color] duration-(--duration-slow) ease-(--ease-standard)',
                           'hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-overlay-4)]',
                           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
-                          // Hit-slop pseudo-element for 44x44 tap target
-                          'after:content-[""] after:absolute after:inset-[-4px]',
-                          'min-[380px]:min-w-10 min-[380px]:min-h-10',
-                          'min-[380px]:after:inset-[-2px]',
                           // Active priority states
                           active &&
                             p === 'must' &&
@@ -156,6 +154,7 @@ export default function TBASection({
                         }}
                       >
                         <PriorityIcon priority={p} className="w-4 h-4" filled={active} />
+                        <span>{PRIORITY_SYMBOLS[p].short}</span>
                       </button>
                     );
                   })}

@@ -86,13 +86,26 @@ function dayKeyDate(date: string | undefined | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const BARE_WEEKDAY = /^(sun|mon|tue|wed|thu|fri|sat)(?:day|sday|nesday|rsday|urday)?$/i;
+
+/**
+ * A label that is only a weekday name must agree with the date. Admin-entered
+ * labels drift (a Sunday date labelled 'Saturday'), and the date is the truth.
+ */
+function reconcileWeekdayLabel(label: string, d: Date | null): string {
+  if (!d || !BARE_WEEKDAY.test(label)) return label;
+  return d.toLocaleDateString('en-US', { weekday: label.length <= 3 ? 'short' : 'long' });
+}
+
 /** Day chip text: label (or weekday), short date, and a screen-reader string. */
 export function formatDayChip(day: Pick<FestivalDay, 'date' | 'label'>): DayChip {
   const d = dayKeyDate(day.date);
   const short = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null;
   const long = d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) : null;
-  const label =
-    day.label?.trim() || (d ? d.toLocaleDateString('en-US', { weekday: 'long' }) : '') || day.date || 'Day';
+  const label = reconcileWeekdayLabel(
+    day.label?.trim() || (d ? d.toLocaleDateString('en-US', { weekday: 'long' }) : '') || day.date || 'Day',
+    d,
+  );
   const date = short && !label.includes(short) ? short : null;
   return { label, date, a11y: date && long ? `${label}, ${long}` : label };
 }

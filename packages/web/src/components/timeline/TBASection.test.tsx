@@ -38,4 +38,35 @@ describe('TBASection', () => {
     expect(screen.getByText("Set times aren't out yet")).toBeTruthy();
     expect(screen.getByText(/Pick sets now/)).toBeTruthy();
   });
+
+  it('lets few stages fill the card from its own padding, with no centring or width cap that indents them', () => {
+    const { container } = renderTba([mk('a', 's1'), mk('b', 's2')], true);
+    const grid = container.querySelector('[data-stage-header]')!.parentElement!.parentElement!;
+    expect(grid.className).toContain('minmax(220px,1fr)');
+    expect(grid.className).not.toContain('justify-center');
+    expect(grid.className).not.toContain('560px');
+  });
+
+  it('labels each pick button with its word and keeps the card inside the page gutter', () => {
+    const { container } = render(
+      <TBASection
+        sets={[mk('a', 's1')]}
+        stages={stages}
+        getMyPick={() => null}
+        getOtherPicks={() => []}
+        conflictIds={new Set()}
+        canPick
+        currentFestival={null}
+        getStageColor={() => '#ff3366'}
+        onSavePick={vi.fn()}
+        onOpenDetail={vi.fn()}
+        allTba
+      />,
+    );
+    for (const [name, word] of [['Must See', 'Must'], ['Want to See', 'Want'], ['Maybe', 'Maybe']] as const) {
+      expect(screen.getByRole('button', { name })).toHaveTextContent(word);
+      expect(screen.getByRole('button', { name }).className).toContain('min-h-11');
+    }
+    expect((container.firstElementChild as HTMLElement).className).toContain('max-md:mx-6');
+  });
 });

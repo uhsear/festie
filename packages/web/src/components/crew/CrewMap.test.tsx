@@ -175,6 +175,21 @@ describe('CrewMap', () => {
     expect(mapInstances).toHaveLength(0);
   });
 
+  it('makes the full-page empty state a width-capped panel near the top, and leaves the Meet tab block inline', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    const festival = { id: 'f1' } as unknown as Festival;
+    const { unmount } = render(<CrewMap fill meetingPoints={[]} festival={festival} />);
+    const wrap = screen.getByTestId('map-empty');
+    expect(wrap.className).toContain('mx-auto');
+    expect(wrap.className).toContain('max-w-md');
+    expect(wrap.className).toContain('pt-12');
+    expect(wrap.firstElementChild!.className).toContain('border-border');
+    unmount();
+    render(<CrewMap hasList meetingPoints={[]} festival={festival} />);
+    expect(screen.getByTestId('map-empty').className).not.toContain('max-w-md');
+    expect(screen.getByTestId('map-empty').firstElementChild!.className).not.toContain('border-border');
+  });
+
   it('renders the map container, not the empty state, when authoring with nothing to plot', () => {
     extractMeetingPointPins.mockReturnValue([]);
     render(<CrewMap meetingPoints={[]} authoring />);

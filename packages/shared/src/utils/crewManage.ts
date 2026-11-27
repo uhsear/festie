@@ -45,11 +45,22 @@ export const crewCopy = {
       : `You're the only member of ${n} crews. They are deleted with your account after 30 days.`,
 };
 
-/** Adds the start year to a festival name that has none, so two years of one festival differ. */
-export function festivalLabel(f: Pick<Festival, 'name' | 'startDate'>): string {
-  if (/\b(19|20)\d{2}\b/.test(f.name)) return f.name;
-  if (/^\d{4}/.test(f.startDate ?? '')) return `${f.name} ${f.startDate.slice(0, 4)}`;
-  return f.name;
+type LabelledFestival = Pick<Festival, 'name' | 'startDate'> & { id?: string };
+
+const YEAR_IN_NAME = /\b(19|20)\d{2}\b/;
+const nameWithoutYear = (name: string): string =>
+  name.replace(/\b(19|20)\d{2}\b/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * The one festival label for every crew surface: the plain name, as the header and the picker show it.
+ * The start year is added only when another festival in `all` has the same name once years are ignored,
+ * so two editions of one festival stay apart.
+ */
+export function festivalLabel(f: LabelledFestival, all: readonly LabelledFestival[] = []): string {
+  if (YEAR_IN_NAME.test(f.name) || !/^\d{4}/.test(f.startDate ?? '')) return f.name;
+  const key = nameWithoutYear(f.name);
+  const clashes = all.some((other) => other !== f && other.id !== f.id && nameWithoutYear(other.name) === key);
+  return clashes ? `${f.name} ${f.startDate.slice(0, 4)}` : f.name;
 }
 
 export interface CrewFestivalGroup {
@@ -104,7 +115,7 @@ export function groupCrewsByFestival(
     const festival = known.get(id)!;
     return {
       festivalId: id,
-      label: festivalLabel(festival),
+      label: festivalLabel(festival, festivals),
       status: festivalStatus(festival, null, now),
       isCurrent: id === currentFestivalId,
       crews: list,

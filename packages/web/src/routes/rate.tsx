@@ -4,7 +4,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
 import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
 import { useFestival } from '@festie/shared/hooks';
-import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore } from '@festie/shared/stores';
 import type { WrapPlannedSet, WrapResponse } from '@festie/shared/types';
 import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { formatTime, isWrapUnlocked, isWrapUpcoming, resolveStageColor, selectSetsToRate } from '@festie/shared/utils';
@@ -15,12 +15,17 @@ import RatingButtons from '../components/features/RatingButtons';
 import SeenToggle from '../components/features/SeenToggle';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
+import { useRouteFestivalId } from '../hooks/useRouteFestivalId';
 import { ArtistNameButton } from '../components/features/ArtistName';
 
 const ADVANCE_DELAY_MS = 300;
+const RATE_TITLE = 'Rate your night';
 
 const listLinkClass =
   'inline-flex min-h-11 items-center text-sm font-semibold text-accent-aqua underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+
+const outlineLinkClass =
+  'inline-flex min-h-11 items-center justify-center rounded-full border border-accent-aqua px-5 text-sm font-semibold text-accent-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 const linkClass =
   'inline-flex min-h-11 items-center justify-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
@@ -35,8 +40,7 @@ export default function RatePage() {
 
 function RatePageInner() {
   const search = useSearch({ from: '/rate' });
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festivalId = search.festival ?? currentFestival?.id;
+  const festivalId = useRouteFestivalId(search.festival);
   if (!festivalId) {
     return (
       <EmptyState
@@ -139,19 +143,21 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   }
   if (queue.length === 0) {
     return (
-      <>
+      <div className="max-w-[480px] mx-auto w-full py-4">
+        <h1 className="text-lg font-bold text-text-primary">{RATE_TITLE}</h1>
+        {/* Say which festival this is about, so an empty page is not mistaken for a missing one. */}
+        <p className="text-sm text-text-secondary mt-1">{data.festival.name}</p>
         <EmptyState
-          headingLevel={1}
           icon={<Music className="w-9 h-9" aria-hidden="true" />}
-          title="Nothing to rate right now"
+          title={`No ended picks at ${data.festival.name} yet`}
           description="Sets you picked show up here after they end."
         />
-        <div className="flex justify-center">
-          <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
+        <div className="mt-4 flex justify-center">
+          <Link to="/caught" search={{ festival: festivalId }} className={outlineLinkClass}>
             See the full list
           </Link>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -187,7 +193,8 @@ function RateFlow({ festivalId }: { festivalId: string }) {
 
   return (
     <div className="max-w-[480px] mx-auto w-full py-4">
-      <h1 className="text-lg font-bold text-text-primary">Rate your night</h1>
+      <h1 className="text-lg font-bold text-text-primary">{RATE_TITLE}</h1>
+      <p className="text-sm text-text-secondary mt-1">{data.festival.name}</p>
       <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
         See the full list
       </Link>

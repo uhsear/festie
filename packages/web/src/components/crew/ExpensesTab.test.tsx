@@ -78,6 +78,23 @@ describe('ExpensesTab', () => {
     expect(screen.queryByRole('tablist', { name: 'Filter expenses' })).not.toBeInTheDocument();
   });
 
+  it('prints the currency as a caption beside the primary Add expense button, not as a bordered box', async () => {
+    mockApi([], { currency: 'USD', balances: [], settlements: [] });
+    setup();
+    const caption = await screen.findByText('Amounts in USD');
+    expect(caption.tagName).toBe('P');
+    expect(caption.className).not.toMatch(/\b(border|bg-bg-card|rounded)/);
+    const add = screen.getByRole('button', { name: 'Add expense' });
+    expect(add.parentElement).toBe(caption.parentElement);
+    expect(add.parentElement!.parentElement!.firstElementChild).toBe(add.parentElement);
+  });
+
+  it('splits the Actual, Planned and All filter into three equal columns', async () => {
+    mockApi([expense({})]);
+    setup();
+    expect(await screen.findByRole('tablist', { name: 'Filter expenses' })).toHaveClass('grid', 'grid-cols-3');
+  });
+
   it('shows an error state with Retry when the load fails and nothing is cached', async () => {
     vi.spyOn(api, 'get').mockRejectedValue(new Error('boom'));
     setup();

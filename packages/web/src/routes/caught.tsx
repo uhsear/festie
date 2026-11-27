@@ -26,7 +26,12 @@ import SeenToggle from '../components/features/SeenToggle';
 import { cn } from '../lib/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
+import { useRouteFestivalId } from '../hooks/useRouteFestivalId';
 import { ArtistNameButton } from '../components/features/ArtistName';
+
+// The only action on an empty page: centred under the empty-state copy and filled.
+const primaryClass =
+  'inline-flex min-h-11 items-center justify-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-[var(--text-on-light-accent)] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 const chipClass =
   'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
@@ -47,8 +52,7 @@ export default function CaughtPage() {
 
 function CaughtPageInner() {
   const search = useSearch({ from: '/caught' });
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festivalId = search.festival ?? currentFestival?.id;
+  const festivalId = useRouteFestivalId(search.festival);
   if (!festivalId) {
     return (
       <EmptyState
@@ -145,7 +149,8 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {countLine}
       </p>
-      <p className="text-xs text-text-secondary mt-1">{ratingCaption(null)}</p>
+      {/* The hint describes rows, so it waits for a row. */}
+      {!isEmpty && <p className="text-xs text-text-secondary mt-1">{ratingCaption(null)}</p>}
       <span className="sr-only" aria-live="polite">
         {announcement}
       </span>
@@ -225,7 +230,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
         </section>
       ))}
 
-      <AddSet festivalId={festivalId} data={data} onAdd={apply} />
+      <AddSet festivalId={festivalId} data={data} onAdd={apply} onlyAction={isEmpty} />
     </div>
   );
 }
@@ -234,9 +239,11 @@ function AddSet({
   festivalId,
   data,
   onAdd,
+  onlyAction,
 }: {
   festivalId: string;
   data: WrapResponse;
+  onlyAction: boolean;
   onAdd: (
     setId: string,
     next: boolean | null,
@@ -297,15 +304,17 @@ function AddSet({
 
   return (
     <section className="mt-6">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls="caught-add-panel"
-        onClick={() => setOpen((o) => !o)}
-        className={chipClass}
-      >
-        Add a set I caught
-      </button>
+      <div className={cn(onlyAction && 'flex justify-center')}>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="caught-add-panel"
+          onClick={() => setOpen((o) => !o)}
+          className={onlyAction ? primaryClass : chipClass}
+        >
+          Add a set I caught
+        </button>
+      </div>
       {open && (
         <div id="caught-add-panel" className="mt-3">
           <label htmlFor="caught-search" className="sr-only">

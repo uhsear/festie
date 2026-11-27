@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
@@ -53,7 +54,7 @@ export default function InboxView() {
   const open = (item: InboxItem) => openInboxItem(item, navigate as unknown as Parameters<typeof openInboxItem>[1]);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4">
+    <div className="max-w-2xl mx-auto py-4">
       <h1 className="text-xl font-display font-bold text-text-primary mb-2">{INBOX_COPY.title}</h1>
 
       {!loaded && loading && (
@@ -91,7 +92,7 @@ export default function InboxView() {
                   type="button"
                   onClick={() => open(item)}
                   aria-label={inboxRowLabel(item, ago, unread)}
-                  className={`flex w-full min-h-11 items-start gap-3 py-3 text-left ${FOCUS_RING}`}
+                  className={`flex w-full min-h-11 items-start gap-3 rounded-lg py-3 text-left hover:bg-bg-card-hover ${FOCUS_RING}`}
                 >
                   <span
                     aria-hidden="true"
@@ -99,10 +100,13 @@ export default function InboxView() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-text-primary">{item.title}</span>
-                    <span className="block text-text-secondary [overflow-wrap:anywhere]">{item.body}</span>
-                    <span className="block text-xs text-text-muted">{ago}</span>
-                    {item.festivalName && <span className="block text-xs text-text-muted">{item.festivalName}</span>}
+                    <span className="block text-sm text-text-secondary [overflow-wrap:anywhere]">{item.body}</span>
+                    {/* One meta line, the same shape on every row. */}
+                    <span className="block text-xs text-text-secondary">
+                      {[ago, item.festivalName].filter(Boolean).join(' · ')}
+                    </span>
                   </span>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
                 </button>
                 <InboxArtist setId={item.data.setId} />
               </li>
@@ -111,7 +115,7 @@ export default function InboxView() {
         </ul>
       )}
 
-      {loaded && <p className="mt-4 text-xs text-text-muted">{INBOX_COPY.footnote}</p>}
+      {loaded && <p className="mt-4 text-xs text-text-secondary">{INBOX_COPY.footnote}</p>}
     </div>
   );
 }

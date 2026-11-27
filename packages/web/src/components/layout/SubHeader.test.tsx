@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SubHeader from './SubHeader';
 
@@ -104,12 +104,19 @@ describe('SubHeader layout density', () => {
   it('applies compact horizontal rhythm on small widths and comfortable on desktop', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const nav = getNav();
-    // Compact (mobile-first) defaults use the space-3 token.
-    expect(nav.className).toContain('px-[var(--space-3)]');
+    // Compact (mobile-first) defaults use the space-3 token for gaps.
     expect(nav.className).toContain('gap-[var(--space-3)]');
     // Comfortable desktop overrides behind the sm: breakpoint.
-    expect(nav.className).toContain('sm:px-6');
     expect(nav.className).toContain('sm:gap-[var(--space-6)]');
+  });
+
+  it('insets the chrome by the page gutter at every width, so chips line up with the content below', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    // The page <main> uses px-6 (24px); a 12px phone inset left the day chips and picker half a gutter left of it.
+    const nav = getNav();
+    expect(nav).toHaveClass('px-6');
+    expect(nav.className).not.toContain('px-[var(--space-3)]');
+    expect(nav.className).not.toContain('sm:px-6');
   });
 
   it('keeps day tabs visible with consistent space-3 gap', () => {
@@ -119,10 +126,25 @@ describe('SubHeader layout density', () => {
     expect(screen.getByRole('button', { name: 'Fri May 29' })).toBeInTheDocument();
   });
 
+  it('paints the active day with a fill and no glow, because the scroller clips a shadow to a rectangle', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const active = within(screen.getByRole('group', { name: 'Festival days' })).getAllByRole('button').find((b) => b.getAttribute('aria-pressed') === 'true')!;
+    expect(active.className).toContain('bg-day-tab-active');
+    expect(active.className).not.toMatch(/shadow-/);
+  });
+
   it('hides day tabs and search when festivalOnly is set (behavior preserved)', () => {
     render(<SubHeader dayOnly={true} festivalOnly={true} />);
     expect(screen.queryByRole('group', { name: 'Festival days' })).not.toBeInTheDocument();
     expect(screen.queryByRole('search')).not.toBeInTheDocument();
+  });
+
+  it.each(['/map', '/caught', '/rate'])('renders the festival picker alone on %s', (path) => {
+    mockPathname = path;
+    const { container } = render(<SubHeader dayOnly={false} festivalOnly={true} />);
+    expect(container.querySelector('nav[aria-label="Festival view controls"]')).not.toBeNull();
+    expect(screen.queryByRole('group', { name: 'Festival days' })).not.toBeInTheDocument();
+    mockPathname = '/cards';
   });
 
   it('shows search box only when not dayOnly/festivalOnly', () => {
@@ -325,6 +347,17 @@ describe('SubHeader route scope', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Festival One' })).toBeInTheDocument();
     expect(screen.queryByTestId('festival-select')).not.toBeInTheDocument();
   });
+
+  it('puts the festival clock beside the /festival-mode title, in the page column', () => {
+    mockPathname = '/festival-mode';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const title = screen.getByTestId('festival-mode-title');
+    expect(screen.getByLabelText('Festival time')).toHaveTextContent(/\d:\d\d/);
+    // One flex row holds both, and it uses the same column widths as the page below it.
+    expect(title.parentElement).toContainElement(screen.getByLabelText('Festival time'));
+    expect(title.parentElement).toHaveClass('max-w-[560px]', 'lg:max-w-5xl', 'mx-auto');
+    expect(title.parentElement?.parentElement).toHaveClass('px-6');
+  });
 });
 
 describe('SubHeader status line', () => {
@@ -473,5 +506,128 @@ describe('SubHeader day chips', () => {
     const chip = screen.getByRole('button', { name: 'Fri May 29' });
     expect(chip).toHaveClass('press-scale');
     expect(chip.className).not.toMatch(/active:scale/);
+  });
+});
+
+describe('SubHeader desktop row plan', () => {
+  const mkDays = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, label: `Day ${i + 1}`, date: `2026-05-${String(29 + i).padStart(2, '0')}` }));
+  const mkStages = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, name: `Stage ${i}` }));
+  const original = { days: storeState.days, stages: storeState.stages };
+  // The class list says which flex line an item joins: order 0 is row 1, the break is order 1, row 2 is order 2, below xl row 3 is order 4 and up.
+  const orderAt = (el: Element, bp: 'md' | 'xl') => {
+    const tokens = el.className.split(/\s+/);
+    const find = (re: RegExp) => tokens.map((t) => re.exec(t)).find(Boolean);
+    if (bp === 'md') {
+      const belowXl = find(/^md:max-xl:order-(\d+)$/);
+      if (belowXl) return Number(belowXl[1]);
+    }
+    if (bp === 'xl' && tokens.includes('xl:order-none')) return 0;
+    const m = find(/^md:order-(\d+)$/) ?? find(/^order-(\d+)$/);
+    return m ? Number(m[1]) : 0;
+  };
+
+  afterEach(() => {
+    storeState.days = original.days;
+    storeState.stages = original.stages;
+    mockPathname = '/cards';
+  });
+
+  it.each([
+    ['many days, many stages', 7, 6],
+    ['days only, two stages', 2, 2],
+    ['one day, one stage', 1, 1],
+  ])('keeps row 1 for the day chips, row 2 for the controls, and the stage chips on row 2 from xl or row 3 below it for %s', (_name, dayCount, stageCount) => {
+    storeState.days = mkDays(dayCount);
+    storeState.stages = mkStages(stageCount);
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    const search = screen.getByRole('search');
+    const views = screen.getByRole('navigation', { name: 'Schedule view' });
+    const groupBy = screen.getByRole('group', { name: 'Group by' });
+    const stageChips = screen.getByRole('group', { name: 'Filter by stage' }).parentElement!;
+    const myPicks = screen.getByRole('button', { name: 'Show only my picks' });
+    const filters = screen.getByRole('button', { name: 'Filters' });
+    const status = screen.getByTestId('schedule-status-line');
+    const rowBreak = screen.getByTestId('subheader-row-break');
+    const rowBreak2 = screen.getByTestId('subheader-row-break-2');
+
+    // Row 1 holds the picker, view switch and day chips (and Group by from xl), so the chips get the width Search used to take.
+    for (const bp of ['md', 'xl'] as const) {
+      for (const el of [rail, views]) expect(orderAt(el, bp)).toBe(0);
+      expect(orderAt(rowBreak, bp)).toBe(1);
+      for (const el of [filters, search, myPicks]) expect(orderAt(el, bp)).toBe(2);
+    }
+    // Group by joins row 1 from xl, where the chips and the picker leave room for it, so the stage chips keep row 2's width.
+    expect(orderAt(groupBy, 'md')).toBe(2);
+    expect(orderAt(groupBy, 'xl')).toBe(0);
+    expect(rowBreak.className).toContain('md:basis-full');
+    // From xl the stage chips and the status line close row 2; below it they take a row 3 behind a second break.
+    expect(orderAt(stageChips, 'xl')).toBe(2);
+    expect(orderAt(status, 'xl')).toBe(3);
+    expect(orderAt(rowBreak2, 'md')).toBe(3);
+    expect(orderAt(stageChips, 'md')).toBe(4);
+    expect(orderAt(status, 'md')).toBe(5);
+    expect(rowBreak2.className).toMatch(/(^|\s)hidden(\s|$)/);
+    expect(rowBreak2.className).toContain('md:max-xl:basis-full');
+  });
+
+  it.each([
+    ['festival-only', true, false],
+    ['day-only', false, true],
+  ])('has no row break on a %s page, so no empty second row sits under the picker', (_name, festivalOnly, dayOnly) => {
+    render(<SubHeader dayOnly={dayOnly} festivalOnly={festivalOnly} />);
+    expect(screen.queryByTestId('subheader-row-break')).toBeNull();
+  });
+
+  it('sizes the day rail to its whole chip set and never shrinks a chip, so a chip is never cut to its first letters', () => {
+    storeState.days = mkDays(3);
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    // Basis auto: the rail wraps to a row of its own before it clips, and scrolls only when the set is wider than the nav.
+    expect(rail.className).toContain('md:flex-[1_1_auto]');
+    expect(rail.className).not.toContain('8rem');
+    for (const chip of within(screen.getByRole('group', { name: 'Festival days' })).getAllByRole('button')) {
+      expect(chip).toHaveClass('shrink-0', 'whitespace-nowrap');
+    }
+  });
+
+  it('gives Search a fixed width that shows the whole placeholder, and leaves the status line its own slot', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const search = screen.getByRole('search');
+    expect(screen.getByPlaceholderText('Search artists or stages')).toBeInTheDocument();
+    expect(search.className).toContain('md:w-[clamp(15rem,18vw,16.25rem)]');
+    expect(search).toHaveClass('md:flex-none');
+    expect(search.className).not.toMatch(/(^|\s)ml-auto(\s|$)/);
+    const status = screen.getByTestId('schedule-status-line');
+    expect(status).toHaveClass('shrink-0', 'whitespace-nowrap');
+  });
+});
+
+describe('SubHeader phone path', () => {
+  it('puts the phone chrome on three rows: picker, day chips, then Filters with the view switch and status', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    const views = screen.getByRole('navigation', { name: 'Schedule view' });
+    const status = screen.getByTestId('schedule-status-line');
+    const phoneOrder = (el: Element) => {
+      const m = /(^|\s)max-md:order-(\d+)(\s|$)/.exec(el.className);
+      return m ? Number(m[2]) : 0;
+    };
+    // Row 2: the full-width day rail alone, so two or three chips fit whole.
+    expect(rail).toHaveClass('max-md:w-full');
+    expect(phoneOrder(rail)).toBe(1);
+    // Row 3: Filters (order 2), the view switch and the status line share one line, ahead of the folded panel.
+    expect(screen.getByRole('button', { name: 'Filters' })).toHaveClass('order-2');
+    expect(phoneOrder(views)).toBe(3);
+    expect(phoneOrder(status)).toBe(4);
+    expect(views).not.toHaveClass('ml-auto');
+    expect(phoneOrder(document.getElementById('subheader-filters')!)).toBe(5);
+  });
+
+  it('leaves the phone fold alone: the filters stay folded and the stage chips stay full width', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(document.getElementById('subheader-filters')).toHaveClass('max-md:hidden');
+    expect(screen.getByRole('group', { name: 'Filter by stage' }).parentElement).toHaveClass('w-full');
   });
 });

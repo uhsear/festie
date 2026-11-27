@@ -36,7 +36,7 @@ describe('MarkedNoSet', () => {
     rows.length = 0;
     Object.assign(state, {
       currentFestival: { id: 'f', b2bSeparator: 'b2b', publishedAt: '2098-12-15T00:00:00.000Z' },
-      days: [{ date: '2099-02-05', label: 'Fri' }],
+      days: [{ date: '2099-02-06', label: 'Fri' }],
       sets: [],
     });
   });

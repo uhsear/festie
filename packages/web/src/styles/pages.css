@@ -30,20 +30,21 @@
   -webkit-overflow-scrolling: touch;
   min-height: calc(100dvh - 180px);
 }
+/* The SOS dock floats over the bottom-right corner, so the page area ends above it instead of letting rows
+   scroll under it (the dock hid the trailing time or status of the last visible row). The margin goes on the
+   shell wrapper, not on #main-content: on the lineup cards the wrapper is the scroller and #main-content
+   is a plain child, so a margin there would only add room at the very end. SosDock publishes the band it
+   needs; it is 0 while the dock is hidden. */
+.main-content {
+  margin-bottom: var(--sos-band-h, 0px);
+}
 /* The map fills the space the shell gives it; a floor taller than that clips the bottom of the page. */
 #main-content:has(.map-page) {
   min-height: 0;
 }
-/* The SOS dock floats over the bottom corner, so every page ends with room to scroll its last row clear.
-   The route wrapper is h-full and content overflows it, so padding on #main-content would not count;
-   a last flex item does. The map overlays already offset themselves by --sos-dock-h. */
-#main-content > :first-child::after {
-  content: '';
-  flex: none;
-  height: var(--sos-dock-h, 0px);
-}
-#main-content:has(.map-page) > :first-child::after {
-  display: none;
+/* The map runs under the dock; its overlays offset themselves by --sos-dock-h and --sos-dock-w. */
+.main-content:has(.map-page) {
+  margin-bottom: 0;
 }
 /* Phones: the map runs edge to edge. The shell's px-6 comes off here, and the map box cancels the page's px-4. */
 @media (max-width: 639px) {
@@ -153,6 +154,14 @@
   flex: 1;
   min-height: 0;
   overflow: auto !important;
+}
+/* The grid is its own scroller, so it runs to the bottom of the page and keeps the SOS band as padding inside
+   the scroll area: the last row still scrolls clear of the dock, with no empty strip under the grid. */
+.main-content:has(.timeline-view) {
+  margin-bottom: 0;
+}
+.timeline-view [data-scroll-sentinel] {
+  padding-bottom: var(--sos-band-h, 0px);
 }
 
 /* ── Viewport-fill routes (mobile) ───────────────────────────────────── */
@@ -275,16 +284,16 @@
   mask-image: none;
 }
 .day-tabs-scroll.fade-right:not(.fade-left) .day-tabs {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
 }
 .day-tabs-scroll.fade-left:not(.fade-right) .day-tabs {
-  -webkit-mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 40px), transparent 100%);
 }
 .day-tabs-scroll.fade-left.fade-right .day-tabs {
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
 }
 
 /* ── SubHeader scroll rows: visible scrollbar on hover for mouse users ──

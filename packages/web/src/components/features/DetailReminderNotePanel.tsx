@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, StickyNote } from 'lucide-react';
 import type { NoteSaveStatus } from '@festie/shared/hooks';
 import { reminderNoteSummary } from '@festie/shared/utils';
 import Button from '../ui/Button';
@@ -43,7 +43,8 @@ export default function DetailReminderNotePanel({
         fullWidth
         aria-expanded={open}
         aria-controls={panelId}
-        icon={<Bell className="w-4 h-4" aria-hidden="true" />}
+        // A set that cannot be reminded about any more (ended) offers only a note, and a bell would promise a reminder.
+        icon={canRemind ? <Bell className="w-4 h-4" aria-hidden="true" /> : <StickyNote className="w-4 h-4" aria-hidden="true" />}
         onClick={() => {
           if (!open) onExpand?.();
           setOpen((o) => !o);

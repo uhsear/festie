@@ -223,14 +223,14 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   if (isLoading)
     return (
-      <SkeletonGroup className="px-4 space-y-2">
+      <SkeletonGroup className="space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
       </SkeletonGroup>
     );
   if (isError && polls.length === 0)
     return (
-      <div className="px-4">
+      <div>
         <EmptyState
           icon={<BarChart3 className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load polls"
@@ -241,7 +241,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     );
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {showSchedule ? (
         <SchedulePollComposer
@@ -361,6 +361,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
       {polls.length === 0 ? (
         <EmptyState
           illustration="emptyList"
+          compact
           title="No polls yet"
           description="Ask the crew something."
         />

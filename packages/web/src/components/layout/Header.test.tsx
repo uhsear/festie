@@ -89,6 +89,18 @@ describe('Header', () => {
     expect(bell).toHaveTextContent('3');
   });
 
+  it('draws the bell count as a 20px solid disc at 12px, not a 10px tint', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(3), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    const badge = screen.getByText('3');
+    expect(badge.className).toContain('h-5');
+    expect(badge.className).toContain('min-w-5');
+    expect(badge.className).toContain('font-size-12');
+    expect(badge.className).toContain('bg-accent-aqua');
+    expect(badge.className).not.toContain('bg-accent-aqua/20');
+  });
+
   it('caps the bell count at 9+', () => {
     mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
     useInboxStore.setState({ items: unreadItems(12), seenAt: '2026-11-01T00:00:00.000Z' });
@@ -120,6 +132,19 @@ describe('Header', () => {
     render(<Header />);
     expect(screen.getByRole('status', { name: 'Disconnected' })).toBeInTheDocument();
     expect(screen.getByText('Offline')).toBeInTheDocument();
+  });
+
+  it('floats the Crew count over the tab padding, so Map and More do not shift when it appears', () => {
+    const { rerender } = render(<Header />);
+    const crewLink = () => screen.getByRole('link', { name: /^Crew/ });
+    const withoutBadge = crewLink().className;
+    mockBadge.value = { count: 2, dot: false, label: '2' };
+    rerender(<Header />);
+    const badge = crewLink().querySelector('span[aria-hidden="true"]') as HTMLElement;
+    expect(badge).toHaveTextContent('2');
+    expect(badge).toHaveClass('absolute');
+    expect(crewLink()).toHaveClass('relative');
+    expect(crewLink().className).toBe(withoutBadge);
   });
 
   it('renders main navigation landmark', () => {

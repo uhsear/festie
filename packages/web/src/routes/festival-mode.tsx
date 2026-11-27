@@ -5,8 +5,6 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import {
   festivalLoadState,
-  festivalTimeLabel,
-  fmtZonedClock,
   isFixRecent,
   resolveFestivalTimeZone,
   resolveStageColor,
@@ -15,7 +13,6 @@ import {
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
-import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -64,7 +61,6 @@ function FestivalModeViewInner() {
   }, []);
 
   const timeZone = resolveFestivalTimeZone(currentFestival);
-  const timeLabel = festivalTimeLabel(timeZone, nowMs);
   const lineupMode = !user;
   const selection = useMemo(
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
@@ -110,26 +106,18 @@ function FestivalModeViewInner() {
   // The hero shows the next set when nothing is live, so the list skips it.
   const heroShowsNext = selection.current.length === 0 && selection.phase === 'during' && (lineupMode || selection.todayCount > 0);
   const upNext = heroShowsNext ? selection.upcoming.slice(1) : selection.upcoming;
+  // While sets are live the hero cards are compact, so the next set follows them straight away instead of sitting below the crew.
+  const liveNow = selection.current.length > 0;
+  // A festival with no dates, or dates but no set times yet, has no schedule to download.
+  const hasScheduleToSave = selection.phase !== 'none' && (selection.phase !== 'before' || selection.startsAtTimed);
   const goCrew = () => navigate({ to: '/crew' });
 
   return (
     <div className={PAGE} data-testid="festival-mode-view">
-      <div className="flex flex-wrap items-baseline justify-end gap-x-3 gap-y-2 mb-4 min-w-0">
-        <div className="flex items-center gap-2 shrink-0">
-          <LowPowerIndicator />
-          <div className="flex flex-col items-end">
-            <span className="type-numeral text-text-secondary" aria-label="Festival time">
-              {fmtZonedClock(nowMs, timeZone)}
-            </span>
-            {timeLabel && <span className="type-label text-text-muted">{timeLabel}</span>}
-          </div>
-        </div>
-      </div>
-
-      {user ? <OfflineStatusChip className="mb-4" /> : null}
-
       {/* Phone: one column in priority order (order-*). Desktop: two columns;
           `contents` lets the children join the phone column directly. */}
+      {/* A section that renders nothing leaves an empty wrapper, which `empty:hidden` takes out of the flex gap
+          (three of them stacked a 70px dead band under the hero). */}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           <div className="order-1">
@@ -148,13 +136,23 @@ function FestivalModeViewInner() {
               walk={walk}
             />
           </div>
+          <div className={liveNow ? 'order-1 empty:hidden' : 'order-4 empty:hidden'}>
+            <UpNextList
+              items={upNext}
+              nowMs={nowMs}
+              timeZone={timeZone}
+              b2bSeparator={currentFestival.b2bSeparator}
+              getStageName={getStageName}
+              onOpenSet={setDetailSet}
+            />
+          </div>
           {showsFestivalWeather(selection, nowMs) ? (
-            <div className="order-1">
+            <div className="order-1 empty:hidden">
               <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
             </div>
           ) : null}
           {user ? (
-            <div className="order-1">
+            <div className="order-1 empty:hidden">
               <CaughtNowCard
                 key={currentFestival.id}
                 festivalId={currentFestival.id}
@@ -165,16 +163,6 @@ function FestivalModeViewInner() {
               />
             </div>
           ) : null}
-          <div className="order-4">
-            <UpNextList
-              items={upNext}
-              nowMs={nowMs}
-              timeZone={timeZone}
-              b2bSeparator={currentFestival.b2bSeparator}
-              getStageName={getStageName}
-              onOpenSet={setDetailSet}
-            />
-          </div>
         </div>
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           <div className="order-2">
@@ -197,8 +185,8 @@ function FestivalModeViewInner() {
               <CrewNowSection crewName={crew.name} rows={whereabouts} onOpenCrew={goCrew} />
             ) : (
               <CrewPrompt
-                title="No crew yet"
-                body="Start a crew or join one with an invite code to see each other here."
+                title={`Start a crew for ${currentFestival.name}`}
+                body="Start one or join with an invite code to see each other here. Crews of other festivals stay on the Crew tab."
                 cta="Start or join a crew"
                 onAction={goCrew}
               />
@@ -211,6 +199,8 @@ function FestivalModeViewInner() {
           )}
         </div>
       </div>
+
+      {user && hasScheduleToSave ? <OfflineStatusChip className="mt-6" /> : null}
     </div>
   );
 }

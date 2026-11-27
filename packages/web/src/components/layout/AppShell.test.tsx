@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { useFestivalModeStore } from '@festie/shared';
 
 // Mock all external dependencies to keep this a unit test on AppShell's
@@ -22,11 +24,12 @@ vi.mock('@festie/shared', async (importOriginal) => ({
     selector({ user: mockUser, checkSession: vi.fn(async () => {}) }),
 }));
 
+let mockDetailSet: { id: string } | null = null;
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
       selector({
-        detailSet: null,
+        detailSet: mockDetailSet,
         setDetailSet: vi.fn(),
         detailAutoSpotify: false,
         setDetailAutoSpotify: vi.fn(),
@@ -42,7 +45,13 @@ vi.mock('@festie/shared/hooks', () => ({
 
 vi.mock('./Header', () => ({ default: () => <div data-testid="header">Header</div> }));
 vi.mock('./BottomNav', () => ({ default: () => <div data-testid="bottom-nav">BottomNav</div> }));
-vi.mock('./SubHeader', () => ({ default: () => <div data-testid="sub-header">SubHeader</div> }));
+vi.mock('./SubHeader', () => ({
+  default: ({ festivalOnly }: { festivalOnly: boolean }) => (
+    <div data-testid="sub-header" data-festival-only={String(festivalOnly)}>
+      SubHeader
+    </div>
+  ),
+}));
 vi.mock('./PageTransition', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="page-transition">{children}</div>,
 }));
@@ -53,6 +62,7 @@ vi.mock('../features/IOSInstallDrawer', () => ({ default: () => null }));
 vi.mock('../../hooks/useIOSInstall', () => ({ useIOSInstall: () => ({ shouldShow: false, dismiss: vi.fn() }) }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
+vi.mock('../features/NowNextStrip', () => ({ default: () => <div data-testid="now-strip" /> }));
 vi.mock('./SosDock', () => ({ default: () => null }));
 vi.mock('../features/Onboarding', () => ({ default: () => <div data-testid="onboarding" /> }));
 vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
@@ -86,11 +96,41 @@ describe('AppShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = null;
+    mockDetailSet = null;
     mockPathname = '/cards';
     mockJoinLoader = {
       pendingJoinCode: null,
       clearPendingJoin: vi.fn(),
     };
+  });
+
+  it.each(['/map', '/caught', '/rate', '/crew-plan', '/wrap', '/picks'])(
+    'carries the festival picker, and nothing else, on %s',
+    (path) => {
+      mockPathname = path;
+      render(<AppShell />);
+      expect(screen.getByTestId('sub-header')).toHaveAttribute('data-festival-only', 'true');
+    },
+  );
+
+  // The sheet mounts only after a tap, so a static import would put its whole tree in the entry chunk.
+  it('loads the set sheet on demand instead of importing it into the entry chunk', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/layout/AppShell.tsx'), 'utf8');
+    expect(source).not.toContain("import DetailPanel from '../features/DetailPanel'");
+    expect(source).toContain("import('../features/DetailPanel')");
+    render(<AppShell />);
+    expect(screen.queryByTestId('detail-panel')).not.toBeInTheDocument();
+    mockDetailSet = { id: 's1' };
+    render(<AppShell />);
+    expect(await screen.findByTestId('detail-panel')).toBeInTheDocument();
+  });
+
+  // React.lazy would hold a cached chunk back ~300 ms (Suspense fallback throttle) on the first tap.
+  it('shows the set sheet without the Suspense throttle once its chunk is cached', async () => {
+    await import('../features/DetailPanel');
+    mockDetailSet = { id: 's1' };
+    render(<AppShell />);
+    await waitFor(() => expect(screen.getByTestId('detail-panel')).toBeInTheDocument(), { timeout: 200, interval: 10 });
   });
 
   it('syncs the theme on sign-in pages, which render no Header', () => {
@@ -175,6 +215,15 @@ describe('AppShell', () => {
       expect(screen.queryByRole('contentinfo', { name: 'Legal and help' })).not.toBeInTheDocument();
       r.unmount();
     }
+  });
+
+  it('shows the Now strip on the cards but not on the grid, which has its own now line', () => {
+    const cards = render(<AppShell />);
+    expect(screen.getByTestId('now-strip')).toBeInTheDocument();
+    cards.unmount();
+    mockPathname = '/grid';
+    render(<AppShell />);
+    expect(screen.queryByTestId('now-strip')).not.toBeInTheDocument();
   });
 
   it('shows the legal footer on sign-in pages', () => {

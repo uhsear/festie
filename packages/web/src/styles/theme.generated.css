@@ -71,6 +71,7 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.6;
   --letter-spacing-display: -0.02em;
+  --letter-spacing-display-small: 0em;
   --letter-spacing-caps: 0.08em;
   --letter-spacing-body: -0.01em;
   --word-spacing-display: 0.1em;

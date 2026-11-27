@@ -41,6 +41,12 @@ describe('DetailPriorityPicker', () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
+  it('adds no bottom margin of its own, so the gap to a clash card below is the section spacing alone', () => {
+    render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
+    const root = screen.getByTestId('pick-controls');
+    expect(root.className).not.toContain('mb-');
+  });
+
   it('renders three priority options and no Clear', () => {
     render(<DetailPriorityPicker {...defaultProps} />);
     expect(screen.getByLabelText('Must See')).toHaveAttribute('aria-pressed', 'false');

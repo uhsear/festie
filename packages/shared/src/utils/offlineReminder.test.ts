@@ -71,7 +71,7 @@ describe('offlineReminderId', () => {
 
 describe('offlineReminderText', () => {
   it('names the map only when the festival has one', () => {
-    expect(offlineReminderText(true)).toBe('Open Festie on wifi to save the map and lineup for no signal.');
-    expect(offlineReminderText(false)).toBe('Open Festie on wifi to save the lineup for no signal.');
+    expect(offlineReminderText(true)).toBe('Download the map and lineup on wifi so it works without signal.');
+    expect(offlineReminderText(false)).toBe('Download the lineup on wifi so it works without signal.');
   });
 });

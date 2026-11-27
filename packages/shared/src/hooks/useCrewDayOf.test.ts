@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
+import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useCrewDayOf } from './useDayOf';
 import type { Crew } from '../types';
 
@@ -37,5 +38,41 @@ describe('useCrewDayOf first-crew selection', () => {
     act(() => useCrewStore.setState({ crewLoading: false }));
     expect(selectCrew).toHaveBeenCalledTimes(1);
     expect(selectCrew).toHaveBeenCalledWith('old');
+  });
+});
+
+describe('useCrewDayOf festival scope', () => {
+  const selectCrew = vi.fn().mockResolvedValue(undefined);
+  const forFestival = (id: string, festivalId: string) => ({ ...crew(id), festivalId }) as Crew;
+
+  beforeEach(() => {
+    selectCrew.mockClear();
+    useAuthStore.setState({ user: { id: 'u1' } } as never);
+    useFestivalDataStore.setState({ currentFestivalId: 'moonlit', currentFestival: { id: 'moonlit' } as never });
+    useCrewStore.setState({
+      crews: [forFestival('design', 'edc'), forFestival('orchard', 'moonlit')],
+      activeCrew: null,
+      crewLoading: false,
+      selectCrew,
+    });
+  });
+
+  it('opens the crew of the selected festival, not crews[0]', () => {
+    renderHook(() => useCrewDayOf(0, []));
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+    expect(selectCrew).toHaveBeenCalledWith('orchard');
+  });
+
+  it('shows no crew when the open one belongs to another festival', () => {
+    useCrewStore.setState({ crews: [forFestival('design', 'edc')], activeCrew: forFestival('design', 'edc') });
+    const { result } = renderHook(() => useCrewDayOf(0, []));
+    expect(result.current.crew).toBeNull();
+    expect(selectCrew).not.toHaveBeenCalled();
+  });
+
+  it('keeps the open crew of the selected festival', () => {
+    useCrewStore.setState({ activeCrew: forFestival('orchard', 'moonlit') });
+    const { result } = renderHook(() => useCrewDayOf(0, []));
+    expect(result.current.crew?.id).toBe('orchard');
   });
 });

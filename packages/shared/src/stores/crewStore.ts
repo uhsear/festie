@@ -357,6 +357,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
       const crews = await api.get<Crew[]>('/crews');
       set({ crews, crewLoading: false });
       selectCrewFestivalIfNone(crews, get().activeCrew);
+      followFestivalCrew();
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load crews');
       set({ error: message, crewLoading: false });
@@ -2072,6 +2073,28 @@ export const useCrewStore = create<CrewStore>()(
     },
   }),
 );
+
+/**
+ * The open crew follows the selected festival. Every crew screen reads `activeCrew`, and
+ * a crew of another festival shows that festival's members, picks and plan under the
+ * wrong festival. Opens the user's crew of the selected festival when the open one
+ * belongs to another. With no crew for that festival it leaves the open crew alone: the
+ * crew screens then show it, and festival-scoped views read `crewForFestival` instead.
+ * An explicit pick of another festival's crew survives until the festival changes or the
+ * crew list reloads. `useLiveLocationCrewSync` calls this whenever the festival changes.
+ */
+export function followFestivalCrew(): void {
+  if (!useAuthStore.getState().user) return;
+  const festivalId = useFestivalDataStore.getState().currentFestivalId;
+  if (!festivalId) return;
+  const { crews, activeCrew, crewLoading, selectCrew } = useCrewStore.getState();
+  if (activeCrew?.festivalId === festivalId) return;
+  const match = crews.find((c) => !c._optimistic && c.festivalId === festivalId);
+  if (!match || match.id === activeCrew?.id) return;
+  // A select of this crew is already fetching it; activeCrew is null until it lands.
+  if (crewLoading && _lastSelectCrewId === match.id) return;
+  selectCrew(match.id).catch((err) => console.warn('crew follow festival failed', err));
+}
 
 // ── Last-synced selector (offline-honesty surfaces) ────────────────────────
 // The crew read-cache already tracks `_cachedAt` (epoch-ms the active crew's

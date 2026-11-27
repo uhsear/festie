@@ -85,6 +85,26 @@ describe('useKeyboardTrap', () => {
     expect(document.activeElement).toBe(btn1);
   });
 
+  it('focuses the container, not a button, when initialFocus is container', () => {
+    container.tabIndex = -1;
+    renderHook(() => useKeyboardTrap(makeRef(container), true, vi.fn(), 'container'));
+
+    rafCallback!(performance.now());
+
+    expect(document.activeElement).toBe(container);
+  });
+
+  it('wraps Shift+Tab from the container to the last element', () => {
+    container.tabIndex = -1;
+    renderHook(() => useKeyboardTrap(makeRef(container), true, vi.fn(), 'container'));
+    container.focus();
+
+    const event = pressKey('Tab', { shiftKey: true });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(btn3);
+  });
+
   it('wraps Tab from last element to first', () => {
     const onClose = vi.fn();
     const ref = makeRef(container);

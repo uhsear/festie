@@ -260,6 +260,7 @@ export function themeDeclarations(): Decl[] {
   d.push(['--line-height-normal', String(lineHeight.normal)]);
   d.push(['--line-height-relaxed', String(lineHeight.relaxed)]);
   d.push(['--letter-spacing-display', em(letterSpacing.display)]);
+  d.push(['--letter-spacing-display-small', em(letterSpacing.displaySmall)]);
   d.push(['--letter-spacing-caps', em(letterSpacing.caps)]);
   d.push(['--letter-spacing-body', em(letterSpacing.body)]);
   d.push(['--word-spacing-display', em(wordSpacing.display)]);

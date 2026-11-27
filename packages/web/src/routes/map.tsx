@@ -97,7 +97,8 @@ function MapViewInner() {
   }
 
   return (
-    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4">
+    // The empty state (an unmapped festival) is centred, so its action centres with it; under a real map the action stays at the left edge.
+    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4 [&:has(.empty-state)>a]:self-center">
       <h1 className="sr-only">Map</h1>
       {/* So a user offline can see how stale the shown pins are, as on mobile. */}
       {user && (
@@ -125,7 +126,11 @@ function MapViewInner() {
       </Suspense>
       {/* Setting a point reuses the Meet tab form and its map; the full-page map stays read-only. */}
       {hasCrew && (
-        <Link to="/crew" search={{ tab: 'find' }} className="min-h-11 self-start text-sm underline">
+        <Link
+          to="/crew"
+          search={{ tab: 'find' }}
+          className="inline-flex min-h-11 items-center self-start rounded-full border border-accent-aqua px-4 text-sm font-semibold text-accent-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        >
           Add a meeting point
         </Link>
       )}

@@ -14,7 +14,7 @@ const entry = (id: string, name: string): LineupEntry => ({
   linkedSetIds: [],
 });
 const lineup = [entry('lu-a', 'Alpha'), entry('lu-b', 'Beta'), entry('lu-c', 'Gamma'), entry('lu-d', 'Delta')];
-const days = [{ date: '2099-02-05', label: 'Fri' }] as FestivalDay[];
+const days = [{ date: '2099-02-06', label: 'Fri' }] as FestivalDay[];
 const stages = [{ id: 'main', name: 'Main Stage' }] as Stage[];
 const sets = [
   { id: 's1', stageId: 'main', artist: 'Beta', dayIndex: 0, startTime: '22:00' },

@@ -240,12 +240,13 @@ function PicksViewInner() {
   const viewTabs: Array<{ id: PicksViewMode; label: string }> = [
     { id: 'plan', label: COPY.myDay.allPicks },
     { id: 'myday', label: COPY.myDay.name },
-    { id: 'reminders', label: `${COPY.planLists.reminders} · ${reminderItems.length}` },
-    { id: 'notes', label: `${COPY.planLists.notes} · ${noteItems.length}` },
+    // A zero count adds width and says nothing, so it is left off.
+    { id: 'reminders', label: reminderItems.length > 0 ? `${COPY.planLists.reminders} · ${reminderItems.length}` : COPY.planLists.reminders },
+    { id: 'notes', label: noteItems.length > 0 ? `${COPY.planLists.notes} · ${noteItems.length}` : COPY.planLists.notes },
   ];
   const viewTabRow =
     hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
-      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
+      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex min-w-0 flex-1 flex-wrap gap-2">
         {viewTabs.map((tab) => (
           <button
             key={tab.id}
@@ -277,6 +278,7 @@ function PicksViewInner() {
             <button
               type="button"
               aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              title="Filters"
               aria-expanded={filtersOpen}
               aria-controls="picks-filters"
               onClick={() => setFiltersOpen((v) => !v)}
@@ -301,6 +303,7 @@ function PicksViewInner() {
             <button
               type="button"
               aria-label="Share and export"
+              title="Share and export"
               aria-expanded={actionsOpen}
               aria-controls="picks-actions"
               onClick={() => setActionsOpen((v) => !v)}

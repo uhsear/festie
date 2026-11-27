@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { useCrewStore } from '../stores/crewStore';
+import { followFestivalCrew, useCrewStore } from '../stores/crewStore';
 import { useFestivalStore } from '../stores/festivalStore';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useSosSeenAck } from './useSosSeenAck';
 import type { Crew, FestivalDay, SosEntry } from '../types';
+import { crewForFestival, defaultCrewId } from '../utils/crewPlan';
+import { useCurrentFestivalCrew } from './useActiveCrew';
 import {
   selectActiveMeet,
   selectActiveSos,
@@ -15,13 +17,18 @@ import {
 import { selectCrewFaces, type CrewFace, type SelectCrewFacesInput } from '../utils/crewFaces';
 
 /**
- * Keeps the live-location store scoped to the active crew app-wide. The store
+ * Keeps the live-location store scoped to the active crew app-wide, and the active crew
+ * on the selected festival (see followFestivalCrew). The store
  * drops SOS and peer events for any other crew, so scoping it only while the
  * crew map is open lost SOS after leaving that screen or switching crews.
  * Mount once, where the app-wide SOS banner lives.
  */
 export function useLiveLocationCrewSync(): void {
   const crewId = useCrewStore((s) => s.activeCrew?.id ?? null);
+  const festivalId = useFestivalStore((s) => s.currentFestivalId);
+  useEffect(() => {
+    followFestivalCrew();
+  }, [festivalId]);
   useEffect(() => {
     const store = useLiveLocationStore.getState();
     store.setActiveCrew(crewId);
@@ -46,14 +53,16 @@ export interface CrewDayOf {
 
 /**
  * Crew data for the day-of Now surface: who is where, and where to meet.
- * Selects the first crew when none is open (as the crew screen does), then
+ * Selects the user's crew of the selected festival when none is open, then
  * refreshes statuses and meeting points for it. Offline, the persisted
- * crewStore copy keeps rendering.
+ * crewStore copy keeps rendering. A crew of another festival is never shown: the
+ * result has no crew, so the Now surface offers to start one for this festival.
  */
 export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, timeZone?: string): CrewDayOf {
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
-  const crew = useCrewStore((s) => s.activeCrew);
+  const crew = useCurrentFestivalCrew();
+  const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? s.currentFestivalId);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const statuses = useCrewStore((s) => s.crewStatuses);
@@ -62,7 +71,8 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const lostContact = useLiveLocationStore((s) => s.lostContact);
   const sos = useActiveSos();
 
-  const firstCrewId = crews[0]?.id;
+  // No festival chosen yet: open the first crew, as the crew screen does.
+  const festivalCrewId = festivalId ? crewForFestival(crews, null, { id: festivalId })?.id : defaultCrewId(crews, null);
   // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
   const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {
@@ -70,11 +80,11 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
       autoSelectedId.current = null;
       return;
     }
-    // A pending select of another crew (a join landing) clears activeCrew; do not override it with the first crew.
-    if (!user || !firstCrewId || crewLoading || autoSelectedId.current === firstCrewId) return;
-    autoSelectedId.current = firstCrewId;
-    useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
-  }, [user, crew, firstCrewId, crewLoading]);
+    // A pending select of another crew (a join landing) clears activeCrew; do not override it with this one.
+    if (!user || !festivalCrewId || crewLoading || autoSelectedId.current === festivalCrewId) return;
+    autoSelectedId.current = festivalCrewId;
+    useCrewStore.getState().selectCrew(festivalCrewId).catch(() => {});
+  }, [user, crew, festivalCrewId, crewLoading]);
 
   const crewId = user ? crew?.id : undefined;
   useEffect(() => {

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { useActiveCrew, useCrewFestival, useCrewHub, usePicks } from '@festie/shared/hooks';
+import { useFestivalCrew, useCrewHub, usePicks } from '@festie/shared/hooks';
 import {
   artistDisplayName,
   formatTime,
@@ -10,6 +10,7 @@ import {
   formatSetTimeRange,
   memberSummary,
   meetingTimeDisplay,
+  noFestivalCrewCopy,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
@@ -27,8 +28,8 @@ import { MapPin, Home, CalendarClock, Users, ArrowLeft, Trophy, Sparkles, Vote }
 import ArtistName from '../components/features/ArtistName';
 
 // The plan renders from the persisted cache first (useCrewHub reads the stores),
-// then refreshes statuses, meeting points and polls. A crew on another festival
-// switches the festival store first (useCrewFestival).
+// then refreshes statuses, meeting points and polls. It shows the user's crew of the
+// selected festival and never switches the festival to fit a crew (useFestivalCrew).
 // Per-priority badge tint using the priority tokens (must=coral, want=aqua,
 // maybe=amber). Static literal class strings so Tailwind detects them.
 const PRIORITY_BADGE: Record<Priority, string> = {
@@ -37,8 +38,12 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   maybe: 'bg-priority-maybe/15 text-priority-maybe',
 };
 
-const EMPTY_LINK =
-  'inline-flex items-center min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2';
+// Same outlined pill as the secondary Button, so a link and a button on this page read alike.
+const PILL_LINK =
+  'inline-flex items-center justify-center min-h-11 px-4 rounded-full border border-accent-aqua/70 text-sm font-semibold text-accent-aqua hover:border-accent-aqua hover:text-text-primary transition-colors duration-(--duration-med) ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+// One title style for every card: no rule under it, one icon tint.
+const CARD_HEADER = 'border-b-0 pb-0 mb-2';
+const CARD_ICON = 'w-5 h-5 text-text-secondary flex-shrink-0';
 
 export default function CrewPlanView() {
   return (
@@ -51,8 +56,7 @@ export default function CrewPlanView() {
 function CrewPlanInner() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const { status, crew, retry: retryCrew } = useActiveCrew();
-  const festival = useCrewFestival(crew);
+  const { status, crew, festivalName, hasCrews, retry: retryCrew } = useFestivalCrew();
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -88,37 +92,14 @@ function CrewPlanInner() {
   }
 
   if (status === 'none' || !crew) {
+    const forFestival = hasCrews ? noFestivalCrewCopy(festivalName) : null;
     return (
       <Gate>
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title="No crew yet"
-          description="Make a crew or join one with a code to plan together."
+          title={forFestival?.title ?? 'No crew yet'}
+          description={forFestival?.description ?? 'Make a crew or join one with a code to plan together.'}
           cta={{ label: 'Create or join a crew', onClick: () => navigate({ to: '/crew' }) }}
-        />
-      </Gate>
-    );
-  }
-
-  if (festival.state === 'switching') {
-    return (
-      <div>
-        <p className="text-sm text-text-secondary text-center pt-4" role="status">
-          Opening {festival.festivalName}…
-        </p>
-        <CrewPlanSkeleton />
-      </div>
-    );
-  }
-
-  if (festival.state === 'failed') {
-    return (
-      <Gate>
-        <EmptyState
-          icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title={`Couldn't open ${festival.festivalName}`}
-          description={`${crew.name} is planning ${festival.festivalName}. Connect to the internet, then try again.`}
-          cta={{ label: 'Try again', onClick: festival.retry }}
         />
       </Gate>
     );
@@ -154,7 +135,7 @@ function CrewPlanContent() {
   const memberLabel = `${hub.memberCount} ${hub.memberCount === 1 ? 'member' : 'members'}`;
 
   return (
-    <div className="space-y-4 pb-6 max-w-2xl mx-auto px-3 w-full">
+    <div className="space-y-4 pb-6 max-w-[600px] mx-auto w-full min-w-0">
       <BackLink />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -170,12 +151,13 @@ function CrewPlanContent() {
 
       <CrewFacesRow />
 
-      {/* Active meeting point */}
-      <Card padding="md">
-        <Card.Header>
-          <MapPin className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
-          <span className="font-semibold text-text-primary">Meet up</span>
-        </Card.Header>
+      {/* Where the crew meets: the next meeting point, and the standing Home Base. */}
+      <Card padding="md" className="divide-y divide-border-light">
+        <section className="pb-4" aria-labelledby="plan-meetup-heading">
+          <Card.Header className={CARD_HEADER}>
+            <MapPin className={CARD_ICON} aria-hidden="true" />
+            <h2 id="plan-meetup-heading" className="font-semibold text-text-primary">Meet up</h2>
+          </Card.Header>
         <Card.Body>
           {meetingPoint ? (
             <div className="space-y-1">
@@ -204,14 +186,12 @@ function CrewPlanContent() {
             </div>
           )}
         </Card.Body>
-      </Card>
-
-      {/* Crew home base */}
-      <Card padding="md">
-        <Card.Header>
-          <Home className="w-5 h-5 text-accent-aqua flex-shrink-0" aria-hidden="true" />
-          <span className="font-semibold text-text-primary">{COPY.homeBase.name}</span>
-        </Card.Header>
+        </section>
+        <section className="pt-4" aria-labelledby="plan-homebase-heading">
+          <Card.Header className={CARD_HEADER}>
+            <Home className={CARD_ICON} aria-hidden="true" />
+            <h2 id="plan-homebase-heading" className="font-semibold text-text-primary">{COPY.homeBase.name}</h2>
+          </Card.Header>
         <Card.Body>
           {crew.homeBaseLocation || crew.homeBaseTime ? (
             <div className="space-y-1">
@@ -235,12 +215,14 @@ function CrewPlanContent() {
             </p>
           )}
         </Card.Body>
+        </section>
       </Card>
 
-      {isPast ? (
+      {/* A crew of one has nobody to compare with. */}
+      {isPast && hub.memberCount > 1 && (
         <Card padding="md">
-          <Card.Header>
-            <Trophy className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
+          <Card.Header className={CARD_HEADER}>
+            <Trophy className={CARD_ICON} aria-hidden="true" />
             <span className="font-semibold text-text-primary">How the crew did</span>
           </Card.Header>
           <Card.Body className="space-y-2">
@@ -263,15 +245,16 @@ function CrewPlanContent() {
                 ))}
               </ul>
             )}
-            <Link to="/wrap" className={EMPTY_LINK}>
+            <Link to="/wrap" className={PILL_LINK}>
               {COPY.wrap.open}
             </Link>
           </Card.Body>
         </Card>
-      ) : (
+      )}
+      {!isPast && (
         <Card padding="md">
-          <Card.Header>
-            <CalendarClock className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
+          <Card.Header className={CARD_HEADER}>
+            <CalendarClock className={CARD_ICON} aria-hidden="true" />
             <span className="font-semibold text-text-primary">Up next</span>
           </Card.Header>
           <Card.Body className="space-y-4">
@@ -279,10 +262,10 @@ function CrewPlanContent() {
               <div className="space-y-2">
                 <p className="text-sm text-text-secondary">No crew picks coming up.</p>
                 <div className="flex flex-wrap gap-x-4">
-                  <Link to="/cards" className={EMPTY_LINK}>
+                  <Link to="/cards" className={PILL_LINK}>
                     Browse the lineup
                   </Link>
-                  <Link to="/crew" search={{ tab: 'members' }} className={EMPTY_LINK}>
+                  <Link to="/crew" search={{ tab: 'members' }} className={PILL_LINK}>
                     Invite your crew
                   </Link>
                 </div>
@@ -347,8 +330,8 @@ function CrewPlanContent() {
 
       {!isPast && mix.length > 0 && (
         <Card padding="md">
-          <Card.Header>
-            <Sparkles className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
+          <Card.Header className={CARD_HEADER}>
+            <Sparkles className={CARD_ICON} aria-hidden="true" />
             <span className="font-semibold text-text-primary">Crew mix</span>
           </Card.Header>
           <Card.Body>
@@ -375,8 +358,8 @@ function CrewPlanContent() {
 
       {openPolls.length > 0 && (
         <Card padding="md">
-          <Card.Header>
-            <Vote className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
+          <Card.Header className={CARD_HEADER}>
+            <Vote className={CARD_ICON} aria-hidden="true" />
             <span className="font-semibold text-text-primary">Open polls</span>
           </Card.Header>
           <Card.Body className="space-y-2">
@@ -403,7 +386,7 @@ function BackLink() {
     <Link
       to="/crew"
       aria-label="Back to crew"
-      className="inline-flex items-center gap-1.5 min-h-11 min-w-11 text-sm text-text-secondary hover:text-text-primary transition-colors"
+      className="inline-flex items-center gap-1.5 min-h-11 min-w-11 text-sm font-medium text-text-primary hover:text-accent-aqua transition-colors"
     >
       <ArrowLeft className="w-4 h-4" aria-hidden="true" />
       <span>Back to crew</span>

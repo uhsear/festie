@@ -61,6 +61,13 @@ describe('ScheduleResultsRow', () => {
     expect(storeState.setHiddenDays).not.toHaveBeenCalled();
   });
 
+  it('sits on the page gutter at every width, in line with the toolbar above it', () => {
+    storeState.activeStages = ['s1'];
+    const { container } = render(<ScheduleResultsRow />);
+    expect(container.firstElementChild).toHaveClass('px-6');
+    expect((container.firstElementChild as HTMLElement).className).not.toContain('px-[var(--space-3)]');
+  });
+
   it('shows for a genre filter alone and Clear all clears genres', () => {
     storeState.activeGenres = ['house'];
     render(<ScheduleResultsRow />);

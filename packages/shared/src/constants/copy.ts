@@ -6,7 +6,7 @@ export type ConceptIconKey =
 
 /** One name per concept, shared by web and mobile. See docs/design/copy-voice.md. */
 export const COPY = {
-  nowNext: { name: 'Now & Next', open: 'Open Now & Next', icon: 'nowNext' },
+  nowNext: { name: 'Now & Next', open: 'Open Now & Next', comingUp: 'Coming up', icon: 'nowNext' },
   jumpToNow: { label: 'Jump to now', a11y: 'Jump to now, scroll to the current time', icon: 'jumpToNow' },
   picks: {
     tab: 'Picks', title: 'My picks', filterA11y: 'Show only my picks',
@@ -54,6 +54,9 @@ export const COPY = {
     one: 'Schedule clash', badge: 'Clash', filter: 'Clashes', none: 'No clashes',
     gridHint: 'Clashes with another of your picks',
     tight: 'Tight change', suggested: 'Suggested', split: 'Split',
+    chooseKeep: 'Choose which to keep',
+    /** Header meta for a clash of three or more sets: the overlap is the longest pair, not the whole group. */
+    manyOverlap: (count: number, longest: string) => `${count} sets overlap, up to ${longest}`,
     splitPlanned: 'Split planned', clearPlan: 'Clear plan', undo: 'Undo',
     failed: "Couldn't update your picks. Try again.",
     noneBody: "None of your picks clash. You're all set.",
@@ -94,7 +97,8 @@ export const COPY = {
     gone: 'That other set is no longer free. Pick another fix.',
   },
   setContext: {
-    stageHeading: (stage: string) => (stage ? `On ${stage} that night` : 'On this stage that night'),
+    // 'That night' was wrong for a 6 AM set, and the section lists the stage's neighbouring sets, not the night.
+    stageHeading: (stage: string) => (stage ? `Also on ${stage}` : 'Also on this stage'),
     before: 'Before',
     after: 'After',
     overlapHeading: 'Playing at the same time',

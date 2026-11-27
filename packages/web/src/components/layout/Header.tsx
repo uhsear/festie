@@ -11,6 +11,7 @@ import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
 import Button from '../ui/Button';
 import DaylightToggle from '../features/DaylightToggle';
+import CountBadge from '../ui/CountBadge';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
 import { useCrewAttention } from '../../hooks/useCrewAttention';
@@ -153,7 +154,7 @@ export default function Header() {
                   aria-current={active ? 'page' : undefined}
                   aria-label={badged ? badgeA11yLabel(tab.label, crewBadge) : undefined}
                   className={cn(
-                    'inline-flex items-center min-h-11 px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
+                    'relative inline-flex items-center min-h-11 px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-(--duration-slow) ease-(--ease-standard) tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
@@ -162,15 +163,13 @@ export default function Header() {
                 >
                   {tab.label}
                   {badged &&
+                    // Over the tab's own padding, so a count never widens the pill and shifts Map and More.
                     (crewBadge.label === '' ? (
-                      <span aria-hidden="true" className="inline-block ml-1 w-1.5 h-1.5 rounded-full bg-accent-aqua" />
+                      <span aria-hidden="true" className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-accent-aqua" />
                     ) : (
-                      <span
-                        aria-hidden="true"
-                        className="inline-block ml-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold leading-none text-center"
-                      >
+                      <CountBadge aria-hidden="true" className="absolute top-1 right-1">
                         {crewBadge.label}
-                      </span>
+                      </CountBadge>
                     ))}
                 </Link>
               );
@@ -203,7 +202,8 @@ export default function Header() {
             {unreadLabel && (
               <span
                 aria-hidden="true"
-                className="absolute top-1 right-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold leading-none text-center"
+                // 12px on a solid disc with a ring: a 10px tinted count on the bell was unreadable and clipped against the icon.
+                className="absolute top-0 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold leading-none text-[var(--text-on-light-accent)] ring-2 ring-[var(--color-bg-primary)]"
               >
                 {unreadLabel}
               </span>
