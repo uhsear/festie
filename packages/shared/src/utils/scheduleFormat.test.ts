@@ -174,6 +174,15 @@ describe('formatDayChip', () => {
     expect(formatDayChip({ date: '2026-11-07', label: 'Day 1' }).label).toBe('Day 1');
     expect(formatDayChip({ date: '2026-11-07' }).label).toBe('Saturday');
   });
+  it('corrects a weekday label that contradicts the date (Dec 27 2026 is a Sunday)', () => {
+    expect(formatDayChip({ date: '2026-12-27', label: 'Saturday' })).toEqual({
+      label: 'Sunday',
+      date: 'Dec 27',
+      a11y: 'Sunday, December 27',
+    });
+    expect(formatDayChip({ date: '2026-12-27', label: 'Sat' }).label).toBe('Sun');
+    expect(formatDayChip({ date: '2026-12-27', label: 'Saturday Night' }).label).toBe('Saturday Night');
+  });
   it('omits the date when the label has it or the date is invalid', () => {
     expect(formatDayChip({ date: '2026-11-07', label: 'Sat Nov 7' })).toEqual({
       label: 'Sat Nov 7',
