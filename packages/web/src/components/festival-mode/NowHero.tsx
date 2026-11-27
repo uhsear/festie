@@ -137,7 +137,7 @@ export default function NowHero({
               </span>
               <span className="flex items-baseline justify-between gap-3 mt-1">
                 <span className="min-w-0 type-label text-text-secondary">
-                  {stage ? `${stage} · ` : ''}until {fmtZonedClock(end, timeZone)}
+                  {stage ? `${stage} Â· ` : ''}until {fmtZonedClock(end, timeZone)}
                   {priority && (
                     <span className="inline-flex items-center gap-1 ml-2 align-middle text-text-primary">
                       <PriorityIcon priority={priority} className="w-3.5 h-3.5" />

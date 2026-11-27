@@ -103,7 +103,7 @@ describe('NowNextStrip', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     state.selectedDay = 1;
     const { unmount } = render(<NowNextStrip />);
-    expect(screen.getByTestId('now-next-strip')).toHaveTextContent('NOW · TODAY');
+    expect(screen.getByTestId('now-next-strip')).toHaveTextContent('NOW Â· TODAY');
     unmount();
     state.selectedDay = 0;
     render(<NowNextStrip />);

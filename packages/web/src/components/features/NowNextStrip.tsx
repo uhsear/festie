@@ -73,7 +73,7 @@ export default function NowNextStrip() {
           }
         >
           {isNow && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-live-fill" />}
-          {isNow ? (nowOnAnotherDay ? 'NOW · TODAY' : 'NOW') : 'UP NEXT'}
+          {isNow ? (nowOnAnotherDay ? 'NOW Â· TODAY' : 'NOW') : 'UP NEXT'}
         </span>
         <span className="min-w-0 max-w-[720px]">
           <span className="block text-lg font-bold text-text-primary line-clamp-2 break-words">

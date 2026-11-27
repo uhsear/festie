@@ -176,7 +176,7 @@ describe('NowHero lead object', () => {
   it('keeps one fixed row per live card: stage and end time left, countdown right', () => {
     render(<NowHero {...props} selection={liveSel(NOW + 30 * 60_000, 'must')} />);
     const card = screen.getByTestId('fm-now-card');
-    expect(card).toHaveTextContent(`Main · until ${fmtZonedClock(NOW + 30 * 60_000, 'UTC')}`);
+    expect(card).toHaveTextContent(`Main Â· until ${fmtZonedClock(NOW + 30 * 60_000, 'UTC')}`);
     expect(card).toHaveTextContent('Must');
     const countdown = screen.getByTestId('fm-lead-countdown');
     expect(countdown).toHaveClass('type-heading', 'tabular-nums', 'shrink-0');

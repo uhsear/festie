@@ -153,7 +153,7 @@ export function NowHero({
             <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
           </Text>
           <View style={s.liveRow}>
-            <Text style={[s.secondary, s.flex]}>{`${stage ? `${stage} · ` : ''}until ${fmtZonedClock(end, timeZone)}`}</Text>
+            <Text style={[s.secondary, s.flex]}>{`${stage ? `${stage} Â· ` : ''}until ${fmtZonedClock(end, timeZone)}`}</Text>
             <Text style={[s.leadCountdown, endingSoon && s.countdownImminent]} testID="fm-lead-countdown">
               {fmtTimeLeft(end, nowMs)}
             </Text>
