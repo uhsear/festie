@@ -53,7 +53,7 @@ import ArtistSheetHost from '../components/ArtistSheetHost';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
-// hideAsync is called when `loading` flips false inside AuthGate; the existing
+// hideAsync is called by BootOverlay once it has painted, and when `loading` flips false; the existing
 // 4-second bootTimedOut ceiling is the forced-hide backstop so the app never
 // wedges. preventAutoHideAsync must run at module scope (before any render).
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -523,10 +523,9 @@ function AuthGate() {
   useQueueDrain(!loading);
   useOtaUpdatePrompt();
 
-  // Dismiss the native splash as soon as loading resolves. The overlay below
-  // stays as a fallback (same #0a0a0a bg) so any frame gap is invisible. The
-  // 4s bootTimedOut ceiling already triggers `loading = false`, so hideAsync
-  // is always called eventually even if fonts or rehydration hang.
+  // Backstop: BootOverlay lifts the native splash once it has painted in the persisted theme.
+  // This covers an overlay that never lays out. The 4s bootTimedOut ceiling already triggers
+  // `loading = false`, so hideAsync is always called even if fonts or rehydration hang.
   useEffect(() => {
     if (!loading) {
       SplashScreen.hideAsync().catch(() => {});
@@ -669,7 +668,7 @@ function AuthGate() {
       )}
       {!loading && <Toaster />}
       <ArtistSheetHost />
-      {loading && <BootOverlay hydrated={hydrated && uiHydrated} />}
+      {loading && <BootOverlay hydrated={hydrated && uiHydrated} themeReady={uiHydrated} />}
       {introShowing && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );

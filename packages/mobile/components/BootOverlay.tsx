@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
 import NetInfo from '@react-native-community/netinfo';
+import * as SplashScreen from 'expo-splash-screen';
 import { useUIStore } from '@festie/shared/stores';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -35,11 +36,18 @@ const useStyles = makeStyles((t) => ({
 }));
 
 /** Covers the app while the root loads: the splash mark where the native splash drew it, then a status line after 1.5 s. */
-export default function BootOverlay({ hydrated }: { hydrated: boolean }) {
+export default function BootOverlay({ hydrated, themeReady }: { hydrated: boolean; themeReady: boolean }) {
   const styles = useStyles();
   const theme = useUIStore((s) => s.theme);
   const reduceMotion = useReduceMotion();
   const [offline, setOffline] = useState<boolean | null>(null);
+  const [laidOut, setLaidOut] = useState(false);
+
+  // Lift the native splash only once this view has painted in the persisted theme, so the mark
+  // is on screen under it. The root's `!loading` call stays as the backstop.
+  useEffect(() => {
+    if (laidOut && themeReady) SplashScreen.hideAsync().catch(() => {});
+  }, [laidOut, themeReady]);
 
   useEffect(() => {
     let live = true;
@@ -58,6 +66,7 @@ export default function BootOverlay({ hydrated }: { hydrated: boolean }) {
     <Animated.View
       style={styles.root}
       pointerEvents="auto"
+      onLayout={() => setLaidOut(true)}
       exiting={reduceMotion ? undefined : FadeOut.duration(motionDuration.med)}
     >
       <Image

@@ -42,3 +42,12 @@ describe('bootStatusLine', () => {
     expect(bootStatusLine({ offline: false, hydrated: true })).toBe('Getting Festie ready');
   });
 });
+
+describe('splash handoff', () => {
+  it('lifts the native splash from the overlay layout, gated on the theme being known', () => {
+    expect(overlay).toContain('onLayout={() => setLaidOut(true)}');
+    expect(overlay).toContain('laidOut && themeReady');
+    expect(overlay).toContain('SplashScreen.hideAsync()');
+    expect(layout).toContain('themeReady={uiHydrated}');
+  });
+});
