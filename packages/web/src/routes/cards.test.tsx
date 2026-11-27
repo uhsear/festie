@@ -131,12 +131,17 @@ describe('CardsView order and earlier row', () => {
     delete festivalState.scheduleGroupBy;
   });
 
-  it('gives every card in the stage columns the same minimum height so the columns read as a tidy grid', () => {
+  it('lays stage groups on explicit columns and lets cards stack at their own height, with no min-height tail', () => {
     festivalState.scheduleGroupBy = 'stage';
     render(<CardsView />);
+    const region = screen.getByRole('region', { name: 'Card view' });
+    expect(region.className).toContain('md:[grid-template-columns:repeat(var(--cols-md),minmax(0,1fr))]');
+    expect(region.className).toContain('lg:[grid-template-columns:repeat(var(--cols-lg),minmax(0,1fr))]');
+    expect(region.className).toContain('xl:[grid-template-columns:repeat(var(--cols-xl),minmax(0,1fr))]');
+    // The fixture has one stage, so one column at every width.
+    expect(region.style.getPropertyValue('--cols-md')).toBe('1');
     const wrapper = screen.getAllByTestId('set-card')[0]!.parentElement!;
-    expect(wrapper.className).toContain('md:min-h-[12.5rem]');
-    expect(wrapper.className).toContain('md:[&>*]:flex-1');
+    expect(wrapper.className).not.toContain('min-h');
     delete festivalState.scheduleGroupBy;
   });
 

@@ -36,6 +36,7 @@ import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { stageColumnCounts } from '../lib/stageColumns';
 
 export default function CardsView() {
   return (
@@ -117,6 +118,7 @@ function CardsViewInner() {
     () => groupScheduleSets(visibleSets, groupBy, stages, currentFestival?.b2bSeparator),
     [visibleSets, groupBy, stages, currentFestival?.b2bSeparator],
   );
+  const columnCounts = stageColumnCounts(groups.length);
   // Position in render order, for the stagger entrance.
   const renderIndex = useMemo(() => new Map(groups.flatMap((g) => g.sets).map((set, i) => [set.id, i])), [groups]);
 
@@ -223,16 +225,25 @@ function CardsViewInner() {
           className={cn(
             'card-grid w-full mx-auto max-w-[1440px] md:[--cards-gap:var(--space-4)]',
             stageColumns
-              ? 'grid items-start'
+              ? [
+                  'grid items-start',
+                  // One column on a phone. From md up the counts are explicit (see stageColumnCounts) so the last stage never wraps alone.
+                  // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
+                  '[grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]',
+                  'md:[grid-template-columns:repeat(var(--cols-md),minmax(0,1fr))]',
+                  'lg:[grid-template-columns:repeat(var(--cols-lg),minmax(0,1fr))]',
+                  'xl:[grid-template-columns:repeat(var(--cols-xl),minmax(0,1fr))]',
+                ]
               : 'flex flex-col gap-[var(--cards-gap,var(--space-3))] md:block md:[column-width:300px] md:[column-gap:var(--space-4)]',
           )}
           style={
             stageColumns
-              ? {
-                  // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+              ? ({
                   gap: 'var(--cards-gap, var(--space-3))',
-                }
+                  '--cols-md': columnCounts.md,
+                  '--cols-lg': columnCounts.lg,
+                  '--cols-xl': columnCounts.xl,
+                } as React.CSSProperties)
               : undefined
           }
           role="region"
@@ -279,9 +290,6 @@ function CardsViewInner() {
                     // on long single-day lineups without virtualization machinery.
                     className={cn(
                       '[content-visibility:auto] [contain-intrinsic-size:auto_240px]',
-                      // Stage columns do not share time slots, so cards get one height instead: tall enough for
-                      // time, title, status chip, clash chip and pick row, with the card filling it.
-                      stageColumns && 'md:flex md:min-h-[12.5rem] md:[&>*]:min-w-0 md:[&>*]:flex-1',
                     )}
                     // Softened stagger entrance on the motion tokens
                     // (duration.med + easing.out). Skipped entirely when the user
