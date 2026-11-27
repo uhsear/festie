@@ -232,17 +232,17 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </span>
         )}
 
-        {onSchedulePath && <ScheduleViewSwitcher className="md:ml-0" />}
+        {onSchedulePath && <ScheduleViewSwitcher className="ml-0 max-md:order-3" />}
 
-        {/* Below md the Filters button and the day rail share the second row; md:contents leaves the desktop row as it was. */}
-        <div className="flex min-w-0 items-center gap-[var(--space-3)] max-md:order-3 max-md:w-full md:contents empty:hidden">
+        {/* No box of its own: the day rail and the Filters button join the nav's flex lines, so `order` can place each one. */}
+        <div className="contents">
         {showFold && (
           <>
             <button
               type="button"
               className={cn(
-                // Row 2 from md up, beside Search, so row 1 keeps its width for the day chips.
-                'relative md:order-2 inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+                // Row 2 from md up, beside Search, so row 1 keeps its width for the day chips; with the view switch below md.
+                'relative order-2 inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
                 !hasWideFold && 'md:hidden',
                 'cursor-pointer border-2 border-border text-text-secondary',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
@@ -273,7 +273,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* Day tabs */}
         {showDaySkeleton && (
           <div
-            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:flex-1 md:flex-[1_1_auto]"
+            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:order-1 max-md:w-full md:flex-[1_1_auto]"
             aria-hidden="true"
           >
             {Array.from({ length: 3 }).map((_, i) => (
@@ -287,8 +287,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             className={cn(
               // The time-zone label wraps under the chips on a narrow row instead of being cut off.
               'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
-              // Below md the day rail shares the second chrome row with the Filters button.
-              'max-md:flex-1',
+              // Below md the day rail owns the second chrome row.
+              'max-md:order-1 max-md:w-full',
               // From md up the rail asks for the width of its whole chip set, so it wraps to a row of its own before a chip is cut,
               // and scrolls (with a fade) only when the set is wider than the nav itself.
               'md:flex-[1_1_auto]',
@@ -381,7 +381,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         </div>
 
         {(currentProfile || onSchedulePath) && (
-          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3 md:order-3 md:max-xl:order-5" />
+          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-4 md:order-3 md:max-xl:order-5" />
         )}
 
         {/* md up: a full-width zero-height line between row 1 (picker, status pill, view, day chips) and row 2 (Filters, search, Group by, My picks, and from xl the stage chips and status; below xl those two take row 3). A flex line never shrinks below zero, so the two row gaps around it stay. */}
@@ -401,7 +401,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div
           id="subheader-filters"
-          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-4 empty:hidden', showFold && !filtersOpen && 'max-md:hidden')}
+          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-5 empty:hidden', showFold && !filtersOpen && 'max-md:hidden')}
         >
         {/* Artist search. Inside the filters wrapper: below md it folds behind Filters; from md up the wrapper is `contents`, so it shares the day-tab row. */}
         {showSearch && (

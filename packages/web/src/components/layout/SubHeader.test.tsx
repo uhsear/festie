@@ -514,7 +514,7 @@ describe('SubHeader desktop row plan', () => {
       const belowXl = find(/^md:max-xl:order-(\d+)$/);
       if (belowXl) return Number(belowXl[1]);
     }
-    const m = find(/^md:order-(\d+)$/);
+    const m = find(/^md:order-(\d+)$/) ?? find(/^order-(\d+)$/);
     return m ? Number(m[1]) : 0;
   };
 
@@ -586,10 +586,29 @@ describe('SubHeader desktop row plan', () => {
 });
 
 describe('SubHeader phone path', () => {
-  it('leaves the phone path alone: the fold, the order-3 and order-4 wrappers and the full-width chips stay', () => {
+  it('puts the phone chrome on three rows: picker, day chips, then Filters with the view switch and status', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(document.getElementById('subheader-filters')).toHaveClass('max-md:order-4', 'max-md:hidden');
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    const views = screen.getByRole('navigation', { name: 'Schedule view' });
+    const status = screen.getByTestId('schedule-status-line');
+    const phoneOrder = (el: Element) => {
+      const m = /(^|\s)max-md:order-(\d+)(\s|$)/.exec(el.className);
+      return m ? Number(m[2]) : 0;
+    };
+    // Row 2: the full-width day rail alone, so two or three chips fit whole.
+    expect(rail).toHaveClass('max-md:w-full');
+    expect(phoneOrder(rail)).toBe(1);
+    // Row 3: Filters (order 2), the view switch and the status line share one line, ahead of the folded panel.
+    expect(screen.getByRole('button', { name: 'Filters' })).toHaveClass('order-2');
+    expect(phoneOrder(views)).toBe(3);
+    expect(phoneOrder(status)).toBe(4);
+    expect(views).not.toHaveClass('ml-auto');
+    expect(phoneOrder(document.getElementById('subheader-filters')!)).toBe(5);
+  });
+
+  it('leaves the phone fold alone: the filters stay folded and the stage chips stay full width', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(document.getElementById('subheader-filters')).toHaveClass('max-md:hidden');
     expect(screen.getByRole('group', { name: 'Filter by stage' }).parentElement).toHaveClass('w-full');
-    expect(screen.getByRole('group', { name: 'Festival days' }).parentElement).toHaveClass('max-md:flex-1');
   });
 });

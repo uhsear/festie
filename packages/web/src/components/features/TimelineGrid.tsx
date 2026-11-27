@@ -20,6 +20,30 @@ const SLOT_MINUTES = 15;
 
 const NAV_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
 
+// An axis label hangs below its tick line: 4px of padding plus half a 12px line puts its centre about 12px under the line.
+const AXIS_LABEL_CENTER_PX = 12;
+// Half the NOW pill (12px text, 1px padding) plus half an axis label, so closer centres than this print over each other.
+const NOW_PILL_CLEARANCE_PX = 18;
+
+/**
+ * The half-hour axis tick (in minutes) whose label the NOW pill would print over, or null.
+ * The pill is centred on the now line, so a label up to a pill below the line collides as well as one beside it.
+ */
+export function axisTickUnderNowPill(nowMin: number, rowHeight: number): number | null {
+  const pxPerMinute = rowHeight / SLOT_MINUTES;
+  const before = Math.floor(nowMin / 30) * 30;
+  let hit: number | null = null;
+  let nearest = NOW_PILL_CLEARANCE_PX;
+  for (const tick of [before, before + 30]) {
+    const gap = Math.abs((nowMin - tick) * pxPerMinute - AXIS_LABEL_CENTER_PX);
+    if (gap < nearest) {
+      nearest = gap;
+      hit = tick;
+    }
+  }
+  return hit;
+}
+
 interface TimelineStaticLayerProps {
   visibleStages: Stage[];
   timeBounds: { minMin: number; maxMin: number; totalSlots: number };
@@ -171,14 +195,12 @@ export default function TimelineGrid({
   const gutterW = vpW <= 430 ? 52 : 70;
   const compact = vpW < 640;
 
-  // The NOW pill hangs in the gutter and would print over the nearest half-hour label.
-  // Half the pill is about 14px, which is this many minutes of the axis; the value only
-  // changes when the line crosses a label, so the memoised layer does not rebuild every tick.
+  // The NOW pill hangs in the gutter and would print over an axis label. The value only changes when the line
+  // crosses a label, so the memoised layer does not rebuild every tick.
   const hiddenTickMin = useMemo(() => {
     if (nowIndicator === null) return null;
     const nowMin = timeBounds.minMin + (nowIndicator / 100) * timeBounds.totalSlots * SLOT_MINUTES;
-    const nearest = Math.round(nowMin / 30) * 30;
-    return Math.abs(nowMin - nearest) <= (14 * SLOT_MINUTES) / rowHeight ? nearest : null;
+    return axisTickUnderNowPill(nowMin, rowHeight);
   }, [nowIndicator, timeBounds.minMin, timeBounds.totalSlots, rowHeight]);
 
   // Roving focus: one cell is the tab stop, arrow keys move between cells.
