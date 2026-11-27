@@ -40,4 +40,4 @@ Festie is a festival crew-coordination app. These notes explain the features App
 
 ## Push notifications
 
-- Push notifications are opt-in. The user can turn each type off in Account.
+- Push notifications are opt-in. The user can turn each type off in More.
