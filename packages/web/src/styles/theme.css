@@ -328,7 +328,7 @@
   font-family: var(--font-family-display);
   font-size: var(--font-size-32);
   line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
+  letter-spacing: var(--letter-spacing-display-small);
   word-spacing: var(--word-spacing-display);
   font-weight: 700;
 }
@@ -336,7 +336,7 @@
   font-family: var(--font-family-display);
   font-size: var(--font-size-24);
   line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
+  letter-spacing: var(--letter-spacing-display-small);
   word-spacing: var(--word-spacing-display);
   font-weight: 700;
 }

@@ -162,7 +162,7 @@ h1 {
   font-family: var(--font-family-display);
   font-weight: 700;
   line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
+  letter-spacing: var(--letter-spacing-display-small);
   word-spacing: var(--word-spacing-display);
 }
 
