@@ -82,6 +82,35 @@ describe('NowNextStrip', () => {
     expect(strip).toHaveTextContent(/Sun/);
   });
 
+  it('draws a 4px progress bar inset from the rounded corners', () => {
+    nowMs = local(2030, 5, 15, 20, 30);
+    render(<NowNextStrip />);
+    const fill = screen.getByTestId('now-next-progress');
+    expect(fill).toHaveStyle({ width: '50%' });
+    expect(fill.parentElement).toHaveClass('h-1', 'inset-x-3', 'rounded-full');
+  });
+
+  it('keeps the time left right after the title and ends with a chevron, so a wide screen reads as one unit', () => {
+    nowMs = local(2030, 5, 15, 20, 48);
+    render(<NowNextStrip />);
+    const title = screen.getByText('Alpha').closest<HTMLElement>('[class*="max-w-[720px]"]')!;
+    expect(title).toHaveClass('max-w-[720px]');
+    expect(title).not.toHaveClass('flex-1');
+    expect(title.parentElement!.querySelector('svg')).toHaveClass('ml-auto');
+  });
+
+  it("says NOW is today's when another day's tab is open, and nothing extra on today's own tab", () => {
+    nowMs = local(2030, 5, 15, 20, 48);
+    state.selectedDay = 1;
+    const { unmount } = render(<NowNextStrip />);
+    expect(screen.getByTestId('now-next-strip')).toHaveTextContent('NOW · TODAY');
+    unmount();
+    state.selectedDay = 0;
+    render(<NowNextStrip />);
+    expect(screen.getByTestId('now-next-strip')).not.toHaveTextContent('TODAY');
+    delete state.selectedDay;
+  });
+
   it('renders nothing for a guest', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     state.user = null;
