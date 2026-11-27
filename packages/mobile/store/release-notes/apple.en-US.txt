@@ -1,0 +1,5 @@
+A fresh look for Festie 1.6.0.
+
+- Redesigned SOS, schedule, set card, crew, account and map screens.
+- Offline maps open from a downloaded archive where a festival provides one. Other festivals show a pin list.
+- Fixes and polish across the app.
