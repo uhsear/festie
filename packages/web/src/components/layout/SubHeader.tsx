@@ -204,6 +204,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           // --space-9 never existed in the scale (invalid var -> column-gap
           // silently dropped); --space-8 (2rem) is the nearest real step.
           'sm:[column-gap:var(--space-8)]',
+          // md up the row is planned: controls on row 1, stage chips on row 2 (see the break below), so the gaps tighten to fit.
+          'md:[column-gap:var(--space-4)] md:[row-gap:var(--space-2)]',
           '[backdrop-filter:saturate(150%)_blur(12px)]',
           '[box-shadow:0_1px_0_var(--color-overlay-1)]',
         )}
@@ -247,13 +249,14 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               aria-expanded={filtersOpen}
               aria-controls="subheader-filters"
               aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              title="Filters"
               onClick={() => {
                 selectHaptic();
                 setFiltersOpen((v) => !v);
               }}
             >
               <Filter className="w-4 h-4" aria-hidden="true" />
-              <span className="max-sm:hidden" aria-hidden="true">Filters</span>
+              <span className="max-sm:hidden md:hidden" aria-hidden="true">Filters</span>
               {filterCount > 0 && (
                 <span
                   className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold text-[var(--text-on-light-accent)]"
@@ -269,7 +272,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* Day tabs */}
         {showDaySkeleton && (
           <div
-            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:flex-1"
+            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:flex-1 md:flex-[1_1_8rem]"
             aria-hidden="true"
           >
             {Array.from({ length: 3 }).map((_, i) => (
@@ -285,6 +288,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
               // Below md the day rail shares the second chrome row with the Filters button.
               'max-md:flex-1',
+              // From md up the rail takes the space the other controls leave and scrolls inside it, so many days never push the row apart.
+              'md:flex-[1_1_8rem]',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -374,8 +379,15 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         </div>
 
         {(currentProfile || onSchedulePath) && (
-          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3" />
+          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3 md:order-3" />
         )}
+
+        {/* md up: a full-width zero-height line between row 1 (picker, view, days, search, Group by from xl) and row 2 (stage chips, My picks, status). The negative margin cancels the extra row gap. */}
+        <div
+          aria-hidden="true"
+          data-testid="subheader-row-break"
+          className="hidden md:order-1 md:block md:h-0 md:basis-full md:mb-[calc(var(--space-2)*-1)]"
+        />
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div
@@ -388,7 +400,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[clamp(200px,18vw,260px)]',
             )}
             role="search"
           >
@@ -424,7 +436,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showGroupBy && (
-          <div className="flex items-center gap-2" role="group" aria-labelledby="cards-group-by">
+          <div className="flex items-center gap-2 md:order-2 xl:order-none" role="group" aria-labelledby="cards-group-by">
             <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
               Group by
             </span>
@@ -466,7 +478,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             aria-disabled={!canFilterMine || undefined}
             aria-label={canFilterMine ? 'Show only my picks' : undefined}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:order-2',
               'border-2 transition-[border-color,background-color,color] duration-(--duration-med)',
               'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               !canFilterMine
@@ -482,12 +494,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showMyPicksSkeleton && (
-          <div className="skeleton-shimmer h-[44px] w-[104px] rounded-full shrink-0" aria-hidden="true" />
+          <div className="skeleton-shimmer h-[44px] w-[104px] rounded-full shrink-0 md:order-2" aria-hidden="true" />
         )}
 
         {/* Stage filter chips */}
         {showStageSkeleton && (
-          <div className="stage-filter-scroll relative min-w-0 w-full" aria-hidden="true">
+          <div className="stage-filter-scroll relative min-w-0 w-full md:order-2 md:w-auto md:flex-[1_1_8rem]" aria-hidden="true">
             <div className="filter-stage flex gap-[var(--space-3)] flex-nowrap overflow-x-auto scrollbar-hide">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="skeleton-shimmer h-[44px] w-[76px] rounded-full shrink-0" />
@@ -499,7 +511,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showStageFilter && (
           <div
             className={cn(
-              'stage-filter-scroll relative min-w-0 w-full',
+              'stage-filter-scroll relative min-w-0 w-full md:order-2 md:w-auto md:flex-[1_1_8rem]',
               canScrollLeft && 'fade-left',
               canScrollRight && 'fade-right',
             )}
@@ -562,7 +574,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showGenreFilter && (
           <div
             className={cn(
-              'genre-filter-scroll relative min-w-0 w-full md:flex md:items-center md:gap-[var(--space-3)]',
+              'genre-filter-scroll relative min-w-0 w-full md:order-4 md:flex md:items-center md:gap-[var(--space-3)]',
               !filtersOpen && 'md:hidden',
             )}
           >
@@ -622,7 +634,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <div
             role="group"
             aria-label="Days I'm going"
-            className={cn('flex items-center gap-[var(--space-3)] flex-wrap w-full', !filtersOpen && 'md:hidden')}
+            className={cn('flex items-center gap-[var(--space-3)] flex-wrap w-full md:order-4', !filtersOpen && 'md:hidden')}
           >
             <span className="type-micro text-text-muted">Days I'm going</span>
             {days.map((day, i) => {

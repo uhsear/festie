@@ -501,3 +501,63 @@ describe('SubHeader day chips', () => {
     expect(chip.className).not.toMatch(/active:scale/);
   });
 });
+
+describe('SubHeader desktop row plan', () => {
+  const mkDays = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, label: `Day ${i + 1}`, date: `2026-05-${String(29 + i).padStart(2, '0')}` }));
+  const mkStages = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, name: `Stage ${i}` }));
+  const original = { days: storeState.days, stages: storeState.stages };
+  // The class list says which flex line an item joins: order 0 is row 1, the break is order 1, row 2 is order 2 and up.
+  const orderAt = (el: Element, bp: 'md' | 'xl') => {
+    const cls = el.className;
+    if (bp === 'xl' && /(^|\s)xl:order-none(\s|$)/.test(cls)) return 0;
+    const m = /(^|\s)md:order-(\d+)(\s|$)/.exec(cls);
+    return m ? Number(m[2]) : 0;
+  };
+
+  afterEach(() => {
+    storeState.days = original.days;
+    storeState.stages = original.stages;
+    mockPathname = '/cards';
+  });
+
+  it.each([
+    ['many days, many stages', 7, 6],
+    ['days only, two stages', 2, 2],
+    ['one day, one stage', 1, 1],
+  ])('puts the controls on row 1 and the stage chips on row 2 for %s', (_name, dayCount, stageCount) => {
+    storeState.days = mkDays(dayCount);
+    storeState.stages = mkStages(stageCount);
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    const search = screen.getByRole('search');
+    const views = screen.getByRole('navigation', { name: 'Schedule view' });
+    const groupBy = screen.getByRole('group', { name: 'Group by' });
+    const stageChips = screen.getByRole('group', { name: 'Filter by stage' }).parentElement!;
+    const myPicks = screen.getByRole('button', { name: 'Show only my picks' });
+    const rowBreak = screen.getByTestId('subheader-row-break');
+
+    // From xl: one row of picker, view switch, day rail, search and Group by.
+    for (const el of [rail, search, views, groupBy]) expect(orderAt(el, 'xl')).toBe(0);
+    // Between md and xl Group by drops to row 2 so row 1 keeps the day rail.
+    expect(orderAt(groupBy, 'md')).toBe(2);
+    for (const el of [rail, search, views]) expect(orderAt(el, 'md')).toBe(0);
+    // Row 2 holds the stage chips and My picks at every desktop width, after one full-width break.
+    expect(orderAt(rowBreak, 'md')).toBe(1);
+    expect(rowBreak.className).toContain('md:basis-full');
+    for (const bp of ['md', 'xl'] as const) {
+      expect(orderAt(stageChips, bp)).toBe(2);
+      expect(orderAt(myPicks, bp)).toBe(2);
+    }
+    // The rail has a small flex basis, so any number of days scrolls inside the row and never forces a wrap.
+    expect(rail.className).toContain('md:flex-[1_1_8rem]');
+    expect(stageChips.className).toContain('md:flex-[1_1_8rem]');
+  });
+
+  it('leaves the phone path alone: the fold, the order-3 and order-4 wrappers and the full-width chips stay', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(document.getElementById('subheader-filters')).toHaveClass('max-md:order-4', 'max-md:hidden');
+    expect(screen.getByRole('group', { name: 'Filter by stage' }).parentElement).toHaveClass('w-full');
+    expect(screen.getByRole('group', { name: 'Festival days' }).parentElement).toHaveClass('max-md:flex-1');
+  });
+});
