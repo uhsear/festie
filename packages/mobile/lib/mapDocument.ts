@@ -36,7 +36,7 @@
 // are a separate problem — a festival still needs a cached PMTiles archive
 // (lib/basemapCache.ts) to draw anything without a network.
 
-import { colors, colorsDaylight } from '@festie/shared/tokens';
+import { colors, colorsDaylight, durationSpatial } from '@festie/shared/tokens';
 import type { ThemePreference } from '@festie/shared/stores';
 import { OPENFREEMAP_HOST } from '@festie/shared/utils';
 import { safeJsonForScript } from './webviewBridge';
@@ -513,7 +513,7 @@ export function buildMapHtml(
       // on every position tick as peers move.
       if (bounds && !HAD_PINS && !FRAMED_LIVE && items.length > 0) {
         FRAMED_LIVE = true;
-        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: 300 });
+        map.fitBounds(bounds, { padding: FIT_PADDING, maxZoom: 16, duration: ${durationSpatial.med} });
       }
     }
 
@@ -740,7 +740,7 @@ export function buildMapHtml(
         // Coords are numeric + range-checked on the RN side before injection.
         window.__festieFlyTo = function (lng, lat, zoom) {
           try {
-            map.flyTo({ center: [lng, lat], zoom: zoom || 16, duration: 600 });
+            map.flyTo({ center: [lng, lat], zoom: zoom || 16, duration: ${durationSpatial.slow} });
             post({ type: 'recentered' });
           } catch (err) { post({ type: 'error', reason: 'flyto' }); }
         };

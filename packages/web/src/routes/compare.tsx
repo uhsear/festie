@@ -49,7 +49,7 @@ function CompareViewInner() {
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)');
 
   // N1: tween the live member count when crew membership changes in real time.
-  const animatedMemberCount = useAnimatedNumber(columns.length);
+  const animatedMemberCount = useAnimatedNumber(columns.length, { startFrom: 0 });
 
   const festivalId = currentFestival?.id;
   const handleAdd = useCallback(

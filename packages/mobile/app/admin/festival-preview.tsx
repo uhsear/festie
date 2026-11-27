@@ -7,6 +7,7 @@ import { useAuthStore } from '@festie/shared/stores';
 import { resolveStageColor, type FestivalPreview } from '@festie/shared/utils';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
@@ -82,8 +83,7 @@ export default function AdminFestivalPreviewScreen() {
       {loading ? (
         <LoadingState label="Loading preview" />
       ) : error || !id || !preview ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load the preview"
           message="Something went wrong reaching the server."
           action={id ? { label: 'Try again', onPress: () => void load() } : undefined}

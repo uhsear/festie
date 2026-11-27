@@ -49,6 +49,8 @@
   --duration-slow: 320ms;
   --duration-pulse: 750ms;
   --press-scale: 0.96;
+  --stagger-step: 30ms;
+  --stagger-last: 7;
   --duration-effects-fast: 120ms;
   --duration-effects-med: 200ms;
   --duration-effects-slow: 320ms;

@@ -16,6 +16,7 @@ import SosControl from '../../components/SosControl';
 import FreshnessChip from '../../components/FreshnessChip';
 import OfflineStatusChip from '../../components/OfflineStatusChip';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
@@ -132,8 +133,7 @@ export default function MapScreen() {
       <View testID="map-screen" style={styles.screen}>
         <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
         {loadState === 'error' ? (
-          <EmptyState
-            icon="cloud-offline-outline"
+          <LoadErrorState
             title={COPY.festivalLoad.errorTitle}
             message={festivalsError ?? COPY.festivalLoad.errorBody}
             action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}

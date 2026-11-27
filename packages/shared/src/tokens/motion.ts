@@ -51,6 +51,11 @@ export const stagger = {
   maxItems: 8,
 } as const;
 
+/** Entrance delay in ms for the item at `index`, capped at the last staggered item. */
+export function staggerDelay(index: number): number {
+  return Math.min(Math.max(index, 0), stagger.maxItems - 1) * stagger.stepMs;
+}
+
 /**
  * Duration, split by WHAT IS MOVING. `duration` above is unchanged and stays
  * the general-purpose scale; these two groups are additive and name the axis.
@@ -86,6 +91,15 @@ export const durationSpatial = {
   fast: duration.med,
   med: duration.slow,
   slow: 480,
+} as const;
+
+/**
+ * One-shot celebration motion: the presence ring and the Wrap confetti. Both
+ * play once and are longer than the UI scale on purpose. Reduce Motion skips them.
+ */
+export const durationCelebration = {
+  ring: durationSpatial.slow,
+  confetti: 1200,
 } as const;
 
 /**

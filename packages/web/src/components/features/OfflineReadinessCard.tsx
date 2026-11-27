@@ -47,7 +47,7 @@ function StepRow({
           <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
         ) : isActive ? (
           <span
-            className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
+            className="ambient-loop block w-2 h-2 rounded-full motion-reduce:opacity-60"
             style={{ background: 'var(--color-accent-aqua)', animation: 'offline-step-pulse 900ms ease-in-out infinite' }}
             aria-hidden="true"
           />
@@ -171,7 +171,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
           ) : summary.overall === 'syncing' ? (
             <span
-              className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
+              className="ambient-loop block w-2 h-2 rounded-full motion-reduce:opacity-60"
               style={{ background: 'var(--color-accent-aqua)', animation: 'offline-step-pulse 900ms ease-in-out infinite' }}
               aria-hidden="true"
             />
@@ -190,7 +190,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           aria-busy={isDownloading || undefined}
           className={cn(
             'inline-flex flex-shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold min-h-11',
-            'transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)]',
+            'transition-[background-color,scale] duration-(--duration-med) ease-(--ease-out)',
             'bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] press-scale',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             'disabled:opacity-50 disabled:cursor-not-allowed',

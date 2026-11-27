@@ -31,7 +31,7 @@ interface StageBadgeProps {
 // `default`/`pick` tighten to the mobile stage-pill density: the `micro` type
 // role (10px / 600 / 0.08em caps) at spacing[2]/spacing[1] padding.
 const VARIANT_CLASS: Record<StageBadgeVariant, string> = {
-  chip: 'inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold cursor-pointer border-2 border-transparent transition-[color,background-color,border-color,box-shadow] duration-200',
+  chip: 'inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold cursor-pointer border-2 border-transparent transition-[color,background-color,border-color,box-shadow] duration-(--duration-med)',
   pick: 'type-micro inline-block max-w-full truncate align-middle rounded-full px-2 py-1',
   default: 'type-micro inline-block rounded-full px-2 py-1',
 };

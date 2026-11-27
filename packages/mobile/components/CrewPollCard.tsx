@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { duration as motionDuration } from '@festie/shared/tokens';
+import { duration as motionDuration, staggerDelay } from '@festie/shared/tokens';
 import type { CrewMember, CrewPoll, Priority } from '@festie/shared/types';
 import {
   decisionSetId,
@@ -43,7 +43,7 @@ interface CrewPollCardProps {
 }
 
 /**
- * R26: Animated result bar — width transitions via Reanimated withTiming (400ms).
+ * R26: Animated result bar — scaleX (left origin) via Reanimated withTiming (slow duration).
  * Instant when reduce-motion is on. Only the fill bar is animated; option row
  * border / gestures are untouched.
  */
@@ -73,13 +73,13 @@ function PollBarFill({
       widthPct.value = pct;
       return;
     }
-    widthPct.value = reduceMotion ? pct : withTiming(pct, { duration: 400 });
+    widthPct.value = reduceMotion ? pct : withTiming(pct, { duration: motionDuration.slow });
     // widthPct is a useSharedValue (stable ref); listed to satisfy exhaustive-deps
     // without changing when the effect re-runs (only pct / reduceMotion drive it).
   }, [pct, reduceMotion, widthPct]);
 
   const animStyle = useAnimatedStyle(() => ({
-    width: `${widthPct.value}%` as unknown as number,
+    transform: [{ scaleX: widthPct.value / 100 }],
   }));
 
   return (
@@ -147,8 +147,8 @@ export default function CrewPollCard({
         const isWinning = votes === topCount && votes > 0;
         const voterLine = voterNamesLine(tally.voters[i] ?? [], members);
         const tail = voterLine ? `, ${voterLine}` : '';
-        // R22: stagger poll options on initial reveal; cap at index 9.
-        const optionEntering = reduceMotion ? undefined : FadeInDown.delay(Math.min(i, 9) * 40).duration(250);
+        // R22: stagger poll options on initial reveal; shared stagger step and cap.
+        const optionEntering = reduceMotion ? undefined : FadeInDown.delay(staggerDelay(i)).duration(motionDuration.med);
         return (
           <Animated.View key={`${poll.id}-${i}`} entering={optionEntering}>
             <TouchableOpacity
@@ -286,8 +286,10 @@ const useStyles = makeStyles((t) => ({
   optionFill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
+    transformOrigin: 'left',
     backgroundColor: t.colors.ring.aqua,
   },
   optionFillWinning: {

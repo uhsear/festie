@@ -191,6 +191,8 @@ test.describe('festival planner browser regression', () => {
 
     // The first pick on a card joins the festival and saves the pick.
     const betaCard = page.locator('[data-testid="set-card"][data-artist="Beta"]');
+    // DP-35 hides unpressed pick buttons on a fine pointer until the card is hovered.
+    await betaCard.hover();
     const wantBtn = betaCard.getByRole('button', { name: /^Want to See/ });
     await expect(wantBtn).toHaveAttribute('aria-pressed', 'false');
     await wantBtn.click();
@@ -221,9 +223,9 @@ test.describe('festival planner browser regression', () => {
 
     // Alpha (10:00-11:00, Main) and Beta (10:30-11:30, Forest) overlap.
     for (const artist of ['Alpha', 'Beta']) {
-      const want = page
-        .locator(`[data-testid="set-card"][data-artist="${artist}"]`)
-        .getByRole('button', { name: /^Want to See/ });
+      const card = page.locator(`[data-testid="set-card"][data-artist="${artist}"]`);
+      await card.hover();
+      const want = card.getByRole('button', { name: /^Want to See/ });
       await want.click();
       await expect(want).toHaveAttribute('aria-pressed', 'true');
     }

@@ -3,6 +3,7 @@ import { Users, type LucideIcon } from 'lucide-react';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
+import IntroLineup from './IntroLineup';
 import { cn } from '@/lib/utils';
 
 interface GuestTeaserProps {
@@ -27,7 +28,13 @@ export default function GuestTeaser({ mode, className }: GuestTeaserProps) {
       aria-labelledby={`guest-teaser-${mode}-heading`}
       className={cn('flex flex-col items-center justify-center py-8 px-4', className)}
     >
-      <Icon aria-hidden="true" className="w-14 h-14 text-accent-aqua mb-6" />
+      {mode === 'picks' ? (
+        <div className="mb-6 flex w-full justify-center">
+          <IntroLineup />
+        </div>
+      ) : (
+        <Icon aria-hidden="true" className="w-14 h-14 text-accent-aqua mb-6" />
+      )}
       <h2
         id={`guest-teaser-${mode}-heading`}
         className="text-2xl font-display font-bold text-text-primary mb-3 text-center"

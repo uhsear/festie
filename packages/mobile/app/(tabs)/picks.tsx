@@ -55,6 +55,7 @@ import { undoNotifier } from '../../lib/undoNotifier';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import SetCardMobile from '../../components/SetCardMobile';
 import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
 import { usePicksCalendar } from '../../hooks/usePicksCalendar';
@@ -537,8 +538,8 @@ export default function PicksScreen() {
 
   const scrollToTop = useCallback(() => {
     haptics.tap();
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [haptics]);
+    listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+  }, [haptics, reduceMotion]);
 
 
   // Nothing to export / share with zero picks — disable so the action can't
@@ -687,7 +688,7 @@ export default function PicksScreen() {
       />
     ) : stats.total === 0 ? (
       <EmptyState
-        illustration="noPicks"
+        ghostRow="picks"
         title="No picks yet"
         message="Browse the lineup and tap the sets you want to see."
         action={{ label: 'Browse the lineup', onPress: () => router.navigate('/(tabs)') }}
@@ -715,8 +716,7 @@ export default function PicksScreen() {
     body = <PicksSkeleton />;
   } else if (error && stats.total === 0) {
     body = (
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn’t load your picks"
         message={error}
         action={{ label: 'Try again', onPress: handleRefresh }}

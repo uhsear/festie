@@ -78,11 +78,11 @@ describe('PollOptionButton', () => {
     expect(svg).toBeNull();
   });
 
-  it('renders progress bar with correct width', () => {
+  it('renders progress bar scaled to the vote share', () => {
     const { container } = render(<PollOptionButton {...defaultProps} pct={42} />);
     const bar = container.querySelector('.crew-poll-bar');
     expect(bar).toBeInTheDocument();
-    expect(bar!.getAttribute('style')).toContain('width: 42%');
+    expect(bar!.getAttribute('style')).toContain('scaleX(0.42)');
   });
 
   it('renders the voter line and includes it in the accessible name', () => {

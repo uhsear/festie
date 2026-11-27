@@ -32,7 +32,7 @@ describe('inboxCopy', () => {
   });
 
   it('never says "Log in"', () => {
-    const all = [INBOX_COPY.title, INBOX_COPY.empty, INBOX_COPY.error, INBOX_COPY.retry, INBOX_COPY.footnote, INBOX_COPY.bellLabel, INBOX_COPY.unreadA11y];
+    const all = [INBOX_COPY.title, INBOX_COPY.emptyTitle, INBOX_COPY.emptyBody, INBOX_COPY.error, INBOX_COPY.retry, INBOX_COPY.footnote, INBOX_COPY.bellLabel, INBOX_COPY.unreadA11y];
     for (const s of all) expect(s).not.toMatch(/log in/i);
   });
 });

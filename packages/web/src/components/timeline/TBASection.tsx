@@ -46,7 +46,7 @@ export default function TBASection({
         'bg-[var(--color-bg-card)] rounded-sm',
         'border border-[var(--color-border)]',
         // fade-in animation kept via keyframe reference
-        'animate-[timeline-legend-fade_220ms_ease-out_both]',
+        'animate-[timeline-legend-fade_var(--duration-med)_var(--ease-out)_both]',
         'motion-reduce:!animate-none',
       )}
     >
@@ -78,7 +78,6 @@ export default function TBASection({
           const myPick = getMyPick(s.id);
           const others = getOtherPicks(s.id);
           const stage = stages.find((st) => st.id === s.stageId);
-          const stageColor = stage ? getStageColor(stage.id) : undefined;
           const dn = artistDisplayName(s, currentFestival?.b2bSeparator);
 
           return (
@@ -90,7 +89,7 @@ export default function TBASection({
                 'bg-[var(--color-bg-secondary)] rounded-sm',
                 'border border-[var(--color-border)]',
                 'cursor-pointer',
-                'transition-[scale,box-shadow] duration-150',
+                'transition-[scale,box-shadow] duration-(--duration-med)',
                 'ease-out',
                 'press-scale',
                 'hover:bg-[var(--color-bg-hover)] hover:outline-2 hover:outline-[var(--color-accent-aqua)]',
@@ -101,11 +100,7 @@ export default function TBASection({
                 myPick === 'want-to-see' && 'shadow-[inset_0_0_24px_var(--color-aqua-a12)]',
                 myPick === 'maybe' && 'shadow-[inset_0_0_24px_var(--color-amber-a12)]',
               )}
-              style={
-                stageColor
-                  ? ({ '--i': Math.min(idx, 20) } as React.CSSProperties)
-                  : ({ '--i': Math.min(idx, 20) } as React.CSSProperties)
-              }
+              style={{ '--i': idx } as React.CSSProperties}
             >
               {/* Positioned click overlay — keeps outer div non-interactive so
                   priority buttons inside don't trigger nested-interactive. */}
@@ -133,7 +128,7 @@ export default function TBASection({
                           'rounded-xs',
                           'text-[var(--color-text-secondary)] cursor-pointer',
                           'text-[length:var(--font-size-12)] px-1.5 py-[3px] leading-none',
-                          'transition-[color,border-color,background-color] duration-[250ms] ease-[var(--ease-standard)]',
+                          'transition-[color,border-color,background-color] duration-(--duration-slow) ease-(--ease-standard)',
                           'hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-overlay-4)]',
                           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
                           // Hit-slop pseudo-element for 44x44 tap target

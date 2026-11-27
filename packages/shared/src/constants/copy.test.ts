@@ -132,3 +132,13 @@ describe('a11y names start with the visible text (WCAG 2.5.3)', () => {
     expect(COPY.jumpToNow.a11y.startsWith(COPY.jumpToNow.label)).toBe(true);
   });
 });
+
+describe('COPY.wrap pending states', () => {
+  it('name the festival Wrap and give both states a title and a description', () => {
+    expect(COPY.wrap.pending.title).toBe(`${COPY.wrap.name} coming soon`);
+    for (const s of [COPY.wrap.pending, COPY.wrap.empty]) {
+      expect(s.title.length).toBeGreaterThan(0);
+      expect(s.description.length).toBeGreaterThan(0);
+    }
+  });
+});

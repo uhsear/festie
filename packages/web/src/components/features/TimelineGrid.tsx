@@ -332,10 +332,13 @@ export default function TimelineGrid({
                 'bg-[var(--color-live-fill)]',
                 'ring-2 ring-[var(--color-bg-primary)]',
                 'shadow-[0_0_10px_var(--color-live-fill)]',
-                'animate-[timeline-now-pulse_1800ms_ease-out_infinite]',
-                'motion-reduce:!animate-none',
               )}
-            />
+            >
+              <span
+                className="ambient-loop absolute inset-0 rounded-full bg-[var(--color-live-fill)] animate-[timeline-now-pulse_1800ms_ease-out_infinite] motion-reduce:!animate-none"
+                aria-hidden="true"
+              />
+            </div>
           </div>
         </div>
       )}

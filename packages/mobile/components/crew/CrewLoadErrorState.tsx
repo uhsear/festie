@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import ScreenHeader from '../ScreenHeader';
-import EmptyState from '../EmptyState';
+import LoadErrorState from '../LoadErrorState';
 
 import { useStyles } from './styles';
 
@@ -15,8 +15,7 @@ export default function CrewLoadErrorState({
   return (
   <View style={styles.screen} testID="crew-screen">
     <ScreenHeader title="Crew" icon="people" />
-    <EmptyState
-      icon="cloud-offline-outline"
+    <LoadErrorState
       title="Couldn't load your crew"
       message="Check your connection, then try again."
       action={{ label: 'Try again', onPress: retry }}

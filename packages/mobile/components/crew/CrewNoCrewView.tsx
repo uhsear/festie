@@ -57,7 +57,7 @@ export default function CrewNoCrewView({
       automaticallyAdjustKeyboardInsets
     >
       <EmptyState
-        illustration="noCrew"
+        ghostRow="crew"
         title="No crew yet"
         message="Plan with your friends. Make a crew, or join one with a code."
       />

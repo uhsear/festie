@@ -38,6 +38,7 @@ import {
 } from '@festie/shared/utils';
 import type { AmenityType, Festival, FestivalMapConfig, Stage } from '@festie/shared/types';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import { ConfirmDialog } from '../../components/admin';
 import type { AuthoringMode } from '../../lib/webviewBridge';
@@ -555,8 +556,7 @@ export default function FestivalMapEditorScreen() {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: headerTitle, headerShown: true }} />
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load festival"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => void load() }}
