@@ -493,7 +493,8 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
           {current.length === 0 && past.length === 0 ? (
             !showForm && <EmptyState
-              illustration="emptyList"
+              // Same 48px icon as the Activity tab's empty state, so the two read as one component.
+              icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
               title="No meeting points yet"
               description="Drop a pin so your crew knows where to meet."
               cta={{ label: 'Add meeting point', onClick: () => setShowForm(true) }}
