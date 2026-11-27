@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { SetStatusResult } from '@festie/shared/utils';
@@ -645,6 +645,21 @@ describe('SetCard', () => {
       expect(artist).toHaveClass('text-text-secondary');
       expect(stage).toHaveClass('text-text-secondary');
       expect(screen.getByTestId('set-card-rail').style.background).toBe('var(--color-overlay-3)');
+    });
+
+    it('marks an ended set with an Ended chip and swaps a pick for Rate while the festival is live', () => {
+      setPhase(-1, 1);
+      mockPicks('must');
+      renderPast();
+      expect(within(screen.getByTestId('set-card')).getByText('Ended')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Rate Daft Punk' })).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: /Priority for/ })).not.toBeInTheDocument();
+    });
+
+    it('shows no Ended chip when the festival is not live', () => {
+      setPhase(-3, -2);
+      renderPast();
+      expect(screen.queryByText('Ended')).not.toBeInTheDocument();
     });
 
     it.each([

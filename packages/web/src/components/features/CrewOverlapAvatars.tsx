@@ -68,13 +68,13 @@ export default function CrewOverlapAvatars({ friends, artistName, className, onC
               name={f.name || f.initials || 'Crew'}
               image={f.avatarUrl ?? undefined}
               size="xs"
-              className={cn('ring-2 ring-bg-card rounded-full', i > 0 && '-ml-2')}
+              className={cn('ring-2 ring-bg-card rounded-full', i > 0 && '-ml-1.5')}
             />
           ))}
           {overflow > 0 && (
             <span
               className={cn(
-                'flex-center -ml-2 w-6 h-6 rounded-full ring-2 ring-bg-card',
+                'flex-center -ml-1.5 w-6 h-6 rounded-full ring-2 ring-bg-card',
                 'type-micro font-bold text-accent-aqua',
                 'bg-[var(--color-aqua-a15)]',
               )}
