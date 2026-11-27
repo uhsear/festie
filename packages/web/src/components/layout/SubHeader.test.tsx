@@ -506,12 +506,16 @@ describe('SubHeader desktop row plan', () => {
   const mkDays = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `d${i}`, label: `Day ${i + 1}`, date: `2026-05-${String(29 + i).padStart(2, '0')}` }));
   const mkStages = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, name: `Stage ${i}` }));
   const original = { days: storeState.days, stages: storeState.stages };
-  // The class list says which flex line an item joins: order 0 is row 1, the break is order 1, row 2 is order 2 and up.
+  // The class list says which flex line an item joins: order 0 is row 1, the break is order 1, row 2 is order 2, below xl row 3 is order 4 and up.
   const orderAt = (el: Element, bp: 'md' | 'xl') => {
-    const cls = el.className;
-    if (bp === 'xl' && /(^|\s)xl:order-none(\s|$)/.test(cls)) return 0;
-    const m = /(^|\s)md:order-(\d+)(\s|$)/.exec(cls);
-    return m ? Number(m[2]) : 0;
+    const tokens = el.className.split(/\s+/);
+    const find = (re: RegExp) => tokens.map((t) => re.exec(t)).find(Boolean);
+    if (bp === 'md') {
+      const belowXl = find(/^md:max-xl:order-(\d+)$/);
+      if (belowXl) return Number(belowXl[1]);
+    }
+    const m = find(/^md:order-(\d+)$/);
+    return m ? Number(m[1]) : 0;
   };
 
   afterEach(() => {
@@ -524,7 +528,7 @@ describe('SubHeader desktop row plan', () => {
     ['many days, many stages', 7, 6],
     ['days only, two stages', 2, 2],
     ['one day, one stage', 1, 1],
-  ])('puts the controls on row 1 and the stage chips on row 2 for %s', (_name, dayCount, stageCount) => {
+  ])('keeps row 1 for the day chips, row 2 for the controls, and the stage chips on row 2 from xl or row 3 below it for %s', (_name, dayCount, stageCount) => {
     storeState.days = mkDays(dayCount);
     storeState.stages = mkStages(stageCount);
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
@@ -535,25 +539,53 @@ describe('SubHeader desktop row plan', () => {
     const groupBy = screen.getByRole('group', { name: 'Group by' });
     const stageChips = screen.getByRole('group', { name: 'Filter by stage' }).parentElement!;
     const myPicks = screen.getByRole('button', { name: 'Show only my picks' });
+    const filters = screen.getByRole('button', { name: 'Filters' });
+    const status = screen.getByTestId('schedule-status-line');
     const rowBreak = screen.getByTestId('subheader-row-break');
+    const rowBreak2 = screen.getByTestId('subheader-row-break-2');
 
-    // From xl: one row of picker, view switch, day rail, search and Group by.
-    for (const el of [rail, search, views, groupBy]) expect(orderAt(el, 'xl')).toBe(0);
-    // Between md and xl Group by drops to row 2 so row 1 keeps the day rail.
-    expect(orderAt(groupBy, 'md')).toBe(2);
-    for (const el of [rail, search, views]) expect(orderAt(el, 'md')).toBe(0);
-    // Row 2 holds the stage chips and My picks at every desktop width, after one full-width break.
-    expect(orderAt(rowBreak, 'md')).toBe(1);
-    expect(rowBreak.className).toContain('md:basis-full');
+    // Row 1 holds the picker, view switch and day chips only, so the chips get the width Search and Group by used to take.
     for (const bp of ['md', 'xl'] as const) {
-      expect(orderAt(stageChips, bp)).toBe(2);
-      expect(orderAt(myPicks, bp)).toBe(2);
+      for (const el of [rail, views]) expect(orderAt(el, bp)).toBe(0);
+      expect(orderAt(rowBreak, bp)).toBe(1);
+      for (const el of [filters, search, groupBy, myPicks]) expect(orderAt(el, bp)).toBe(2);
     }
-    // The rail has a small flex basis, so any number of days scrolls inside the row and never forces a wrap.
-    expect(rail.className).toContain('md:flex-[1_1_8rem]');
-    expect(stageChips.className).toContain('md:flex-[1_1_8rem]');
+    expect(rowBreak.className).toContain('md:basis-full');
+    // From xl the stage chips and the status line close row 2; below it they take a row 3 behind a second break.
+    expect(orderAt(stageChips, 'xl')).toBe(2);
+    expect(orderAt(status, 'xl')).toBe(3);
+    expect(orderAt(rowBreak2, 'md')).toBe(3);
+    expect(orderAt(stageChips, 'md')).toBe(4);
+    expect(orderAt(status, 'md')).toBe(5);
+    expect(rowBreak2.className).toMatch(/(^|\s)hidden(\s|$)/);
+    expect(rowBreak2.className).toContain('md:max-xl:basis-full');
   });
 
+  it('sizes the day rail to its whole chip set and never shrinks a chip, so a chip is never cut to its first letters', () => {
+    storeState.days = mkDays(3);
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const rail = screen.getByRole('group', { name: 'Festival days' }).parentElement!;
+    // Basis auto: the rail wraps to a row of its own before it clips, and scrolls only when the set is wider than the nav.
+    expect(rail.className).toContain('md:flex-[1_1_auto]');
+    expect(rail.className).not.toContain('8rem');
+    for (const chip of within(screen.getByRole('group', { name: 'Festival days' })).getAllByRole('button')) {
+      expect(chip).toHaveClass('shrink-0', 'whitespace-nowrap');
+    }
+  });
+
+  it('gives Search a fixed width that shows the whole placeholder, and leaves the status line its own slot', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const search = screen.getByRole('search');
+    expect(screen.getByPlaceholderText('Search artists or stages')).toBeInTheDocument();
+    expect(search.className).toContain('md:w-[clamp(15rem,18vw,16.25rem)]');
+    expect(search).toHaveClass('md:flex-none');
+    expect(search.className).not.toMatch(/(^|\s)ml-auto(\s|$)/);
+    const status = screen.getByTestId('schedule-status-line');
+    expect(status).toHaveClass('shrink-0', 'whitespace-nowrap');
+  });
+});
+
+describe('SubHeader phone path', () => {
   it('leaves the phone path alone: the fold, the order-3 and order-4 wrappers and the full-width chips stay', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(document.getElementById('subheader-filters')).toHaveClass('max-md:order-4', 'max-md:hidden');
