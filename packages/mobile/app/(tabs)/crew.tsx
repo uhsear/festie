@@ -712,7 +712,7 @@ export default function CrewScreen() {
   const crewFestival = festivalForCrew(crew, currentFestival);
   const inviteExpiry = formatInviteExpiry(crew.inviteExpiresAt);
   const countText = memberCountLabel(members.length, crew.maxMembers);
-  const headerSubtitle = crewFestival ? `${festivalLabel(crewFestival)} · ${countText}` : countText;
+  const headerSubtitle = crewFestival ? `${festivalLabel(crewFestival, festivals)} · ${countText}` : countText;
 
   const overlapEntries: CrewOverlap[] = Object.values(crewOverlap)
     .filter((o) => o.memberCount > 0)

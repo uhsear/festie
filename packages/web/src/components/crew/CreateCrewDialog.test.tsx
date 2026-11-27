@@ -57,7 +57,7 @@ describe('CreateCrewDialog', () => {
   it('submits with the festival line and the chosen festival id', async () => {
     const onOpenChange = vi.fn();
     render(<CreateCrewDialog open onOpenChange={onOpenChange} />);
-    expect(screen.getByText('For EDC Orlando 2099')).toBeInTheDocument();
+    expect(screen.getByText('For EDC Orlando')).toBeInTheDocument();
     expect(screen.queryByLabelText('Festival')).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Crew name'), 'Sunset Squad');
     await userEvent.click(screen.getByRole('button', { name: 'Create crew' }));

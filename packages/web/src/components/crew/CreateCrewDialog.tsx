@@ -61,7 +61,7 @@ export default function CreateCrewDialog({ open, onOpenChange }: CreateCrewDialo
     <Dialog open={open} onOpenChange={onOpenChange} title="New crew">
       <form onSubmit={submit} className="space-y-3" {...(busy ? { 'aria-busy': true } : {})}>
         <p className="text-sm text-text-secondary">
-          {chosen ? crewCopy.createFor(festivalLabel(chosen)) : crewCopy.pickFestivalFirst}
+          {chosen ? crewCopy.createFor(festivalLabel(chosen, festivals)) : crewCopy.pickFestivalFirst}
         </p>
         {choices.length >= 2 && (
           <div className="space-y-1">
@@ -77,7 +77,7 @@ export default function CreateCrewDialog({ open, onOpenChange }: CreateCrewDialo
             >
               {choices.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {festivalLabel(f)}
+                  {festivalLabel(f, festivals)}
                 </option>
               ))}
             </select>
