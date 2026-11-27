@@ -183,12 +183,13 @@ describe('NowHero lead object', () => {
     expect(countdown.parentElement).toContainElement(screen.getByText(/until/));
   });
 
-  it('turns the countdown amber in the last ten minutes of a set', () => {
+  it('turns the countdown to the danger red, not amber, in the last ten minutes of a set', () => {
     const { unmount } = render(<NowHero {...props} selection={liveSel(NOW + 9 * 60_000)} />);
-    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('text-accent-amber');
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('text-text-danger');
+    expect(screen.getByTestId('fm-lead-countdown')).not.toHaveClass('text-accent-amber');
     unmount();
     render(<NowHero {...props} selection={liveSel(NOW + 11 * 60_000)} />);
-    expect(screen.getByTestId('fm-lead-countdown')).not.toHaveClass('text-accent-amber');
+    expect(screen.getByTestId('fm-lead-countdown')).not.toHaveClass('text-text-danger');
   });
 
   it('leads with a display-lg countdown before the festival', () => {

@@ -23,7 +23,8 @@ import ArtistName, { RowOpenButton } from '../features/ArtistName';
 // Countdown turns amber and bold when a set is this close, so "go now" reads
 // at a glance in a crowd.
 const IMMINENT_MIN = 5;
-// A live set this close to its end gets the same amber, so the one to leave for stands out among concurrent cards.
+// A live set this close to its end gets the danger red, not amber: amber is brown in Daylight, which is off palette on the green Now card.
+// text.danger clears 4.5:1 on the card in Stage (6.7:1) and 7:1 in Daylight (8.2:1).
 const ENDING_SOON_MIN = 10;
 
 interface Props {
@@ -146,7 +147,7 @@ export default function NowHero({
                   )}
                 </span>
                 <span
-                  className={cn('shrink-0 type-heading tabular-nums', endingSoon ? 'text-accent-amber' : 'text-text-primary')}
+                  className={cn('shrink-0 type-heading tabular-nums', endingSoon ? 'text-text-danger' : 'text-text-primary')}
                   data-testid="fm-lead-countdown"
                 >
                   {fmtTimeLeft(end, nowMs)}
