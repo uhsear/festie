@@ -16,6 +16,13 @@ describe('crew horizontal rows fit or hint that they scroll', () => {
     expect(src).toContain('<EndFade visible={more}');
   });
 
+  it('Settle up toggle wraps under its label and shrinks its options at large text instead of running off the card', () => {
+    const src = read('components/CrewExpenses.tsx');
+    expect(src).toMatch(/ledgerHeader: \{\s*flexDirection: 'row',\s*flexWrap: 'wrap',/);
+    expect(src).toMatch(/settleToggle: \{\s*flexGrow: 1,\s*flexShrink: 1,/);
+    expect(src).toMatch(/settleToggleTab: \{\s*flexGrow: 1,\s*flexShrink: 1,/);
+  });
+
   it('EndFade draws from tokens only and never intercepts touches', () => {
     const src = read('components/EndFade.tsx');
     expect(src).toContain('pointerEvents="none"');

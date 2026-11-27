@@ -1118,13 +1118,18 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
     textTransform: 'uppercase',
   },
+  // Wraps so the toggle drops under the label when large text makes the two
+  // options too wide for one line; the toggle then fills the row.
   ledgerHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: t.spacing[2],
   },
   settleToggle: {
+    flexGrow: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     gap: t.spacing[1],
     padding: 2,
@@ -1133,7 +1138,11 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.input,
   },
+  // flexShrink lets a long option wrap onto two lines instead of running off the card.
   settleToggleTab: {
+    flexGrow: 1,
+    flexShrink: 1,
+    alignItems: 'center',
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
@@ -1143,6 +1152,7 @@ const useStyles = makeStyles((t) => ({
   },
   settleToggleText: {
     ...typeStyle('micro'),
+    textAlign: 'center',
     color: t.colors.text.secondary,
   },
   settleToggleTextActive: {
