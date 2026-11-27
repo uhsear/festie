@@ -288,31 +288,37 @@ function CrewViewInner() {
   const members = crew?.members || [];
   const isOwner = isCrewOwner(crew, members, user.id);
 
+  const selector =
+    crews.length > 0 ? (
+      <CrewSelector
+        crews={crews}
+        selectedCrewId={activeCrew?.id}
+        onSelectCrew={handleSelectCrew}
+        onCreateCrew={handleCreateCrew}
+        onJoinCrew={handleJoinCrew}
+        festivals={festivals}
+        currentFestivalId={currentFestival?.id}
+        memberCount={activeCrew ? members.length : undefined}
+      />
+    ) : null;
+
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
       {activeCrew ? (
-        <CrewHeader crew={activeCrew} members={members} onOpenMembers={() => handleTabChange('members')} />
+        <CrewHeader
+          crew={activeCrew}
+          selector={selector}
+          action={
+            isOwner && (
+              <IconButton label="Rename crew" icon={<Pencil className="w-4 h-4" />} onClick={() => setRenameOpen(true)} />
+            )
+          }
+        />
       ) : (
-        <h1 className="sr-only">Crew</h1>
-      )}
-
-      {crews.length > 0 && (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
-            <CrewSelector
-              crews={crews}
-              selectedCrewId={activeCrew?.id}
-              onSelectCrew={handleSelectCrew}
-              onCreateCrew={handleCreateCrew}
-              onJoinCrew={handleJoinCrew}
-              festivals={festivals}
-              currentFestivalId={currentFestival?.id}
-            />
-          </div>
-          {activeCrew && isOwner && (
-            <IconButton label="Rename crew" icon={<Pencil className="w-4 h-4" />} onClick={() => setRenameOpen(true)} />
-          )}
-        </div>
+        <>
+          <h1 className="sr-only">Crew</h1>
+          {selector}
+        </>
       )}
 
       {!activeCrew ? (
@@ -348,41 +354,16 @@ function CrewViewInner() {
         )
       ) : (
         <div className="crew-content space-y-4 min-w-0">
-          <CrewFacesRow />
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <FreshnessChip surface="crew" />
-            <OfflineStatusChip />
-          </div>
-
-          {members.length <= 1 && activeCrew.inviteCode && (
-            <Card padding="md" className="space-y-2">
-              <h2 className="text-base font-bold text-text-primary">{crewCopy.inviteCardTitle}</h2>
-              <p className="text-sm text-text-secondary">{crewCopy.inviteCardBody(activeCrew.name)}</p>
-              <CrewInviteBar
-                inviteCode={activeCrew.inviteCode}
-                crewId={activeCrew.id}
-                crewName={activeCrew.name}
-                isOwner={isOwner}
-                expiresAt={activeCrew.inviteExpiresAt}
-                memberCount={members.length}
-                maxMembers={activeCrew.maxMembers}
-              />
-            </Card>
-          )}
-
-          <HomeBaseCard
-            crewId={activeCrew.id}
-            currentLocation={crew?.homeBaseLocation ?? null}
-            currentTime={crew?.homeBaseTime ?? null}
-            isOwner={isOwner}
-            onSaved={() => selectCrew(activeCrew.id)}
-          />
-
           <CrewTabBar
             activeTab={tab}
             onTabChange={handleTabChange}
             badges={{ plan: openPollCount, money: hasUnsettledBalance }}
           />
+
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <FreshnessChip surface="crew" />
+            <OfflineStatusChip />
+          </div>
 
           <CrewTabContent
             tab={tab}
@@ -400,6 +381,33 @@ function CrewViewInner() {
             onDeleteCrew={() => setConfirmKind('delete')}
             maxMembers={crew?.maxMembers}
             focusSosUserId={focusSosUserId}
+            findLead={
+              <>
+                <CrewFacesRow />
+                {members.length <= 1 && activeCrew.inviteCode && (
+                  <Card padding="md" className="space-y-2">
+                    <h2 className="text-base font-bold text-text-primary">{crewCopy.inviteCardTitle}</h2>
+                    <p className="text-sm text-text-secondary">{crewCopy.inviteCardBody(activeCrew.name)}</p>
+                    <CrewInviteBar
+                      inviteCode={activeCrew.inviteCode}
+                      crewId={activeCrew.id}
+                      crewName={activeCrew.name}
+                      isOwner={isOwner}
+                      expiresAt={activeCrew.inviteExpiresAt}
+                      memberCount={members.length}
+                      maxMembers={activeCrew.maxMembers}
+                    />
+                  </Card>
+                )}
+                <HomeBaseCard
+                  crewId={activeCrew.id}
+                  currentLocation={crew?.homeBaseLocation ?? null}
+                  currentTime={crew?.homeBaseTime ?? null}
+                  isOwner={isOwner}
+                  onSaved={() => selectCrew(activeCrew.id)}
+                />
+              </>
+            }
           />
 
           {/* Setup rows sit after the day-of content. */}

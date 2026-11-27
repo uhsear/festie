@@ -28,6 +28,8 @@ interface CrewTabContentProps {
   maxMembers?: number;
   /** Raiser to aim the Find tab's map at (from an SOS banner or push). */
   focusSosUserId?: string;
+  /** Crew-wide rows (faces, invite, Home Base) that open the Find tab, so the tab bar stays under the header. */
+  findLead?: React.ReactNode;
 }
 
 const SECTION_HEADING = 'px-1 text-xs font-semibold uppercase tracking-wide text-text-muted';
@@ -48,6 +50,7 @@ export default function CrewTabContent({
   onDeleteCrew,
   maxMembers,
   focusSosUserId,
+  findLead,
 }: CrewTabContentProps) {
   return (
     <div
@@ -76,7 +79,8 @@ export default function CrewTabContent({
         />
       )}
       {tab === 'find' && (
-        <>
+        <div className="space-y-4">
+          {findLead}
           <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} focusSosUserId={focusSosUserId} isOwner={isOwner} />
           <section aria-labelledby="crew-activity-heading" className="space-y-3 pt-4">
             <h3 id="crew-activity-heading" className={SECTION_HEADING}>
@@ -84,7 +88,7 @@ export default function CrewTabContent({
             </h3>
             <ActivityTab crewId={crewId} />
           </section>
-        </>
+        </div>
       )}
       {tab === 'plan' && (
         <div className="space-y-4">

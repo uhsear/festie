@@ -197,5 +197,15 @@ describe('CrewSelector', () => {
       render(<CrewSelector {...props} />);
       expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('New CrewEDC Orlando 2026');
     });
+
+    it('adds the member count after the festival, so the switcher is the whole header', () => {
+      render(<CrewSelector {...props} memberCount={4} />);
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('EDC Orlando 2026 · 4 members');
+    });
+
+    it('uses the singular for a crew of one and shows the count without a festival', () => {
+      render(<CrewSelector {...defaultProps} memberCount={1} />);
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('Alpha Crew1 member');
+    });
   });
 });
