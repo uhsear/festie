@@ -150,7 +150,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
             key={`${group.recommendedKeepId}-${gi}`}
             className="rounded-lg border border-border bg-bg-card p-3"
           >
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <ClashHatch className="h-4 w-1.5" />
               <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
@@ -161,7 +161,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                 </span>
               )}
               {meta && (
-                <span className="ml-auto text-xs font-semibold text-text-muted tabular-nums">{meta}</span>
+                <span className="ml-auto whitespace-nowrap text-xs font-semibold text-text-muted tabular-nums">{meta}</span>
               )}
             </div>
 
@@ -187,27 +187,11 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       isKeep && 'rounded-lg bg-accent-aqua/5',
                     )}
                   >
-                    {/* Fixed layout: title (may wrap), badge column, details chevron. The columns never move with title length. */}
+                    {/* Fixed layout, the same for every row: the title (may wrap) and the details chevron, then one
+                        badge line. The badges never stack, so a suggested row is no taller than its neighbours. */}
                     <div className="flex items-start gap-2">
                       <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-left text-sm font-bold text-text-primary">
                         <ArtistName set={pick.set} separator={b2bSeparator} />
-                      </span>
-                      <span className="flex shrink-0 flex-col items-end gap-1">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 type-micro',
-                            chip.className,
-                          )}
-                        >
-                          <PriorityIcon priority={pick.priority} className="h-4 w-4" filled />
-                          {PRIORITY_SYMBOLS[pick.priority].short}
-                        </span>
-                        {isKeep && (
-                          // Outlined, so it reads as advice and not as a second priority tint.
-                          <span className="rounded-full border border-accent-aqua px-2 py-0.5 type-micro text-accent-aqua">
-                            {COPY.clash.suggested}
-                          </span>
-                        )}
                       </span>
                       <button
                         type="button"
@@ -220,6 +204,24 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       >
                         <ChevronRight className="h-5 w-5" aria-hidden="true" />
                       </button>
+                    </div>
+
+                    <div data-testid="clash-row-badges" className="-mt-1 flex flex-wrap items-center gap-1">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 type-micro',
+                          chip.className,
+                        )}
+                      >
+                        <PriorityIcon priority={pick.priority} className="h-4 w-4" filled />
+                        {PRIORITY_SYMBOLS[pick.priority].short}
+                      </span>
+                      {isKeep && (
+                        // Outlined, so it reads as advice and not as a second priority tint.
+                        <span className="rounded-full border border-accent-aqua px-2 py-0.5 type-micro text-accent-aqua">
+                          {COPY.clash.suggested}
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
