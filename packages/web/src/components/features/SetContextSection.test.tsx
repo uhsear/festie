@@ -49,7 +49,7 @@ describe('SetContextSection', () => {
   it('shows only the neighbours section when nothing overlaps', () => {
     state.ctx = { before: { set: mk('p', 'Prev', 'st1'), time: '6:00 PM - 7:00 PM' }, after: null, overlaps: [] };
     render(<SetContextSection set={me} />);
-    expect(screen.getByText('On Main that night')).toBeInTheDocument();
+    expect(screen.getByText('Also on Main')).toBeInTheDocument();
     expect(screen.queryByText('Playing at the same time')).toBeNull();
   });
 
@@ -58,10 +58,24 @@ describe('SetContextSection', () => {
     state.picks = { o: 'must' };
     state.ctx = { before: null, after: null, overlaps: [{ set: mk('o', 'Odesza', 'st2'), time: '8:30 PM - 9:30 PM' }] };
     render(<SetContextSection set={me} />);
-    expect(screen.queryByText('On Main that night')).toBeNull();
+    expect(screen.queryByText('Also on Main')).toBeNull();
     expect(screen.getByText('Sahara · 8:30 PM - 9:30 PM')).toBeInTheDocument();
     expect(screen.getByText('Must See')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Odesza, Sahara/ }));
     expect(setDetailSet).toHaveBeenCalledWith(expect.objectContaining({ id: 'o' }));
+  });
+
+  it('previews three overlaps and reveals the rest on See all', async () => {
+    const user = userEvent.setup();
+    state.ctx = {
+      before: null,
+      after: null,
+      overlaps: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ set: mk(id, `Act ${id}`, 'st2'), time: '8:30 PM - 9:30 PM' })),
+    };
+    render(<SetContextSection set={me} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    await user.click(screen.getByRole('button', { name: 'See all 5 sets playing at the same time' }));
+    expect(screen.getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.queryByRole('button', { name: /See all/ })).toBeNull();
   });
 });

@@ -25,6 +25,14 @@ describe('DetailReminderNotePanel', () => {
     expect(screen.getByRole('button')).toHaveTextContent(text);
   });
 
+  it('shows a bell only while a reminder is possible, and a note icon once the set is over', () => {
+    const { container, rerender } = render(<DetailReminderNotePanel {...props} />);
+    expect(container.querySelector('svg.lucide-bell')).not.toBeNull();
+    rerender(<DetailReminderNotePanel {...props} canRemind={false} />);
+    expect(container.querySelector('svg.lucide-bell')).toBeNull();
+    expect(container.querySelector('svg.lucide-sticky-note')).not.toBeNull();
+  });
+
   it('toggles the panel with aria-expanded', async () => {
     const user = userEvent.setup();
     const onExpand = vi.fn();

@@ -17,7 +17,7 @@ import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 /** Rows shown under "Playing at the same time" before "See all"; keeps a B2B set from pushing the sheet's controls down. */
 export const OVERLAP_PREVIEW_LIMIT = 3;
 
-/** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
+/** "Also on <stage>" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
   const styles = useStyles();
   const t = useTokens();

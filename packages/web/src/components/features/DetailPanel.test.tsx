@@ -590,13 +590,20 @@ describe('DetailPanel', () => {
     expect(screen.getByRole('button', { name: 'Remind me 5m before' })).not.toBeDisabled();
   });
 
-  it('renders Also plays between the time line and the priority picker', () => {
+  it('puts the pick control right under the time line, ahead of Also plays and the stage context', () => {
     render(<DetailPanel {...defaultProps} />);
     const when = screen.getByTestId('set-when');
-    const also = screen.getByTestId('also-plays');
     const picker = screen.getByTestId('priority-picker');
-    expect(when.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(also.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const also = screen.getByTestId('also-plays');
+    expect(when.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(picker.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('only reserves the tall top inset on the side panel, where the share and close buttons sit above the content', () => {
+    render(<DetailPanel {...defaultProps} />);
+    const scroller = screen.getByTestId('set-when').closest('div.overflow-hidden, div.overflow-y-auto')!;
+    expect(scroller.className).toContain('pt-3');
+    expect(scroller.className).toContain('lg:pt-[72px]');
   });
 
   it('View as starts the filter, closes the sheet and stays put on a schedule path', async () => {

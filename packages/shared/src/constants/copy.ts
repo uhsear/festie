@@ -97,7 +97,8 @@ export const COPY = {
     gone: 'That other set is no longer free. Pick another fix.',
   },
   setContext: {
-    stageHeading: (stage: string) => (stage ? `On ${stage} that night` : 'On this stage that night'),
+    // 'That night' was wrong for a 6 AM set, and the section lists the stage's neighbouring sets, not the night.
+    stageHeading: (stage: string) => (stage ? `Also on ${stage}` : 'Also on this stage'),
     before: 'Before',
     after: 'After',
     overlapHeading: 'Playing at the same time',
