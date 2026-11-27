@@ -98,6 +98,8 @@ export interface ClashBadge {
   more: number;
   /** True only when every pair for this set is a tight change. */
   tight: boolean;
+  /** The label without the "+N more" suffix, for a layout that shows the count in its own chip. */
+  base: string;
   label: string;
 }
 
@@ -155,6 +157,7 @@ export function clashBadgeBySetId(
       overlapMinutes: best.tight ? 0 : best.overlapMinutes,
       more,
       tight: best.tight,
+      base,
       label: more > 0 ? `${base} +${more} more` : base,
     });
   }

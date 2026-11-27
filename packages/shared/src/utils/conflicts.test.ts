@@ -251,6 +251,7 @@ describe('clashBadgeBySetId', () => {
       { setA: a, setB: c, overlapMinutes: 15 },
     ]);
     expect(badges.get('a')!.label).toBe('Clashes with B (30 min) +1 more');
+    expect(badges.get('a')!.base).toBe('Clashes with B (30 min)');
   });
 
   it('breaks an overlap tie on the earlier-starting other set', () => {

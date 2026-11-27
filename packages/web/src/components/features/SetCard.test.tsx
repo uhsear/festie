@@ -421,6 +421,26 @@ describe('SetCard', () => {
       expect(screen.getByTestId('set-card').className).not.toContain('has-conflict');
     });
 
+    it('shows the extra clash count in its own chip, so the label truncation never cuts it', () => {
+      render(<SetCard {...defaultProps} clashLabel="Clashes with Marsh Choir Collective (45 min)" clashMore={2} />);
+      const chip = screen.getByTestId('clash-more-chip');
+      expect(chip.textContent).toBe('+2 more');
+      expect(screen.getByText('Clashes with Marsh Choir Collective (45 min)').className).toContain('truncate');
+      expect(screen.getByText('Clashes with Marsh Choir Collective (45 min)').textContent).not.toContain('+');
+      expect(chip.className).toContain('shrink-0');
+    });
+
+    it('has no count chip when there is a single clash', () => {
+      render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={0} />);
+      expect(screen.queryByTestId('clash-more-chip')).toBeNull();
+    });
+
+    it('re-renders when only clashMore changes', () => {
+      const { rerender } = render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={1} />);
+      rerender(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" clashMore={3} />);
+      expect(screen.getByTestId('clash-more-chip').textContent).toBe('+3 more');
+    });
+
     it('re-renders when only clashLabel changes', () => {
       const { rerender } = render(<SetCard {...defaultProps} clashLabel="Clashes with A (10 min)" />);
       rerender(<SetCard {...defaultProps} clashLabel="Clashes with B (20 min)" />);
