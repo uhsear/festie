@@ -1,7 +1,7 @@
 // The boot overlay must hand off from the native splash without the mark moving, so its
 // size and art are pinned to the expo-splash-screen config, and it speaks only real state.
 import { BOOT_STATUS_DELAY_MS, bootStatusLine } from '../lib/bootStatus';
-import { tokens } from '../hooks/useTokens';
+import { colors } from '@festie/shared/tokens';
 import { read } from './read-source';
 
 const overlay = read('components/BootOverlay.tsx');
@@ -23,7 +23,7 @@ describe('boot overlay handoff', () => {
     expect(overlay).toContain('const t = tokens');
     expect(overlay).not.toContain('MARK_DAYLIGHT');
     expect(overlay).not.toContain('useUIStore');
-    expect(tokens.colors.bg.primary).toBe(splashPlugin.backgroundColor);
+    expect(colors.bg.primary).toBe(splashPlugin.backgroundColor);
     expect(overlay).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(overlay).toContain('FadeOut');
   });

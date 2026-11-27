@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
-import { useFocusEffect } from 'expo-router';
 
 // Two contexts so the root, which only writes, does not re-render when the height changes.
 const HeightContext = createContext(0);
@@ -37,21 +36,15 @@ export function useSetTopBannerHeight(): (height: number) => void {
 }
 
 /**
- * A screen header calls this: while its screen is focused, the overlay may grow to a 44 pt tap
- * target, because this header starts below the overlay. A native stack header starts at the status-bar
- * inset and does not call it, so the overlay stays one line there and covers only a sliver of the bar.
+ * Adds or removes a header that pads below the overlay. ScreenHeader calls it with +1 while its
+ * screen is focused, so the overlay may grow to a 44 pt tap target there. A native stack header
+ * starts at the status-bar inset and never calls it, so the overlay stays one line over it.
  */
-export function useRegisterPaddedHeader(): void {
-  const addHeaders = useContext(SetHeaderCountContext);
-  useFocusEffect(
-    useCallback(() => {
-      addHeaders(1);
-      return () => addHeaders(-1);
-    }, [addHeaders]),
-  );
+export function useAddPaddedHeader(): (delta: number) => void {
+  return useContext(SetHeaderCountContext);
 }
 
-/** True while a focused screen header pads below the overlay (see useRegisterPaddedHeader). */
+/** True while a focused screen header pads below the overlay (see useAddPaddedHeader). */
 export function useHeaderPadsBelowBanner(): boolean {
   return useContext(HeaderCountContext) > 0;
 }

@@ -30,7 +30,7 @@ describe('top banner tap targets (FU-P56)', () => {
 
 describe('native stack headers (FU-P56)', () => {
   it('only ScreenHeader registers as padding below the overlay', () => {
-    expect(read('components/ScreenHeader.tsx')).toContain('useRegisterPaddedHeader()');
+    expect(read('components/ScreenHeader.tsx')).toContain('useAddPaddedHeader()');
     expect(read('components/SosBanner.tsx')).toContain('useHeaderPadsBelowBanner()');
     expect(read('components/OfflineBanner.tsx')).toContain('useHeaderPadsBelowBanner()');
   });

@@ -1,12 +1,13 @@
-import type { ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 import AppPressable from './AppPressable';
 import InboxBell from './InboxBell';
-import { headerTopPadding, useRegisterPaddedHeader, useTopBannerHeight } from '../contexts/TopBannerContext';
+import { headerTopPadding, useAddPaddedHeader, useTopBannerHeight } from '../contexts/TopBannerContext';
 
 interface ScreenHeaderProps {
   /** Primary heading text. */
@@ -61,7 +62,13 @@ export default function ScreenHeader({
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const bannerHeight = useTopBannerHeight();
-  useRegisterPaddedHeader();
+  const addPaddedHeader = useAddPaddedHeader();
+  useFocusEffect(
+    useCallback(() => {
+      addPaddedHeader(1);
+      return () => addPaddedHeader(-1);
+    }, [addPaddedHeader]),
+  );
   const titleText = (
     <Text
       style={styles.title}
