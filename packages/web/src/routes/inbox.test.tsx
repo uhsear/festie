@@ -84,7 +84,8 @@ describe('InboxView', () => {
   it('shows the empty copy', () => {
     setState({ items: [] });
     render(<InboxView />);
-    expect(screen.getByText(/No notifications yet/)).toBeTruthy();
+    expect(screen.getByText('No notifications yet')).toBeTruthy();
+    expect(screen.getByText(/show up here/)).toBeTruthy();
   });
 
   it('shows the error with retry when there are no items', () => {

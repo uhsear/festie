@@ -16,6 +16,7 @@ import {
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import DisplayWords from '../../components/DisplayWords';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import SectionLabel from '../../components/SectionLabel';
 import PickInsight from '../../components/admin/PickInsight';
@@ -177,8 +178,7 @@ export default function AdminAnalyticsScreen() {
       {loading ? (
         <LoadingState label="Loading analytics" />
       ) : error && !data ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load analytics"
           message={error}
           action={{ label: 'Try again', onPress: onRefresh }}

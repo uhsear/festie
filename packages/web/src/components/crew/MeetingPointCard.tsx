@@ -39,7 +39,7 @@ export default function MeetingPointCard({
   const isEmergency = p.type === 'emergency';
   return (
   <div
-    className={`p-3 rounded-xl bg-bg-card border animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none ${isEmergency ? 'border-accent-coral' : 'border-border'}`}
+    className={`p-3 rounded-xl bg-bg-card border animate-[card-in_var(--duration-med)_var(--ease-out)_both] motion-reduce:!animate-none ${isEmergency ? 'border-accent-coral' : 'border-border'}`}
   >
     <div className="flex flex-wrap items-start gap-x-3">
       <KindIcon

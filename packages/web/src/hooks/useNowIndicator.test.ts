@@ -13,6 +13,9 @@ vi.mock('@festie/shared/stores/festivalStore', () => ({
   useFestivalDataStore: (selector: (s: typeof storeState) => unknown) => selector(storeState),
 }));
 
+let reducedMotion = false;
+vi.mock('motion/react', () => ({ useReducedMotion: () => reducedMotion }));
+
 /** A festival-zone (UTC) wall clock on 2026-06-15 plus `dayOffset` days. */
 const at = (h: number, m = 0, dayOffset = 0) => new Date(Date.UTC(2026, 5, 15 + dayOffset, h, m, 0));
 
@@ -20,6 +23,7 @@ describe('useNowIndicator', () => {
   let _rafCallback: FrameRequestCallback | null;
 
   beforeEach(() => {
+    reducedMotion = false;
     vi.useFakeTimers();
     _rafCallback = null;
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
@@ -137,6 +141,38 @@ describe('useNowIndicator', () => {
       behavior: 'smooth',
       block: 'center',
     });
+  });
+
+  function attachGrid(result: { current: ReturnType<typeof useNowIndicator> }) {
+    const mockGrid = document.createElement('div');
+    const nowLine = document.createElement('div');
+    nowLine.className = 'timeline-now-label';
+    nowLine.scrollIntoView = vi.fn();
+    mockGrid.appendChild(nowLine);
+    Object.defineProperty(result.current.gridRef, 'current', { writable: true, value: mockGrid });
+    return nowLine;
+  }
+
+  it('scrollToNow jumps instead of gliding under reduced motion', () => {
+    reducedMotion = true;
+    vi.setSystemTime(at(13, 0));
+    const { result } = renderHook(() => useNowIndicator(makeBounds(600, 960), 0));
+    const nowLine = attachGrid(result);
+    act(() => result.current.scrollToNow());
+    expect(nowLine.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' });
+  });
+
+  it('the automatic day-switch scroll never glides, even without reduced motion', () => {
+    vi.setSystemTime(at(13, 0));
+    const bounds = makeBounds(600, 960);
+    const { result, rerender } = renderHook(({ day }) => useNowIndicator(bounds, day), {
+      initialProps: { day: 1 },
+    });
+    const nowLine = attachGrid(result);
+    // Day 0 is the festival day containing now, so it has a now-line to scroll to.
+    rerender({ day: 0 });
+    act(() => _rafCallback?.(0));
+    expect(nowLine.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' });
   });
 
   it('scrollToNow is safe to call when gridRef is null', () => {

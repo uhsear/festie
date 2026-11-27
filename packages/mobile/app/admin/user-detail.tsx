@@ -6,6 +6,7 @@ import { ApiClientError, fetchAdminUserDetail, type AdminUserDetail } from '@fes
 import { useAuthStore } from '@festie/shared/stores';
 import { auditRowLabel, maskEmail, PRIVATE_VIEW_NOTICE, timeAgoFromIso } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
@@ -70,8 +71,7 @@ export default function AdminUserDetailScreen() {
     }
     if (state.kind === 'error') {
       return (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load this user"
           message={state.message}
           action={{ label: 'Try again', onPress: () => void load() }}

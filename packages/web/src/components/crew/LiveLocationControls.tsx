@@ -146,7 +146,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             role="alert"
             aria-atomic="true"
             data-testid="sos-banner"
-            className="rounded-xl border-2 border-accent-coral bg-accent-coral/15 p-3 space-y-2 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
+            className="rounded-xl border-2 border-accent-coral bg-accent-coral/15 p-3 space-y-2 animate-[card-in_var(--duration-med)_var(--ease-out)_both] motion-reduce:!animate-none"
           >
             <div className="flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-accent-coral shrink-0 mt-0.5" aria-hidden="true" />

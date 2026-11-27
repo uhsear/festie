@@ -17,6 +17,8 @@ import { RATING_IONICON } from '../lib/ratingIcon';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { useSharedValue, withTiming, Easing, useDerivedValue, runOnJS } from 'react-native-reanimated';
 import EmptyState from '../components/EmptyState';
+import Button from '../components/Button';
+import LoadErrorState from '../components/LoadErrorState';
 import SectionLabel from '../components/SectionLabel';
 import { Skeleton } from '../components/Skeleton';
 import CrewPhotoLink from '../components/CrewPhotoLink';
@@ -191,8 +193,7 @@ export default function WrapScreen() {
     }
     if (error && !data) {
       return (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={`Couldn't load your ${COPY.wrap.name}`}
           message={`Something went wrong loading your ${COPY.wrap.name}.`}
           action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}
@@ -202,19 +203,14 @@ export default function WrapScreen() {
     if (!data) return <WrapSkeleton />;
     if (!unlocked) {
       return (
-        <EmptyState
-          icon={CONCEPT_IONICON.wrap}
-          title={`${COPY.wrap.name} coming soon`}
-          message="We'll put together your highlights the day after the festival ends."
-        />
+        <WrapPending title={COPY.wrap.pending.title} message={COPY.wrap.pending.description} />
       );
     }
     if (cards.length === 0) {
       return (
-        <EmptyState
-          icon="trophy-outline"
-          title="Nothing to wrap yet"
-          message="Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page."
+        <WrapPending
+          title={COPY.wrap.empty.title}
+          message={COPY.wrap.empty.description}
           action={{ label: 'Open the lineup', onPress: () => router.push('/(tabs)') }}
         />
       );
@@ -384,6 +380,26 @@ export default function WrapScreen() {
  * Cold-load placeholder for the wrap — a header line, the hero number, and a
  * couple of list rows, matching the real layout so it doesn't jump on arrival.
  */
+/** Pending Wrap states: the Wrap concept icon at the 64px hero size, same copy as web. */
+function WrapPending({ title, message, action }: { title: string; message: string; action?: { label: string; onPress: () => void } }) {
+  const t = useTokens();
+  const styles = useStyles();
+  return (
+    <View style={styles.pending}>
+      <Ionicons
+        name={CONCEPT_IONICON.wrap}
+        size={t.iconSize.hero}
+        color={t.colors.accent.aqua}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+      <Text style={styles.pendingTitle}>{title}</Text>
+      <Text style={styles.pendingMessage}>{message}</Text>
+      {action ? <Button label={action.label} onPress={action.onPress} style={styles.pendingAction} /> : null}
+    </View>
+  );
+}
+
 function WrapSkeleton() {
   const t = useTokens();
   const styles = useStyles();
@@ -633,8 +649,7 @@ function CrewWrapTab({
   }
   if (error || !wrap) {
     return (
-      <EmptyState
-        icon="cloud-offline-outline"
+      <LoadErrorState
         title="Couldn't load your Crew Wrap"
         message={`Something went wrong loading the ${COPY.wrap.crewName}.`}
         action={{ label: 'Try again', onPress: () => setReloadKey((k) => k + 1) }}
@@ -784,6 +799,29 @@ function CrewWrapTab({
 }
 
 const useStyles = makeStyles((t) => ({
+  pending: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[4],
+    paddingHorizontal: t.spacing[6],
+  },
+  pendingTitle: {
+    ...typeStyle('title', 600),
+    color: t.colors.text.primary,
+    textAlign: 'center',
+  },
+  pendingMessage: {
+    ...typeStyle('body'),
+    color: t.colors.text.secondary,
+    textAlign: 'center',
+    alignSelf: 'stretch',
+  },
+  pendingAction: {
+    paddingHorizontal: t.spacing[6],
+    marginTop: t.spacing[2],
+    alignSelf: 'center',
+  },
   screen: {
     flex: 1,
     backgroundColor: t.colors.bg.primary,

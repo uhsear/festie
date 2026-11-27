@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { duration as motionDuration, staggerDelay } from '@festie/shared/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { useCrewDaysIndex } from '@festie/shared/hooks';
@@ -926,8 +927,8 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
                 style: ({ pressed }: { pressed: boolean }) => [styles.expenseRow, pressed && styles.expenseRowPressed],
               }
             : { style: styles.expenseRow };
-          // R22: staggered entrance — cap at index 9 (400ms max), reduce-motion safe.
-          const rowEntering = reduceMotion ? undefined : FadeInDown.delay(Math.min(idx, 9) * 40).duration(250);
+          // R22: staggered entrance — shared stagger step and cap, reduce-motion safe.
+          const rowEntering = reduceMotion ? undefined : FadeInDown.delay(staggerDelay(idx)).duration(motionDuration.med);
           return (
             <Animated.View key={e.id} entering={rowEntering}>
               <RowContainer {...rowProps}>

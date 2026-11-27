@@ -1,7 +1,6 @@
 import { Component, useEffect, type ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { WifiOff, ServerCrash, FileQuestion, AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
-import Button from '../ui/Button';
+import ErrorState from './ErrorState';
 
 // ---------------------------------------------------------------------------
 // Error classification helpers
@@ -58,10 +57,8 @@ function classifyError(error: Error): ErrorKind {
 // ---------------------------------------------------------------------------
 
 interface ErrorPresentation {
-  icon: ReactNode;
   heading: string;
   description: string;
-  showBack: boolean;
 }
 
 function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
@@ -70,47 +67,37 @@ function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
   switch (kind) {
     case 'network':
       return {
-        icon: <WifiOff className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'You appear to be offline',
         description: 'Check your connection and try again. Your data is safe; we’ll sync it when you reconnect.',
-        showBack: false,
       };
     case 'update':
       return {
-        icon: <RefreshCw className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'Festie was updated',
         description: 'A new version is available. Reload to continue.',
-        showBack: false,
       };
     case 'not-found':
       return {
-        icon: <FileQuestion className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
         heading: 'Page not found',
         description: 'The page you’re looking for doesn’t exist or may have been moved.',
-        showBack: true,
       };
     case 'server':
       return {
-        icon: <ServerCrash className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
         heading: 'Server error',
         description: errorId
           ? `Our server hit an error (ref: ${errorId}). Try again shortly.`
           : 'Our server hit an error. Try again shortly.',
-        showBack: false,
       };
     case 'generic':
     default:
       return {
-        icon: <AlertTriangle className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
         heading: 'Something broke',
         description: 'Reload the page to try again.',
-        showBack: false,
       };
   }
 }
 
 /**
- * Classify `error` and return the copy and icon to show for it. Never includes the raw
+ * Classify `error` and return the copy to show for it. Never includes the raw
  * `error.message`, so a boundary can render it without leaking internals.
  */
 export function describeError(error: Error): ErrorPresentation & { kind: ErrorKind } {
@@ -132,67 +119,36 @@ export interface RouteErrorBoundaryProps {
 /**
  * Contextual error fallback for TanStack Router's `errorComponent` prop.
  *
- * Classifies the error (network / 404 / 5xx / generic) and shows an
- * appropriate icon, heading, description, and action buttons. Routes can
- * pass an optional `contextMessage` for additional guidance.
+ * Classifies the error (network / 404 / 5xx / generic) and shows the shared
+ * ErrorState: mark, heading, one sentence and one action. Routes can pass an
+ * optional `contextMessage`, shown inside the same sentence block.
  */
 export default function RouteErrorBoundary({ error, reset, contextMessage }: RouteErrorBoundaryProps) {
   const navigate = useNavigate();
-  const { kind, icon, heading, description, showBack } = describeError(error);
+  const { kind, heading, description } = describeError(error);
 
   useEffect(() => {
     console.error('[route error]', error);
   }, [error]);
 
+  const action =
+    kind === 'update'
+      ? { label: 'Reload', onClick: () => window.location.reload() }
+      : kind === 'not-found'
+        ? { label: 'Go home', onClick: () => void navigate({ to: '/' }) }
+        : { label: 'Retry', onClick: reset };
+
   return (
-    <div className="flex flex-col items-center justify-center h-full text-center text-text-muted p-12" role="alert">
-      <div className="mb-3 flex justify-center">{icon}</div>
-      <h2 className="mt-0 text-lg">{heading}</h2>
-      <p className="my-2 text-sm text-[var(--color-text-secondary)] max-w-[400px]">{description}</p>
-      {contextMessage && (
-        <p className="my-1 mb-3 text-sm text-[var(--color-text-secondary)] italic max-w-[400px]">{contextMessage}</p>
-      )}
-      <div className="mt-4 flex justify-center gap-2">
-        {kind === 'update' && (
-          <Button
-            variant="primary"
-            size="sm"
-            type="button"
-            icon={<RefreshCw className="size-4" aria-hidden="true" />}
-            onClick={() => window.location.reload()}
-          >
-            Reload
-          </Button>
-        )}
-        {kind !== 'not-found' && kind !== 'update' && (
-          <Button
-            variant="primary"
-            size="sm"
-            type="button"
-            icon={<RefreshCw className="size-4" aria-hidden="true" />}
-            onClick={reset}
-          >
-            Retry
-          </Button>
-        )}
-        {showBack && (
-          <Button
-            variant="primary"
-            size="sm"
-            type="button"
-            icon={<ArrowLeft className="size-4" aria-hidden="true" />}
-            onClick={() => navigate({ to: '/' })}
-          >
-            Go home
-          </Button>
-        )}
-        {kind !== 'update' && (
-          <Button variant="ghost" size="sm" type="button" onClick={() => window.location.reload()}>
-            Reload page
-          </Button>
-        )}
-      </div>
-    </div>
+    <ErrorState
+      heading={heading}
+      description={
+        <>
+          {description}
+          {contextMessage && <span className="block mt-1 italic">{contextMessage}</span>}
+        </>
+      }
+      action={action}
+    />
   );
 }
 
@@ -235,24 +191,12 @@ export class RenderErrorBoundary extends Component<{ children: ReactNode; name: 
   render() {
     if (this.state.error) {
       return (
-        <div
-          className="flex flex-col items-center justify-center h-full text-center text-text-muted p-12"
-          role="alert"
+        <ErrorState
+          heading="This view failed to load"
+          description="Try again to reload this view."
+          action={{ label: 'Try again', onClick: () => this.setState({ error: null }) }}
           aria-label={`${this.props.name} view error`}
-        >
-          <h2 className="mt-0 text-lg">This view failed to load</h2>
-          <p className="my-2 mb-4 text-sm text-[var(--color-text-secondary)] max-w-[400px]">
-            Reload the page or switch festivals to try again.
-          </p>
-          <div className="flex gap-2">
-            <Button variant="primary" size="sm" type="button" onClick={() => this.setState({ error: null })}>
-              Try again
-            </Button>
-            <Button variant="ghost" size="sm" type="button" onClick={() => window.location.reload()}>
-              Reload page
-            </Button>
-          </div>
-        </div>
+        />
       );
     }
     return this.props.children;

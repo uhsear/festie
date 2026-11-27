@@ -61,7 +61,7 @@ export default function FestivalPickInsight({ festivalId }: { festivalId: string
                   <div aria-hidden="true" className="h-2 rounded-full bg-bg-primary/30 overflow-hidden">
                     <div
                       style={{ transform: `scaleX(${row.barPct / 100})` }}
-                      className="h-full w-full origin-left bg-accent-aqua transition-transform duration-[var(--duration-med)] ease-[var(--ease-out)] motion-reduce:transition-none"
+                      className="h-full w-full origin-left bg-accent-aqua transition-transform duration-(--duration-med) ease-(--ease-out) motion-reduce:transition-none"
                     />
                   </div>
                 </li>

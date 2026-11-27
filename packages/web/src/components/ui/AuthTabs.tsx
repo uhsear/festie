@@ -37,14 +37,14 @@ export default function AuthTabs({ active, variant }: AuthTabsProps) {
 
   const activeSeg = cn(
     'bg-accent-aqua text-[var(--text-on-light-accent)] font-bold cursor-default',
-    'transition-[background,color,scale] duration-200 ease-[var(--ease-out)]',
+    'transition-[background,color,scale] duration-(--duration-med) ease-(--ease-out)',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
   );
 
   const inactiveSeg = cn(
     variant === 'pill' ? 'bg-transparent border border-border' : 'bg-[var(--color-bg-card)]',
     'text-text-secondary hover:text-text-primary cursor-pointer',
-    'transition-[background,color,scale] duration-200 ease-[var(--ease-out)]',
+    'transition-[background,color,scale] duration-(--duration-med) ease-(--ease-out)',
     'press-scale',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
   );

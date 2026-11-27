@@ -338,7 +338,7 @@ function CrewViewInner() {
         ) : (
           <Card padding="lg" className="space-y-4">
             <EmptyState
-              illustration="noCrew"
+              ghostRow="crew"
               title="No crew yet"
               description="Plan with your friends. Make a crew, or join one with a code."
               cta={{ label: 'Create crew', onClick: handleCreateCrew }}

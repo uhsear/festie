@@ -10,6 +10,8 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { routeNotification } from '../lib/routeNotification';
 import AppPressable from '../components/AppPressable';
 import Button from '../components/Button';
+import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import ArtistName from '../components/ArtistName';
 
 /** The artist a notification is about, as its own button under the row. Hidden when the set is not loaded. */
@@ -86,10 +88,7 @@ export default function InboxScreen() {
     !loaded && loading ? (
       <ActivityIndicator style={styles.spinner} color={t.colors.accent.aqua} />
     ) : error && items.length === 0 ? (
-      <View style={styles.message}>
-        <Text style={styles.errorText}>{error}</Text>
-        {retry}
-      </View>
+      <LoadErrorState title={error} action={{ label: INBOX_COPY.retry, onPress: () => void load() }} />
     ) : (
       <FlatList
         data={items}
@@ -98,7 +97,7 @@ export default function InboxScreen() {
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshing={loading}
         onRefresh={() => void load()}
-        contentContainerStyle={{ paddingBottom: bottomPad }}
+        contentContainerStyle={[{ paddingBottom: bottomPad }, items.length === 0 && styles.emptyGrow]}
         ListHeaderComponent={
           error ? (
             <View style={styles.message}>
@@ -107,7 +106,7 @@ export default function InboxScreen() {
             </View>
           ) : undefined
         }
-        ListEmptyComponent={loaded ? <Text style={styles.footnote}>{INBOX_COPY.empty}</Text> : undefined}
+        ListEmptyComponent={loaded && !error ? <EmptyState ghostRow="inbox" title={INBOX_COPY.emptyTitle} message={INBOX_COPY.emptyBody} /> : undefined}
         ListFooterComponent={<Text style={styles.footnote}>{INBOX_COPY.footnote}</Text>}
       />
     );
@@ -122,6 +121,7 @@ export default function InboxScreen() {
 
 const useStyles = makeStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.colors.bg.primary },
+  emptyGrow: { flexGrow: 1 },
   spinner: { marginTop: t.spacing[8] },
   row: {
     minHeight: 56,

@@ -8,10 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   type AnnouncedLineupModel,
   type FestivalPhase,
+  type LineupFlyerModel,
 } from '@festie/shared/utils';
 import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import SetTimesBanner from '../SetTimesBanner';
 import AnnouncedLineup from '../AnnouncedLineup';
+import LineupFlyer from '../LineupFlyer';
 import DiscoverRow from '../DiscoverRow';
 import type { ReactElement, RefObject } from 'react';
 import type { ListRow } from './listRow';
@@ -22,6 +24,8 @@ interface ScheduleCardsViewProps {
   cardsEmpty: ReactElement | undefined;
   cardsSeparator: () => ReactElement;
   controls: ReactElement;
+  /** Set while no set has a time: the lineup flyer takes the place of the banner, the announced lineup and the cards. */
+  flyer: LineupFlyerModel | null;
   genreFilterActive: boolean;
   hPad: number;
   handleCardsScroll: (e: { nativeEvent: { contentOffset: { y: number; }; }; }) => void;
@@ -45,6 +49,7 @@ export default function ScheduleCardsView({
   cardsEmpty,
   cardsSeparator,
   controls,
+  flyer,
   genreFilterActive,
   hPad,
   handleCardsScroll,
@@ -69,19 +74,19 @@ export default function ScheduleCardsView({
       <FlatList
         ref={listRef}
         style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
-        data={rows}
+        data={flyer ? [] : rows}
         renderItem={renderRow}
         keyExtractor={keyExtractor}
         ListHeaderComponent={
           <>
             {controls}
-            <SetTimesBanner hPad={hPad} />
+            {flyer ? <LineupFlyer model={flyer} hPad={hPad} /> : <SetTimesBanner hPad={hPad} />}
             <DiscoverRow
               hPad={hPad}
               hidden={phase === 'post' || searchQuery.trim() !== '' || stageFilterActive || genreFilterActive}
             />
             {/* A search lists the matching announced acts under the set results instead (footer). */}
-            {searchQuery.trim() ? null : <AnnouncedLineup model={announced} hPad={hPad} />}
+            {searchQuery.trim() || flyer ? null : <AnnouncedLineup model={announced} hPad={hPad} />}
           </>
         }
         // The controls already apply hPad themselves, so cancel the container's.
@@ -91,11 +96,11 @@ export default function ScheduleCardsView({
         ItemSeparatorComponent={cardsSeparator}
         // F2 — a failed festival load surfaces the error + retry rather than a
         // misleading "No sets" empty state (see cardsEmpty).
-        ListEmptyComponent={cardsEmpty}
+        ListEmptyComponent={flyer ? undefined : cardsEmpty}
         ListFooterComponent={
           <>
-            {rows.length > 0 ? otherDayMatches : null}
-            {searchQuery.trim() ? <AnnouncedLineup model={announced} /> : null}
+            {rows.length > 0 && !flyer ? otherDayMatches : null}
+            {searchQuery.trim() && !flyer ? <AnnouncedLineup model={announced} /> : null}
           </>
         }
         // Perf for big lineups: cap the initial + per-batch render window so a

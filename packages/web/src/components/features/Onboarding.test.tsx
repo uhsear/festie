@@ -46,10 +46,10 @@ describe('Onboarding sequencing', () => {
     h.state.user = null;
   });
 
-  it('shows on a first visit with the brand mark on step one', () => {
+  it('shows on a first visit with the lineup visual on step one', () => {
     render(<Onboarding />);
     expect(screen.getByRole('dialog', { name: 'Welcome to Festie' })).toBeInTheDocument();
-    expect(document.querySelector('img[src="/favicon.svg"]')).toBeInTheDocument();
+    expect(screen.getByText('Friday')).toBeInTheDocument();
   });
 
   it('is skipped, and not re-shown, when the visit arrived through an invite', () => {

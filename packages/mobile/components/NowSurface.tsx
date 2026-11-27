@@ -28,6 +28,7 @@ import Button from './Button';
 import LiveDot from './LiveDot';
 import SectionLabel from './SectionLabel';
 import { ArtistNameRuns, artistOpenActions } from './ArtistName';
+import SetChangeEnter from './SetChangeEnter';
 
 /**
  * Building blocks of the day-of Now & Next screen (app/festival-mode.tsx):
@@ -138,8 +139,8 @@ export function NowHero({
     body = current.map(({ set, end }) => {
       const stage = getStageName(set.stageId) || '';
       return (
+        <SetChangeEnter key={set.id}>
         <AppPressable
-          key={set.id}
           style={[s.card, s.liveCard]}
           onPress={() => onOpenSet(set)}
           accessibilityRole="button"
@@ -157,6 +158,7 @@ export function NowHero({
             <Text style={s.figure}>until {fmtZonedClock(end, timeZone)}</Text>
           </View>
         </AppPressable>
+        </SetChangeEnter>
       );
     });
   } else if (phase === 'none') {
@@ -226,6 +228,7 @@ export function NowHero({
     const relative = startsInIsRelative(next.start, nowMs);
     const walkA11y = walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : '';
     body = (
+      <SetChangeEnter key={next.set.id}>
       <AppPressable
         style={s.card}
         onPress={() => onOpenSet(next.set)}
@@ -250,6 +253,7 @@ export function NowHero({
           </View>
         </View>
       </AppPressable>
+      </SetChangeEnter>
     );
   } else {
     body = (

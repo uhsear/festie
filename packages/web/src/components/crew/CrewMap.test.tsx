@@ -115,6 +115,9 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
 
 vi.mock('lucide-react', () => ({
   Heart: () => <span />,
+  Music: () => <span />,
+  User: () => <span />,
+  Bell: () => <span />,
   Inbox: () => <span />,
   Users: () => <span />,
   WifiOff: () => <span />,
