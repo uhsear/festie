@@ -17,8 +17,8 @@ import ArtistName, { RowOpenButton } from './ArtistName';
 
 /**
  * Compact "Now / Up next" strip for the schedule views (Cards, Timeline, Grid).
- * Reads the picked set playing now, else the soonest upcoming pick, and opens
- * Now & Next. Renders nothing for guests, users without picks, or when nothing
+ * Reads the picked set playing now (a "+N more live" count covers concurrent
+ * picks), else the soonest upcoming pick, and opens Now & Next. Renders nothing for guests, users without picks, or when nothing
  * is playing or upcoming. Uses the same selector as festival-mode.
  */
 export default function NowNextStrip() {
@@ -49,6 +49,9 @@ export default function NowNextStrip() {
   const isNow = !!current;
   // The strip is about the clock, not the list: on another day's tab it says so rather than seem to describe that list.
   const nowOnAnotherDay = isNow && typeof selectedDay === 'number' && selectedDay !== focus.set.dayIndex;
+  // Concurrent live picks: the lead is the set ending first (same order as the Now & Next list); the rest fold into a count.
+  const moreLive = isNow ? selection.current.length - 1 : 0;
+  const moreLabel = moreLive > 0 ? `+${moreLive} more live` : '';
   const name = artistDisplayName(focus.set, currentFestival?.b2bSeparator);
   const stage = getStageName(focus.set.stageId) ?? focus.set.stageName ?? '';
   const timing = isNow ? fmtTimeLeft(focus.end, nowMs) : fmtStartsIn(focus.start, nowMs, timeZone);
@@ -67,7 +70,7 @@ export default function NowNextStrip() {
         )}
       >
         <RowOpenButton
-          label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}
+          label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}.${moreLabel ? ` ${moreLabel}.` : ''} Open Now and Next.`}
           onClick={() => navigate({ to: '/festival-mode' })}
         />
         <span
@@ -84,7 +87,16 @@ export default function NowNextStrip() {
           <span className="block text-lg font-bold text-text-primary line-clamp-2 break-words">
             <ArtistName set={focus.set} separator={currentFestival?.b2bSeparator} />
           </span>
-          {stage && <span className="block truncate text-text-secondary">{stage}</span>}
+          {(stage || moreLabel) && (
+            <span className="flex items-baseline gap-2 text-text-secondary">
+              <span className="min-w-0 truncate">{stage}</span>
+              {moreLabel && (
+                <span data-testid="now-next-more" className="shrink-0 text-xs font-semibold text-live-text">
+                  {moreLabel}
+                </span>
+              )}
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-sm font-semibold text-text-secondary tabular-nums">{timing}</span>
         <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-text-secondary" aria-hidden="true" />

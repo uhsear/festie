@@ -34,3 +34,15 @@ describe('Now & Next live handoff (DP-50)', () => {
     expect(read('components/NowNextStrip.tsx')).toContain('<SetChangeEnter key={focus.set.id}>');
   });
 });
+
+describe('Now & Next strip concurrent live sets', () => {
+  const src = read('components/NowNextStrip.tsx');
+  it('leads with one set and folds the rest into a count', () => {
+    expect(src).toContain('const nowSet = current[0];');
+    expect(src).toContain('`+${current.length - 1} more live`');
+    expect(src).toContain('testID="now-next-more"');
+  });
+  it('announces the count in the accessibility label', () => {
+    expect(src).toContain("${moreLabel ? ` ${moreLabel}.` : ''} Open Now & Next.");
+  });
+});
