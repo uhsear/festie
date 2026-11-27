@@ -408,7 +408,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         ]}
         value={view}
         onChange={setView}
-        className="inline-flex gap-1 rounded-xl bg-bg-card"
+        className="inline-flex gap-1 bg-bg-card"
         tabClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md"
       />
       <Link

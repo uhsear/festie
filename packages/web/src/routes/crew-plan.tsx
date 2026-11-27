@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { useActiveCrew, useCrewFestival, useCrewHub, usePicks } from '@festie/shared/hooks';
+import { useFestivalCrew, useCrewHub, usePicks } from '@festie/shared/hooks';
 import {
   artistDisplayName,
   formatTime,
@@ -10,6 +10,7 @@ import {
   formatSetTimeRange,
   memberSummary,
   meetingTimeDisplay,
+  noFestivalCrewCopy,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
@@ -27,8 +28,8 @@ import { MapPin, Home, CalendarClock, Users, ArrowLeft, Trophy, Sparkles, Vote }
 import ArtistName from '../components/features/ArtistName';
 
 // The plan renders from the persisted cache first (useCrewHub reads the stores),
-// then refreshes statuses, meeting points and polls. A crew on another festival
-// switches the festival store first (useCrewFestival).
+// then refreshes statuses, meeting points and polls. It shows the user's crew of the
+// selected festival and never switches the festival to fit a crew (useFestivalCrew).
 // Per-priority badge tint using the priority tokens (must=coral, want=aqua,
 // maybe=amber). Static literal class strings so Tailwind detects them.
 const PRIORITY_BADGE: Record<Priority, string> = {
@@ -55,8 +56,7 @@ export default function CrewPlanView() {
 function CrewPlanInner() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const { status, crew, retry: retryCrew } = useActiveCrew();
-  const festival = useCrewFestival(crew);
+  const { status, crew, festivalName, hasCrews, retry: retryCrew } = useFestivalCrew();
 
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
@@ -92,37 +92,14 @@ function CrewPlanInner() {
   }
 
   if (status === 'none' || !crew) {
+    const forFestival = hasCrews ? noFestivalCrewCopy(festivalName) : null;
     return (
       <Gate>
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title="No crew yet"
-          description="Make a crew or join one with a code to plan together."
+          title={forFestival?.title ?? 'No crew yet'}
+          description={forFestival?.description ?? 'Make a crew or join one with a code to plan together.'}
           cta={{ label: 'Create or join a crew', onClick: () => navigate({ to: '/crew' }) }}
-        />
-      </Gate>
-    );
-  }
-
-  if (festival.state === 'switching') {
-    return (
-      <div>
-        <p className="text-sm text-text-secondary text-center pt-4" role="status">
-          Opening {festival.festivalName}…
-        </p>
-        <CrewPlanSkeleton />
-      </div>
-    );
-  }
-
-  if (festival.state === 'failed') {
-    return (
-      <Gate>
-        <EmptyState
-          icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title={`Couldn't open ${festival.festivalName}`}
-          description={`${crew.name} is planning ${festival.festivalName}. Connect to the internet, then try again.`}
-          cta={{ label: 'Try again', onClick: festival.retry }}
         />
       </Gate>
     );
@@ -241,7 +218,8 @@ function CrewPlanContent() {
         </section>
       </Card>
 
-      {isPast ? (
+      {/* A crew of one has nobody to compare with. */}
+      {isPast && hub.memberCount > 1 && (
         <Card padding="md">
           <Card.Header className={CARD_HEADER}>
             <Trophy className={CARD_ICON} aria-hidden="true" />
@@ -272,7 +250,8 @@ function CrewPlanContent() {
             </Link>
           </Card.Body>
         </Card>
-      ) : (
+      )}
+      {!isPast && (
         <Card padding="md">
           <Card.Header className={CARD_HEADER}>
             <CalendarClock className={CARD_ICON} aria-hidden="true" />

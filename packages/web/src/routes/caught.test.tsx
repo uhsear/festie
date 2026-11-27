@@ -177,10 +177,16 @@ describe('CaughtPage', () => {
     mocks.wrap = { festival, planned: [] };
     renderPage();
     expect(await screen.findByText('Nothing to check off yet')).toBeInTheDocument();
-    // The hint is about rows, so an empty list does not print it; the one action is an outlined accent pill.
-    expect(screen.queryByText('Tap to rate this set')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add a set I caught' }).className).toContain('border-accent-aqua');
-    expect(screen.getByRole('button', { name: 'Add a set I caught' })).toBeInTheDocument();
+    const add = screen.getByRole('button', { name: 'Add a set I caught' });
+    // The only action on an empty page: filled and centred, as the empty-state copy above it is.
+    expect(add.className).toContain('bg-accent-aqua');
+    expect(add.parentElement!.className).toContain('justify-center');
+  });
+
+  it('keeps the add button a quiet chip when the list has rows', async () => {
+    renderPage();
+    const add = await screen.findByRole('button', { name: 'Add a set I caught' });
+    expect(add.className).not.toContain('bg-accent-aqua');
   });
 
   it('shows a retry action when the load fails', async () => {

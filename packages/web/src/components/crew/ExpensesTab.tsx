@@ -387,8 +387,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           options={EXPENSE_VIEWS}
           value={view}
           onChange={setView}
-          className="grid grid-cols-3 gap-1 rounded-xl bg-bg-card"
-          tabClassName="rounded-md capitalize text-sm"
+          className="grid grid-cols-3 gap-1 bg-bg-card"
+          tabClassName="capitalize text-sm"
         />
       )}
 

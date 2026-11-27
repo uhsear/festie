@@ -33,7 +33,7 @@ vi.mock('@festie/shared/services', () => ({
   fetchWrap: vi.fn(async () => {
     if (mocks.fail === 'notFound') throw Object.assign(new Error('not found'), { status: 404 });
     if (mocks.fail) throw new Error('boom');
-    return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
+    return { planned: [], festival: { id: 'f1', name: 'Moonlit Orchard Fest', days: [{ date: '2026-04-24', label: 'Friday' }] } };
   }),
   isApiClientError: (e: unknown) => !!e && typeof e === 'object' && 'status' in e,
   markCaught: mocks.markCaught,
@@ -190,7 +190,9 @@ describe('RatePage', () => {
   it('shows the empty state when nothing needs rating', async () => {
     mocks.toRate = [];
     renderPage();
-    expect(await screen.findByText('Nothing to rate right now')).toBeInTheDocument();
+    expect(await screen.findByText('No ended picks at Moonlit Orchard Fest yet')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Rate your night' })).toBeInTheDocument();
+    expect(screen.getByText('Moonlit Orchard Fest')).toBeInTheDocument();
   });
 
   it('shows a retry action when the load fails', async () => {

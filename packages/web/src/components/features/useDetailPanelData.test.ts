@@ -34,4 +34,25 @@ describe('useDetailPanelData whoTitle', () => {
     const { result } = renderHook(() => useDetailPanelData(set));
     expect(result.current.whoTitle).toBe('Nobody else going yet');
   });
+
+  it('names the crew of the selected festival', () => {
+    const mate: Profile = { ...stranger, id: 'p-m', userId: 'u-m', name: 'Mo', picks: { 'set-1': 'must' } };
+    useFestivalStore.setState({ currentFestivalId: 'f1', allProfiles: [me, mate] });
+    useCrewStore.setState({
+      activeCrew: { id: 'c1', name: 'Orchard Crew', festivalId: 'f1' } as never,
+      crewMembers: [{ userId: 'u-m' }] as never,
+    });
+    const { result } = renderHook(() => useDetailPanelData(set));
+    expect(result.current.whoTitle).toBe('Orchard Crew (1 going)');
+  });
+
+  it('ignores a crew of another festival', () => {
+    useFestivalStore.setState({ currentFestivalId: 'f1', pickCounts: { 'set-1': 5 } });
+    useCrewStore.setState({
+      activeCrew: { id: 'c2', name: 'Design Squad', festivalId: 'other' } as never,
+      crewMembers: [],
+    });
+    const { result } = renderHook(() => useDetailPanelData(set));
+    expect(result.current.whoTitle).toBe('5 going');
+  });
 });

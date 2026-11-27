@@ -85,7 +85,7 @@ export default function FestivalModeScreen() {
     next && isFixRecent(fix.at, nowMs)
       ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
       : null;
-  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone, currentFestival?.id);
+  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   // A festival with no dates, or dates but no set times yet, has no schedule to download.
   const hasScheduleToSave = selection.phase !== 'none' && (selection.phase !== 'before' || selection.startsAtTimed);
@@ -229,8 +229,8 @@ export default function FestivalModeScreen() {
             </>
           ) : (
             <CrewPrompt
-              title="No crew yet"
-              body="Start a crew or join one with an invite code to see each other here."
+              title={currentFestival ? `Start a crew for ${currentFestival.name}` : 'No crew yet'}
+              body="Start one or join with an invite code to see each other here. Crews of other festivals stay on the Crew tab."
               cta="Start or join a crew"
               onPress={() => router.push(CREW_MEET_HREF)}
             />

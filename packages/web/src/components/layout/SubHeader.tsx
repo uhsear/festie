@@ -43,7 +43,7 @@ const FESTIVAL_MODE_PATH = '/festival-mode';
 
 // Routes that carry the festival/day/stage controls. Anything else (admin, 404)
 // gets no schedule chrome; AppShell already hides it on account/crew; /festival-mode gets a title only.
-const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan'];
+const SUB_HEADER_PATHS = ['/', '/cards', '/timeline', '/grid', '/picks', '/wrap', '/compare', '/crew-plan', '/map', '/caught', '/rate'];
 
 interface SubHeaderProps {
   /** Show only day tabs (no stage chips or search). Used on /picks and /compare. */

@@ -72,7 +72,7 @@ function FestivalModeViewInner() {
     next && isFixRecent(fix.at, nowMs)
       ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
       : null;
-  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone, currentFestival?.id);
+  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
@@ -183,8 +183,8 @@ function FestivalModeViewInner() {
               <CrewNowSection crewName={crew.name} rows={whereabouts} onOpenCrew={goCrew} />
             ) : (
               <CrewPrompt
-                title="No crew yet"
-                body="Start a crew or join one with an invite code to see each other here."
+                title={`Start a crew for ${currentFestival.name}`}
+                body="Start one or join with an invite code to see each other here. Crews of other festivals stay on the Crew tab."
                 cta="Start or join a crew"
                 onAction={goCrew}
               />

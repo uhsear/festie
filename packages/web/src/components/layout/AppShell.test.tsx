@@ -42,7 +42,13 @@ vi.mock('@festie/shared/hooks', () => ({
 
 vi.mock('./Header', () => ({ default: () => <div data-testid="header">Header</div> }));
 vi.mock('./BottomNav', () => ({ default: () => <div data-testid="bottom-nav">BottomNav</div> }));
-vi.mock('./SubHeader', () => ({ default: () => <div data-testid="sub-header">SubHeader</div> }));
+vi.mock('./SubHeader', () => ({
+  default: ({ festivalOnly }: { festivalOnly: boolean }) => (
+    <div data-testid="sub-header" data-festival-only={String(festivalOnly)}>
+      SubHeader
+    </div>
+  ),
+}));
 vi.mock('./PageTransition', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="page-transition">{children}</div>,
 }));
@@ -93,6 +99,15 @@ describe('AppShell', () => {
       clearPendingJoin: vi.fn(),
     };
   });
+
+  it.each(['/map', '/caught', '/rate', '/crew-plan', '/wrap', '/picks'])(
+    'carries the festival picker, and nothing else, on %s',
+    (path) => {
+      mockPathname = path;
+      render(<AppShell />);
+      expect(screen.getByTestId('sub-header')).toHaveAttribute('data-festival-only', 'true');
+    },
+  );
 
   it('syncs the theme on sign-in pages, which render no Header', () => {
     mockPathname = '/login';

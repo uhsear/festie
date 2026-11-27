@@ -58,8 +58,8 @@ export default function SettleUpCard({
       options={SETTLE_VIEWS}
       value={settleView}
       onChange={onSettleViewChange}
-      className="grid grid-cols-2 gap-1 rounded-xl bg-bg-secondary"
-      tabClassName="px-2 py-1 rounded-md text-sm text-center leading-tight break-normal"
+      className="grid grid-cols-2 gap-1 bg-bg-secondary"
+      tabClassName="px-2 py-1 text-sm text-center leading-tight break-normal"
     />
 
     <div id="settle-view-panel">

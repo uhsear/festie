@@ -128,7 +128,7 @@ describe('FestivalModeView (Now surface)', () => {
     expect(hero).toHaveTextContent('in 1h 30m');
     // The hero holds the first upcoming pick; the list holds the rest.
     expect(screen.getAllByTestId('fm-next-card')).toHaveLength(1);
-    expect(screen.getByText('No crew yet')).toBeInTheDocument();
+    expect(screen.getByText('Start a crew for Bonnaroo 2026')).toBeInTheDocument();
   });
 
   it('passes walk: null to the hero when there is no fix', () => {

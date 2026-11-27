@@ -2,6 +2,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCrewStore } from '../stores/crewStore';
+import { useAuthStore } from '../stores/authStore';
+import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useLiveLocationCrewSync } from './useDayOf';
 import type { Crew } from '../types';
@@ -40,5 +42,21 @@ describe('useLiveLocationCrewSync', () => {
     act(() => useCrewStore.setState({ activeCrew: crew('b') }));
     expect(load).toHaveBeenCalledWith('b');
     expect(load).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useLiveLocationCrewSync festival follow', () => {
+  it('opens the crew of the festival when the selected festival changes', () => {
+    const selectCrew = vi.fn().mockResolvedValue(undefined);
+    useAuthStore.setState({ user: { id: 'u1' } } as never);
+    useFestivalDataStore.setState({ currentFestivalId: 'edc' });
+    const design = { id: 'design', festivalId: 'edc' } as unknown as Crew;
+    const orchard = { id: 'orchard', festivalId: 'moonlit' } as unknown as Crew;
+    useCrewStore.setState({ crews: [design, orchard], activeCrew: design, crewLoading: false, selectCrew });
+    renderHook(() => useLiveLocationCrewSync());
+    expect(selectCrew).not.toHaveBeenCalled();
+
+    act(() => useFestivalDataStore.setState({ currentFestivalId: 'moonlit' }));
+    expect(selectCrew).toHaveBeenCalledWith('orchard');
   });
 });

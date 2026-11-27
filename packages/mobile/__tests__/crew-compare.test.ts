@@ -7,8 +7,7 @@ describe('crew compare source guards', () => {
     const src = read('app/crew-compare.tsx');
     for (const needle of [
       'useCrewCompare(',
-      'useCrewFestival(',
-      'useActiveCrew(',
+      'useFestivalCrew(',
       'Most picked',
       'to my picks',
       'CrewCompareSummary',
@@ -28,6 +27,10 @@ describe('crew compare source guards', () => {
   it('the crew full notice shows in the members invite bar and the join consent line hides when full', () => {
     expect(read('components/crew/CrewMembersTab.tsx')).toContain('crewCopy.inviteCrewFull(isOwner)');
     expect(read('app/join/[code].tsx')).toMatch(/\{!full \? \(\s*<Text[^>]*>\s*Crew members can see your picks/);
+  });
+  it('crew screens never switch the festival to fit a crew', () => {
+    expect(read('app/crew-compare.tsx')).not.toContain('useCrewFestival');
+    expect(read('app/crew-plan.tsx')).not.toContain('useCrewFestival');
   });
   it('crew-compare no longer refreshes through loadOverlap', () => {
     expect(read('app/crew-compare.tsx')).not.toContain('loadOverlap(');

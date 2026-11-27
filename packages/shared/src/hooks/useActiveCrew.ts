@@ -3,12 +3,17 @@ import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
 import { useFestivalStore } from '../stores/festivalStore';
 import type { Crew } from '../types';
-import { crewForFestival, crewFestivalName, crewScreenStatus, type CrewScreenStatus } from '../utils/crewPlan';
+import {
+  crewForFestival,
+  crewFestivalName,
+  crewScreenStatus,
+  defaultCrewId,
+  type CrewScreenStatus,
+} from '../utils/crewPlan';
 
 /**
- * The crew a crew screen shows. Loads the crews once, selects one when none is open
- * (the crew of the festival on screen, else the first), and reports what to render
- * (skeleton, error card, "No crew yet").
+ * The crew a crew screen shows. Loads the crews once, selects the crew of the selected
+ * festival (else the first) when none is open, and reports what to render (skeleton, error card, "No crew yet").
  */
 export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; crews: Crew[]; retry: () => void } {
   const user = useAuthStore((s) => s.user);
@@ -38,9 +43,8 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
   }, [user, crews.length, crewLoading, track]);
 
   // Skip an offline-join placeholder: it has no server crew to select until the join replays.
-  const firstCrewId = crews.find((c) => !c._optimistic)?.id;
-  // With crews at two festivals, open the one that belongs to the festival on screen.
-  const autoCrewId = (festivalId && crews.find((c) => !c._optimistic && c.festivalId === festivalId)?.id) || firstCrewId;
+  const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id ?? s.currentFestivalId);
+  const openCrewId = defaultCrewId(crews, currentFestivalId);
   // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
   const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {
@@ -49,10 +53,10 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
       return;
     }
     // A pending select of another crew clears activeCrew; do not override it with the first crew.
-    if (!user || !autoCrewId || crewLoading || autoSelectedId.current === autoCrewId) return;
-    autoSelectedId.current = autoCrewId;
-    track(useCrewStore.getState().selectCrew(autoCrewId));
-  }, [user, crew, autoCrewId, crewLoading, track]);
+    if (!user || !openCrewId || crewLoading || autoSelectedId.current === openCrewId) return;
+    autoSelectedId.current = openCrewId;
+    track(useCrewStore.getState().selectCrew(openCrewId));
+  }, [user, crew, openCrewId, crewLoading, track]);
 
   // A persisted activeCrew is a cold-start read cache; refetch it once per crew so members
   // who joined while this device was closed appear. selectCrew keeps same-crew data on screen.
@@ -68,15 +72,15 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
 
   const retry = useCallback(() => {
     const store = useCrewStore.getState();
-    const first = store.crews.find((c) => !c._optimistic);
-    track(first ? store.selectCrew(first.id) : store.loadCrews());
+    const openId = defaultCrewId(store.crews, useFestivalStore.getState().currentFestivalId);
+    track(openId ? store.selectCrew(openId) : store.loadCrews());
   }, [track]);
 
   return {
     status: crewScreenStatus({
       hasActiveCrew: !!crew,
       crewCount: crews.length,
-      joiningOnly: crews.length > 0 && !firstCrewId,
+      joiningOnly: crews.length > 0 && !openCrewId,
       loading: crewLoading,
       error: failed ? 'failed' : null,
     }),
@@ -87,14 +91,34 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
 }
 
 /**
- * The crew the map shows layers for. The selected festival follows the Lineup tab, so the
- * active crew can belong to another festival. When the user has a crew for the selected
- * festival, this selects it (once per crew) so its members and meeting points load.
- * `crew` is null until that crew is the active one, so layers never mix two crews.
- * `otherFestivalName` names the active crew's festival when no crew fits the selected one.
+ * The open crew when it belongs to the selected festival, else null. Festival-scoped
+ * surfaces (Now, set detail) read this so a crew of another festival never shows under
+ * the selected one. It only reads: followFestivalCrew and useActiveCrew open the crew.
  */
-export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | null } {
-  const { crew: activeCrew, crews } = useActiveCrew();
+export function useCurrentFestivalCrew(): Crew | null {
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? s.currentFestivalId);
+  return activeCrew && (!activeCrew.festivalId || activeCrew.festivalId === festivalId) ? activeCrew : null;
+}
+
+/**
+ * The crew a festival-scoped screen (map, compare, crew plan) shows. The selected festival
+ * follows the Lineup tab, so the active crew can belong to another festival. When the user
+ * has a crew for the selected festival, this selects it (once per crew) so its members and
+ * meeting points load. `crew` is null until that crew is the active one, so layers never
+ * mix two crews. `status` is `none` when no crew fits the selected festival, and
+ * `otherFestivalName` then names the active crew's festival. The screen never switches
+ * the festival to fit a crew: the festival picker owns that choice.
+ */
+export function useFestivalCrew(): {
+  status: CrewScreenStatus;
+  crew: Crew | null;
+  festivalName: string | null;
+  hasCrews: boolean;
+  otherFestivalName: string | null;
+  retry: () => void;
+} {
+  const { status, crew: activeCrew, crews, retry } = useActiveCrew();
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const festivals = useFestivalStore((s) => s.festivals);
   const match = crewForFestival(crews, activeCrew, currentFestival);
@@ -109,67 +133,24 @@ export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | n
     useCrewStore
       .getState()
       .selectCrew(matchId)
-      .catch((err) => console.warn('map: could not switch to the crew for this festival', err));
+      .catch((err) => console.warn('could not switch to the crew for this festival', err));
   }, [matchId, activeId]);
 
+  const open = !!match && match.id === activeId;
+  let fitted = status;
+  if (status === 'ready' && currentFestival && !open) fitted = match ? 'loading' : 'none';
   return {
-    crew: match && match.id === activeId ? match : null,
+    status: fitted,
+    crew: open ? match : null,
+    festivalName: currentFestival?.name ?? null,
+    hasCrews: crews.length > 0,
     otherFestivalName: !match && activeCrew ? crewFestivalName(activeCrew, festivals, currentFestival) : null,
+    retry,
   };
 }
 
-/**
- * Makes the festival store follow the crew's festival, so crew plan and compare
- * read the crew's lineup and profiles. Switches once per festival id per mount.
- */
-export function useCrewFestival(crew: Crew | null): {
-  state: 'match' | 'switching' | 'failed';
-  festivalName: string;
-  retry: () => void;
-} {
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festivals = useFestivalStore((s) => s.festivals);
-  const targetId = crew?.festivalId ?? null;
-  const matches = !targetId || targetId === currentFestival?.id;
-
-  const [failedId, setFailedId] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const attempted = useRef(new Set<string>());
-  const supersededRetry = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (matches || !targetId) return;
-    const key = `${targetId}:${attempt}`;
-    if (attempted.current.has(key)) return;
-    attempted.current.add(key);
-    useFestivalStore
-      .getState()
-      .selectFestival(targetId)
-      .then(
-        () => {
-          if (useFestivalStore.getState().currentFestival?.id === targetId) return;
-          // A newer selectFestival call (the web loader's re-fetch) superseded this one,
-          // so it resolved without switching. Try once more, then offer Try again.
-          if (supersededRetry.current.has(targetId)) {
-            setFailedId(targetId);
-            return;
-          }
-          supersededRetry.current.add(targetId);
-          setAttempt((n) => n + 1);
-        },
-        () => setFailedId(targetId),
-      );
-  }, [matches, targetId, attempt]);
-
-  const retry = useCallback(() => {
-    setFailedId(null);
-    setAttempt((n) => n + 1);
-  }, []);
-
-  const state = matches ? 'match' : failedId === targetId ? 'failed' : 'switching';
-  return {
-    state,
-    festivalName: crewFestivalName(crew, festivals, currentFestival) ?? "the crew's festival",
-    retry,
-  };
+/** The crew the map shows layers for, and the other festival's name when none fits. */
+export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | null } {
+  const { crew, otherFestivalName } = useFestivalCrew();
+  return { crew, otherFestivalName };
 }

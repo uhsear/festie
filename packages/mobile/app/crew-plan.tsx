@@ -3,8 +3,8 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
-import { useActiveCrew, useCrewFestival, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, formatTimeOrRaw, memberCountLabel, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
+import { useFestivalCrew, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
+import { artistDisplayName, formatTime, formatTimeOrRaw, memberCountLabel, formatSetTimeRange, memberSummary, meetingTimeDisplay, noFestivalCrewCopy, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
 import { COPY, GUEST_PROMPT_COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -37,8 +37,7 @@ export default function CrewPlanScreen() {
   const { savePick } = usePicks();
   const days = useFestivalStore((s) => s.days);
   const nowMs = useNow();
-  const { status, crew, retry: retryCrew } = useActiveCrew();
-  const festival = useCrewFestival(crew);
+  const { status, crew, festivalName, hasCrews, retry: retryCrew } = useFestivalCrew();
   const hub = useCrewHub(nowMs);
 
   const gate = (children: ReactNode) => (
@@ -93,19 +92,11 @@ export default function CrewPlanScreen() {
     return gate(
       <EmptyState
         icon="people-outline"
-        title="No crew yet"
-        message="Make a crew or join one with a code to plan together."
+        title={hasCrews ? noFestivalCrewCopy(festivalName).title : 'No crew yet'}
+        message={
+          hasCrews ? noFestivalCrewCopy(festivalName).description : 'Make a crew or join one with a code to plan together.'
+        }
         action={{ label: 'Create or join a crew', onPress: () => router.navigate('/(tabs)/crew') }}
-      />,
-    );
-  }
-  if (festival.state === 'switching') return gate(<LoadingState label={`Opening ${festival.festivalName}…`} />);
-  if (festival.state === 'failed') {
-    return gate(
-      <LoadErrorState
-        title={`Couldn't open ${festival.festivalName}`}
-        message={`${crew?.name} is planning ${festival.festivalName}. Connect to the internet, then try again.`}
-        action={{ label: 'Try again', onPress: festival.retry }}
       />,
     );
   }
@@ -137,7 +128,7 @@ export default function CrewPlanScreen() {
       <Stack.Screen options={{ title: `${crew.name}'s plan`, headerShown: true }} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]}>
         <FreshnessChip surface="crew" />
-        <Text style={styles.secondaryLine}>{`${hub.festivalName ?? festival.festivalName} · ${memberCountLabel(hub.memberCount)}`}</Text>
+        <Text style={styles.secondaryLine}>{`${hub.festivalName ?? festivalName} · ${memberCountLabel(hub.memberCount)}`}</Text>
 
         {/* Active meeting point */}
         <View style={styles.card}>
@@ -196,7 +187,8 @@ export default function CrewPlanScreen() {
           )}
         </View>
 
-        {hub.isPast ? (
+        {/* A crew of one has nobody to compare with. */}
+        {hub.isPast && hub.memberCount < 2 ? null : hub.isPast ? (
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="trophy" size={iconSize.action} color={t.colors.accent.aqua} />
