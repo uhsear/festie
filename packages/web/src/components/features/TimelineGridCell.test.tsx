@@ -271,4 +271,11 @@ describe('TimelineGridCell keyboard', () => {
     expect(onActivate).toHaveBeenCalledTimes(2);
     expect(onActivate).toHaveBeenLastCalledWith('a');
   });
+  it('marks the pick row so a fine pointer shows only the chosen pick until the tile is hovered or focused', () => {
+    const cell = renderCell('pickrow', 0, 4, 'want-to-see', { canPick: true });
+    const row = cell.querySelector('.tl-pick-row');
+    expect(row).not.toBeNull();
+    // Opacity, not display: every button stays focusable by keyboard.
+    expect(row!.querySelectorAll('button[aria-pressed]')).toHaveLength(3);
+  });
 });
