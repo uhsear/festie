@@ -372,7 +372,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             id="subheader-search"
             ref={searchBoxRef}
             className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
+              'search-box ml-auto w-full min-w-0 sm:w-auto sm:min-w-56 sm:flex-1 lg:flex-none lg:w-[260px]',
             )}
             role="search"
           >
