@@ -8,6 +8,9 @@ import {
   renderInviteIcs,
   INVITE_ERROR_MESSAGES,
 } from '../lib/invite-pages';
+import { colors } from '../packages/shared/src/tokens/colors';
+import { colorsDaylight } from '../packages/shared/src/tokens/colorsDaylight';
+import { wordSpacing } from '../packages/shared/src/tokens/typography';
 
 // ---------------------------------------------------------------------------
 // escapeHtml (re-exported from lib/helpers/sanitize.js)
@@ -63,6 +66,23 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.ok(html.includes('@media (prefers-color-scheme: light)'));
     assert.ok(!/d6154f|ff5c85|Crew invite|border-top: 4px/i.test(html));
     assert.ok(renderInviteErrorPage('x').includes('@media (prefers-color-scheme: light)'));
+  });
+
+  it('follows the visitor scheme with the daylight tokens, since a server page cannot read the app theme', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, now: NOW });
+    const light = html.slice(html.indexOf('@media (prefers-color-scheme: light)'));
+    assert.ok(light.includes(`--ds-bg: ${colorsDaylight.bg.primary}`));
+    assert.ok(light.includes(`--ds-card: ${colorsDaylight.bg.card}`));
+    assert.ok(html.includes(`:root { color-scheme: dark light; --ds-bg: ${colors.bg.primary}`));
+  });
+
+  it('gives the display headings the display word spacing and zero tracking at 32px and 24px', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, now: NOW });
+    const word = `word-spacing: ${wordSpacing.display}em`;
+    assert.ok(/h1 \{[^}]*letter-spacing: 0em/.test(html), 'the h1 is not tracked at -0.02em');
+    assert.ok(/\.iv-when \{[^}]*letter-spacing: 0em; word-spacing: 0\.1em/.test(html));
+    assert.ok(/h1 \{[^}]*font-weight: 700[^}]*word-spacing/.test(html), 'the shared h1 rule carries the word spacing');
+    assert.ok(html.includes(word));
   });
 
   it('leads with the faces, the festival name and the countdown', () => {

@@ -6,7 +6,7 @@
 // chat apps show a rich preview, and one Join button into the app. Every value
 // is escaped here, inside the renderer, so no caller can forget.
 
-import { fontFamily } from '../packages/shared/src/tokens/typography';
+import { fontFamily, letterSpacing, wordSpacing } from '../packages/shared/src/tokens/typography';
 import { baseCss, ctaCss, daylightCss, designCss, fontFaceCss, festieLockupHtml, headSnippet, stageRootCss } from './design-css.js';
 import { addDaysCompact, buildVCalendar } from './helpers/ics-builder.js';
 import { escapeHtml } from './helpers/sanitize.js';
@@ -31,6 +31,8 @@ const THEME_COLOR_META = headSnippet
 
 const SHARED_CSS = [stageRootCss, daylightCss, ...CLASH_FACE, baseCss, ctaCss].join('\n');
 
+// The 32px and 24px display text tracks at zero (at -0.02em its glyphs touch), and the face's narrow space gets the
+// display word spacing, so "Moonlit Orchard Fest" reads as three words. Same tokens as the web app.
 const PAGE_STYLE = `
 main { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
 .iv { width: 100%; max-width: 26rem; padding: 2rem 1.5rem; border: 1px solid var(--ds-border); border-radius: 0.75rem; background: var(--ds-card); }
@@ -39,8 +41,8 @@ main { min-height: 100vh; display: flex; align-items: center; justify-content: c
 .iv-face { display: inline-flex; width: 2.5rem; height: 2.5rem; margin-right: -0.5rem; align-items: center; justify-content: center; border: 2px solid var(--ds-card); border-radius: 50%; background: var(--ds-border); color: var(--ds-text); font-weight: 600; }
 .iv-faces { display: flex; flex: none; }
 .iv-state { margin-left: 1rem; }
-h1 { margin: 0 0 0.5rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; }
-.iv-when { margin: 0 0 0.5rem; font: 700 1.5rem ${fontFamily.displayWeb}; }
+h1 { margin: 0 0 0.5rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; letter-spacing: ${letterSpacing.displaySmall}em; }
+.iv-when { margin: 0 0 0.5rem; font: 700 1.5rem ${fontFamily.displayWeb}; letter-spacing: ${letterSpacing.displaySmall}em; word-spacing: ${wordSpacing.display}em; }
 .iv p { margin: 0 0 0.25rem; color: var(--ds-text-secondary); }
 .iv p.iv-when { color: var(--ds-text); }
 .iv .ds-cta { width: 100%; margin-top: 1.5rem; }

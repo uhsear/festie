@@ -8,14 +8,14 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--ds-bg); color: var(--ds-text); font-family: 'Space Grotesk', system-ui, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.2; text-wrap: balance; }
-h1 { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+h1 { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; letter-spacing: -0.02em; word-spacing: 0.1em; }
 p, li { text-wrap: pretty; }
 time, .ds-time { font-variant-numeric: tabular-nums; }
 .ds-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 24px; border-radius: 999px; background: var(--ds-accent); color: var(--ds-accent-ink); font-family: inherit; font-size: 1rem; font-weight: 600; text-decoration: none; }
 .ds-cta:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 3px; }
 .ds-lockup { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ds-text); text-decoration: none; }
 .ds-lockup svg { width: 2rem; height: 2rem; }
-.ds-wordmark { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; font-size: 1.5rem; letter-spacing: -0.02em; }
+.ds-wordmark { font-family: 'Clash Display', 'Clash Display Fallback', sans-serif; font-weight: 700; font-size: 1.5rem; letter-spacing: -0.02em; word-spacing: 0.1em; }
 
 /* Legal pages. The values above come from the shared tokens; the rules below only place them. */
 body { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; font-size: 1rem; line-height: 1.6; overflow-wrap: break-word; }
