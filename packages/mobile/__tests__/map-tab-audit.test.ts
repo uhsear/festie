@@ -81,8 +81,10 @@ describe('map GPS watch lifecycle', () => {
     expect(src).toMatch(/useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?return \(\) => \{\s*focusedRef\.current = false;\s*watchSubRef\.current\?\.remove\(\);/);
   });
 
-  it('says the festival has no map, not no offline map, beside the Download for offline chip', () => {
-    expect(src).toContain('OFFLINE_MAP_COPY.noMapYet');
+  it('says a festival has no map once: the banner carries only download advice, the body note owns the message', () => {
+    expect(src).not.toContain('noMapYet');
     expect(src).not.toContain('has no offline map');
+    expect(src).toContain('{loadFailed || remotePmtilesUrl ? (');
+    expect(src).toContain("This festival isn't mapped yet.");
   });
 });
