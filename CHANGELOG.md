@@ -19,6 +19,17 @@ Merged to `main` but not yet deployed to production.
 - The Now & Next widget and Live Activity show one lead object per state.
 - SOS is one press-and-hold control on web and mobile, and the incoming SOS banner floats over the page instead of pushing it down. Keyboard and screen-reader users open the same confirm without the hold.
 - The donation pill and the shrinking header are gone; support stays under Account help. The connection dot shows only when offline.
+- Motion is complete for reduced-motion users, ambient loops pause in low-power mode and hidden tabs, and Now & Next plays a short entrance when the live set changes.
+- Load errors share one error state with a single Retry on web and mobile, empty lists show product-shaped placeholder rows, and a festival without a lineup shows it as a flyer.
+- Web and mobile first-run teach the same picks and clash with one scripted lineup.
+- The mobile top banners are compact strips that float over the page, and the SOS control keeps clear of the tab bar.
+- The Play listing describes background location sharing correctly: opt-in, while the phone is locked, until the time you pick.
+- The web app's first load is smaller: modules used only by lazy screens stay out of the shared chunk.
+
+### Docs
+- The README says the apps are in testing and links CI, uptime, privacy and support.
+- App Review notes, release notes and the store privacy answers live in `packages/mobile/store/`, with tests that tie each claim to code.
+- ARCHITECTURE.md, CONTEXT.md, GETTING_STARTED.md and AGENTS.md match the code again.
 
 ## [2026-11-24] deploy-20261124-025224
 
