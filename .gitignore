@@ -138,6 +138,7 @@ packages/web/public/fonts/clash-display/
 !/docs/runbooks/
 /docs/runbooks/*
 !/docs/runbooks/ios-testing.md
+!/docs/runbooks/mobile-release.md
 !/docs/REUSE.md
 !/docs/adrs/
 /docs/adrs/*
