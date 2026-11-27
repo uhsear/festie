@@ -104,7 +104,7 @@ export default function DetailReminderPicker({
         <div className={cn('text-xs text-text-secondary', problem ? 'mb-2' : 'mb-6')}>
           Default for must-see picks. Pick another time to change it, or{' '}
           <button type="button" className={problemLinkClass} onClick={() => void navigate({ to: '/account' })}>
-            turn it off in Account
+            turn it off in More
           </button>
           .
         </div>
@@ -128,9 +128,9 @@ export default function DetailReminderPicker({
               : "This browser can't show reminders. Use the Festie app or another browser.")}
           {problem === 'pref-off' && (
             <>
-              Set reminders are turned off in Account.{' '}
+              Set reminders are turned off in More.{' '}
               <button type="button" className={problemLinkClass} onClick={() => void navigate({ to: '/account' })}>
-                Turn on in Account
+                Turn on in More
               </button>
             </>
           )}

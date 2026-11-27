@@ -211,13 +211,13 @@ export default function SharePicksDialog({ className }: { className?: string }) 
             ? 'Public schedule page is on. It shows your newest festival.'
             : 'Public schedule page is off.'}{' '}
           <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
-            Change in Account
+            Change in More
           </Link>
         </p>
         <p className="text-xs text-text-muted">
           Sent a link by mistake?{' '}
           <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
-            Reset your links in Account
+            Reset your links in More
           </Link>
           .
         </p>

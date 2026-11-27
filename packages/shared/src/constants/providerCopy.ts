@@ -8,7 +8,7 @@ export const PROVIDER_COPY = {
   finishBody: 'Pick a username your crew will see. Your username is permanent. You can change your display name later.',
   finishButton: 'Create account',
   signupExpired: 'Sign-up took too long. Start again.',
-  emailInUse: 'An account already uses this email. Sign in with your password, then link this provider in Account.',
+  emailInUse: 'An account already uses this email. Sign in with your password, then link this provider in More.',
   methodsTitle: 'Sign-in methods',
   password: 'Password',
   passwordNotSet: 'Not set',

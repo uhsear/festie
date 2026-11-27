@@ -71,8 +71,8 @@ describe('DetailReminderPicker', () => {
       prefs: { ...useNotificationPrefsStore.getState().prefs, setReminders: false },
     } as never);
     renderWith(15);
-    expect(screen.getByRole('status')).toHaveTextContent('Set reminders are turned off in Account.');
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Turn on in Account' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Set reminders are turned off in More.');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Turn on in More' }));
     expect(navigate).toHaveBeenCalledWith({ to: '/account' });
   });
 
@@ -116,7 +116,7 @@ describe('DetailReminderPicker', () => {
     expect(screen.getByText(/Default for must-see picks/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Default reminder 15m before, click to keep it' }));
     expect(onReminderClick).toHaveBeenCalledWith(15);
-    await user.click(screen.getByRole('button', { name: 'turn it off in Account' }));
+    await user.click(screen.getByRole('button', { name: 'turn it off in More' }));
     expect(navigate).toHaveBeenCalledWith({ to: '/account' });
   });
 

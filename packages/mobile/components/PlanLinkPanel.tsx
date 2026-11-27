@@ -87,9 +87,9 @@ export default function PlanLinkPanel() {
           ? 'Public schedule page is on. It shows your newest festival.'
           : 'Public schedule page is off.'}
       </Text>
-      <Button label="Change in Account" variant="ghost" onPress={goAccount} />
+      <Button label="Change in More" variant="ghost" onPress={goAccount} />
       <Text style={styles.muted}>Sent a link by mistake?</Text>
-      <Button label="Reset your links in Account" variant="ghost" onPress={goAccount} />
+      <Button label="Reset your links in More" variant="ghost" onPress={goAccount} />
     </ScrollView>
   );
 }
