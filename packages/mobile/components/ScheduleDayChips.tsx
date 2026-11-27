@@ -126,10 +126,10 @@ const useStyles = makeStyles((t: Tokens) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[1],
-    // spacing[6]: enough horizontal room that the longest day labels
-    // ("Saturday"/"Sunday") clear the pill's rounded edge comfortably — the
-    // bg-sibling stops the clip, this keeps the trailing glyph off the edge.
-    paddingHorizontal: t.spacing[6],
+    // spacing[4]: the longest day labels ("Saturday"/"Sunday") still clear the pill's
+    // rounded edge (the bg-sibling stops the clip). Wider padding pushed "Tomorrow Nov 28"
+    // past the gutter at font scale 1.3 on a 393 dp phone; two chips now fit inside it up to 1.4.
+    paddingHorizontal: t.spacing[4],
     paddingVertical: t.spacing[3],
     // WCAG 2.5.5 / 2.5.8 minimum 44x44px touch target (motor accessibility).
     minHeight: 44,

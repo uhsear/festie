@@ -42,6 +42,13 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(timeline).toContain('mark ? styles.setBlockClashed : null');
   });
 
+  it('day chips leave room for two chips inside the gutter at font scale 1.3', () => {
+    const src = read('components/ScheduleDayChips.tsx');
+    const chip = src.slice(src.indexOf('  dayChip: {'), src.indexOf('  dayChipBg: {'));
+    expect(chip).toContain('paddingHorizontal: t.spacing[4]');
+    expect(chip).not.toContain('paddingHorizontal: t.spacing[6]');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });
