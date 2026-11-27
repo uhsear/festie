@@ -34,6 +34,17 @@
 #main-content:has(.map-page) {
   min-height: 0;
 }
+/* The SOS dock floats over the bottom corner, so every page ends with room to scroll its last row clear.
+   The route wrapper is h-full and content overflows it, so padding on #main-content would not count;
+   a last flex item does. The map overlays already offset themselves by --sos-dock-h. */
+#main-content > :first-child::after {
+  content: '';
+  flex: none;
+  height: var(--sos-dock-h, 0px);
+}
+#main-content:has(.map-page) > :first-child::after {
+  display: none;
+}
 /* Phones: the map runs edge to edge. The shell's px-6 comes off here, and the map box cancels the page's px-4. */
 @media (max-width: 639px) {
   #main-content:has(.map-page) {
