@@ -46,6 +46,18 @@ describe('NowNextStrip', () => {
     });
   });
 
+  it('hides on another day while the festival runs, and shows on the live day', () => {
+    nowMs = local(2030, 5, 15, 20, 48);
+    state.selectedDay = 1;
+    const { unmount } = render(<NowNextStrip />);
+    expect(screen.queryByTestId('now-next-strip')).toBeNull();
+    unmount();
+    state.selectedDay = 0;
+    render(<NowNextStrip />);
+    expect(screen.getByTestId('now-next-strip')).toBeInTheDocument();
+    delete state.selectedDay;
+  });
+
   it('shows NOW with time left for a pick playing now and navigates on click', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     render(<NowNextStrip />);

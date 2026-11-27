@@ -197,7 +197,8 @@ export default function AppShell() {
 
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
-          {isSchedulePath(location.pathname) && <NowNextStrip />}
+          {/* The grid has its own now line and Jump to now, and cannot spare the height. */}
+          {isSchedulePath(location.pathname) && location.pathname !== '/grid' && <NowNextStrip />}
 
           <main
             id="main-content"

@@ -200,9 +200,13 @@ export default function Header() {
           >
             <Bell size={20} aria-hidden="true" />
             {unreadLabel && (
-              <CountBadge aria-hidden="true" className="absolute top-1 right-1">
+              <span
+                aria-hidden="true"
+                // 12px on a solid disc with a ring: a 10px tinted count on the bell was unreadable and clipped against the icon.
+                className="absolute top-0 right-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold leading-none text-[var(--text-on-light-accent)] ring-2 ring-[var(--color-bg-primary)]"
+              >
                 {unreadLabel}
-              </CountBadge>
+              </span>
             )}
           </Link>
         )}

@@ -13,6 +13,7 @@ import {
   type FestivalReadyItem,
 } from '../utils/festivalReady';
 import { festivalPhase } from '../utils/festivalTime';
+import { setTimesPending } from '../utils/scheduleFilters';
 
 const hiddenKey = (festivalId: string) => `festie_ready_hidden:${festivalId}`;
 
@@ -52,6 +53,7 @@ export function useFestivalReady(
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const days = useFestivalDataStore((s) => s.days);
+  const sets = useFestivalDataStore((s) => s.sets);
   const crews = useCrewStore((s) => s.crews);
   const prefs = useNotificationPrefsStore((s) => s.prefs);
   const loaded = useNotificationPrefsStore((s) => s.loaded);
@@ -104,6 +106,7 @@ export function useFestivalReady(
     hasCrew: !!currentFestival && crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id),
     remindersOn: notificationsAllowed && prefs.setReminders,
     offlineReady: isFestivalDownloaded(readiness, offlineMap),
+    timesPending: setTimesPending(sets),
   });
 
   // Once per festival, so an async adapter (mobile) does not start a new read on every render.

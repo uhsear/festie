@@ -206,7 +206,7 @@ function TimelineGridCell({
 
       {/* Priority pick buttons */}
       {canPick && !compact && !isShort && blockPx >= 60 && (
-        <div className="flex gap-[var(--space-1)] mt-0.5">
+        <div className="tl-pick-row flex gap-[var(--space-1)] mt-0.5">
           {PICK_BUTTONS.map((p) => {
             const active = myPick === p;
             return (

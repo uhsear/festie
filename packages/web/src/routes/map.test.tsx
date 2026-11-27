@@ -199,6 +199,8 @@ describe('MapView', () => {
     await screen.findByTestId('crew-map');
     expect(screen.getByRole('link', { name: 'Add a meeting point' })).toHaveAttribute('href', '/crew');
     expect(screen.getByRole('link', { name: 'Add a meeting point' })).toHaveAttribute('data-search', '{"tab":"find"}');
+    // A pill, not a bare underlined link, so it reads as the map's one action.
+    expect(screen.getByRole('link', { name: 'Add a meeting point' }).className).toContain('rounded-full');
   });
 
   it('hides crew layers and SOS when the crew belongs to another festival', async () => {

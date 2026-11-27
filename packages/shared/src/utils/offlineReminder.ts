@@ -2,7 +2,7 @@ import { zonedWallTimeToMs } from './setStatus';
 
 /** Copy for the day-before reminder: the mobile local notification and the web home banner. */
 export function offlineReminderText(hasMap: boolean): string {
-  return `Open Festie on wifi to save the ${hasMap ? 'map and lineup' : 'lineup'} for no signal.`;
+  return `Download the ${hasMap ? 'map and lineup' : 'lineup'} on wifi so it works without signal.`;
 }
 
 const REMINDER_HOUR = 18;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import OfflineStatusChip from './OfflineStatusChip';
 
 const h = vi.hoisted(() => ({
@@ -43,23 +43,27 @@ describe('OfflineStatusChip', () => {
     h.days = [{ date: '2026-11-10' }];
     vi.setSystemTime(Date.UTC(2026, 10, 9, 17, 59));
     const before = render(<OfflineStatusChip remind />);
-    expect(before.queryByText(/Open Festie on wifi/)).toBeNull();
+    expect(before.queryByText(/on wifi so it works without signal/)).toBeNull();
     before.unmount();
     vi.setSystemTime(Date.UTC(2026, 10, 9, 18, 0));
     const at = render(<OfflineStatusChip remind />);
-    expect(at.getByText('Open Festie on wifi to save the lineup for no signal.')).toBeInTheDocument();
+    expect(at.getByText('Download the lineup on wifi so it works without signal.')).toBeInTheDocument();
+    // One neutral row: the text and its button share a container, and nothing is amber.
+    const row = at.getByText('Download the lineup on wifi so it works without signal.').parentElement!;
+    expect(within(row).getByRole('button')).toBeInTheDocument();
+    expect(row.className).not.toMatch(/amber/);
     at.unmount();
     h.hook.hasMap = true;
     const withMap = render(<OfflineStatusChip remind />);
-    expect(withMap.getByText('Open Festie on wifi to save the map and lineup for no signal.')).toBeInTheDocument();
+    expect(withMap.getByText('Download the map and lineup on wifi so it works without signal.')).toBeInTheDocument();
     withMap.unmount();
     h.hook.hasMap = false;
     const noRemind = render(<OfflineStatusChip />);
-    expect(noRemind.queryByText(/Open Festie on wifi/)).toBeNull();
+    expect(noRemind.queryByText(/on wifi so it works without signal/)).toBeNull();
     noRemind.unmount();
     setHook('ready');
     const ready = render(<OfflineStatusChip remind />);
-    expect(ready.queryByText(/Open Festie on wifi/)).toBeNull();
+    expect(ready.queryByText(/on wifi so it works without signal/)).toBeNull();
     vi.useRealTimers();
   });
 

@@ -1,7 +1,7 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors, POSTER as POSTER_TOKENS } from '@festie/shared/tokens';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
-import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, posterBand } from '@festie/shared/utils';
+import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, fitScheduleRowHeight, posterBand } from '@festie/shared/utils';
 import { posterFont } from '../hooks/useTokens';
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 
@@ -27,7 +27,8 @@ interface Props {
  */
 export default function ScheduleImagePoster({ model, format }: Props) {
   const layout = SCHEDULE_IMAGE_LAYOUT[format];
-  const k = layout.rowHeight / M.row.base;
+  const rowHeight = fitScheduleRowHeight(format, model.rows.length);
+  const k = rowHeight / M.row.base;
   const r = (n: number) => Math.round(n * k);
   return (
     <View
@@ -50,7 +51,7 @@ export default function ScheduleImagePoster({ model, format }: Props) {
       </Text>
       <View style={s.rows}>
         {model.rows.map((row) => (
-          <View key={row.setId} style={[s.row, { height: layout.rowHeight, gap: r(M.row.gap) }]}>
+          <View key={row.setId} style={[s.row, { height: rowHeight, gap: r(M.row.gap) }]}>
             <View
               style={{
                 width: r(M.row.barWidth),

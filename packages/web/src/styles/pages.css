@@ -275,16 +275,16 @@
   mask-image: none;
 }
 .day-tabs-scroll.fade-right:not(.fade-left) .day-tabs {
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
 }
 .day-tabs-scroll.fade-left:not(.fade-right) .day-tabs {
-  -webkit-mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to left, #000 0, #000 calc(100% - 40px), transparent 100%);
 }
 .day-tabs-scroll.fade-left.fade-right .day-tabs {
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
-  mask-image: linear-gradient(to right, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%);
 }
 
 /* ── SubHeader scroll rows: visible scrollbar on hover for mouse users ──

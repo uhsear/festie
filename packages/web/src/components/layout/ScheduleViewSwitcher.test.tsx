@@ -15,13 +15,24 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 const setScheduleView = vi.fn();
+const storeState: Record<string, unknown> = {};
 vi.mock('@festie/shared', () => ({
-  useFestivalStore: (selector: (s: unknown) => unknown) => selector({ scheduleView: null, setScheduleView }),
+  useFestivalStore: (selector: (s: unknown) => unknown) => selector({ scheduleView: null, setScheduleView, ...storeState }),
 }));
+vi.mock('../../hooks/useSetStatus', () => ({ useNow: () => Date.parse('2026-12-01T12:00:00Z') }));
 
 describe('ScheduleViewSwitcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    for (const name of Object.keys(storeState)) delete storeState[name];
+  });
+
+  it('drops the Grid link while the lineup is a flyer with no set times', () => {
+    storeState.currentFestival = { id: 'f', name: 'Hush', status: 'published', lineup: [] };
+    storeState.days = [{ id: 'd', date: '2026-12-27', dayIndex: 0 }];
+    storeState.sets = [{ id: 's', festivalId: 'f', stageId: 'st', artist: 'Ada', dayIndex: 0 }];
+    render(<ScheduleViewSwitcher />);
+    expect(screen.getAllByRole('link').map((l) => l.textContent)).toEqual(['Cards']);
   });
 
   it('renders two links and marks only the current view', () => {

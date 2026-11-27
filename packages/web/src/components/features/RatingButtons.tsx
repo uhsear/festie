@@ -151,11 +151,16 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
               >
                 <r.Icon className={iconSize} aria-hidden="true" />
               </button>
+              {/* Full size names every step, because the scale mixes thumbs and faces. A compact list row has no
+                  room and names only the active step (DP-40). */}
               <span
                 aria-hidden="true"
-                className="min-h-4 text-[length:var(--font-size-10)] font-semibold text-text-primary"
+                className={cn(
+                  'min-h-4 text-[length:var(--font-size-12)] font-semibold',
+                  active ? 'text-text-primary' : 'text-text-secondary',
+                )}
               >
-                {active ? r.label : ''}
+                {active || !compact ? r.label : ''}
               </span>
             </div>
           );

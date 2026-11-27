@@ -259,7 +259,7 @@ function GridViewInner() {
             onSavePick={handleSavePick}
             onOpenDetail={setDetailSet}
           />
-          <AnnouncedLineup model={announced} className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5 max-md:mx-6" />
         </div>
       </RefreshableView>
     );
@@ -275,7 +275,7 @@ function GridViewInner() {
           aria-label={COPY.grid.regionLabel}
           data-scroll-sentinel
         >
-          <AnnouncedLineup model={announced} className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5 max-md:mx-6" />
         </div>
       </RefreshableView>
     );
@@ -311,7 +311,7 @@ function GridViewInner() {
           />
         )}
         {/* A search lists the matching announced acts under the set results, even when no set matches. */}
-        {!allDaySets.length && searchQuery.trim() ? <AnnouncedLineup model={announced} className="mt-5" /> : null}
+        {!allDaySets.length && searchQuery.trim() ? <AnnouncedLineup model={announced} className="mt-5 max-md:mx-6" /> : null}
       </RefreshableView>
     );
   }
@@ -429,7 +429,7 @@ function GridViewInner() {
               onOpenDetail={setDetailSet}
             />
           )}
-          <AnnouncedLineup model={announced} className="mt-5" />
+          <AnnouncedLineup model={announced} className="mt-5 max-md:mx-6" />
         </div>
       </div>
     </RefreshableView>

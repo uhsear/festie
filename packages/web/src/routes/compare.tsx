@@ -153,8 +153,9 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title="No crew picks yet"
-          description="Once your crewmates save picks for this festival, their schedules show up here side by side."
+          title="Invite a crewmate to compare"
+          description="Compare lines up your crew's picks side by side. Once a crewmate joins and saves picks, their schedule shows up here."
+          cta={{ label: 'Invite a crewmate', onClick: () => navigate({ to: '/crew' }).catch(() => {}) }}
         />
       </div>
     );

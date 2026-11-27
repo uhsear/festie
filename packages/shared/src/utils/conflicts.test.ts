@@ -250,7 +250,7 @@ describe('clashBadgeBySetId', () => {
       { setA: a, setB: b, overlapMinutes: 30 },
       { setA: a, setB: c, overlapMinutes: 15 },
     ]);
-    expect(badges.get('a')!.label).toBe('Clashes with B (30 min) +1');
+    expect(badges.get('a')!.label).toBe('Clashes with B (30 min) +1 more');
   });
 
   it('breaks an overlap tie on the earlier-starting other set', () => {
@@ -272,7 +272,7 @@ describe('clashBadgeBySetId', () => {
       { setA: a, setB: d, overlapMinutes: 0, tight: true },
       { setA: a, setB: b, overlapMinutes: 5 },
     ]);
-    expect(badges.get('a')).toMatchObject({ otherSetId: 'b', tight: false, label: 'Clashes with B (5 min) +1' });
+    expect(badges.get('a')).toMatchObject({ otherSetId: 'b', tight: false, label: 'Clashes with B (5 min) +1 more' });
     expect(badges.get('d')!.label).toBe('Tight change with A');
   });
 });

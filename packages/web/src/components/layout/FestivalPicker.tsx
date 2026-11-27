@@ -102,7 +102,7 @@ export default function FestivalPicker() {
     // A series mixes statuses, so each edition decides: a festival that has not ended can be followed.
     const status = festivalStatus(f);
     const followable = groupFollowable ?? (status === 'upcoming' || status === null);
-    const detail = [formatFestivalDateRange(f.startDate, f.endDate), f.location].filter(Boolean).join(' · ');
+    const dates = formatFestivalDateRange(f.startDate, f.endDate);
     const isCurrent = f.id === currentFestival?.id;
     const button = (
       <button
@@ -117,8 +117,10 @@ export default function FestivalPicker() {
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-text-primary">{f.name}</span>
-          {detail && <span className="block truncate text-xs text-text-muted">{detail}</span>}
-          {f.scheduleProgress && (
+          {dates && <span className="block truncate text-xs text-text-muted">{dates}</span>}
+          {f.location && <span className="block truncate text-xs text-text-muted">{f.location}</span>}
+          {/* 'Set times' is the normal case and says nothing: only the exceptions get a chip. */}
+          {f.scheduleProgress && f.scheduleProgress !== 'times' && (
             <span
               data-testid={`festival-progress-${f.id}`}
               className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs font-medium text-text-secondary"
@@ -127,7 +129,11 @@ export default function FestivalPicker() {
             </span>
           )}
         </span>
-        {isCurrent && <Check className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />}
+        {isCurrent && (
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-aqua text-[var(--text-on-light-accent)]">
+            <Check className="w-4 h-4" strokeWidth={3} aria-hidden="true" />
+          </span>
+        )}
       </button>
     );
     const slug = f.slug;
@@ -135,7 +141,7 @@ export default function FestivalPicker() {
       <div key={f.id} className="flex items-center gap-2">
         {button}
         {/* Follow comes before share so the share icons line up in one right-hand column. */}
-        {followable && <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />}
+        {followable && <FollowButton festivalId={f.id} festivalName={f.name} size="sm" quiet />}
         {slug && (
           <button
             type="button"

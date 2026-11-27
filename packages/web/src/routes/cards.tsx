@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { staggerDelay } from '@festie/shared/tokens';
@@ -35,6 +35,7 @@ import { useOfflineDownload } from '../hooks/useOfflineDownload';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 export default function CardsView() {
   return (
@@ -70,6 +71,7 @@ function CardsViewInner() {
   const dismissedPhase = useFestivalStore((state) => state.dismissedPhase);
   const dismissPhaseBand = useFestivalStore((state) => state.dismissPhaseBand);
   const groupBy = useFestivalStore((state) => state.scheduleGroupBy) ?? 'time';
+  const stageColumns = groupBy === 'stage';
 
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const setDetailAutoSpotify = useUIStore((state) => state.setDetailAutoSpotify);
@@ -170,6 +172,9 @@ function CardsViewInner() {
 
   return (
     <>
+      {/* A flyer says why there are no sets (times are not out) and offers Follow, so it leads the checklist. */}
+      {flyer ? <LineupFlyer model={flyer} /> : null}
+
       {/* Before the festival the Festival ready checklist takes the band's place until it is done or hidden. */}
       {/* Next useful steps for this phase; empty (hidden) when there is nothing to do or dismissed. */}
       {ready.visible ? (
@@ -180,7 +185,6 @@ function CardsViewInner() {
 
       {flyer ? null : <SetTimesBanner />}
       <DiscoverRow />
-      {flyer ? <LineupFlyer model={flyer} /> : null}
       {/* A search lists the matching announced acts under the set results instead (below). */}
       {q || flyer ? null : <AnnouncedLineup model={announced} />}
 
@@ -211,34 +215,39 @@ function CardsViewInner() {
       ) : (
         <div
           // `card-grid` is kept for its behavioral hooks (scroll-container
-          // detection, focus-visible, priority-button styling) — layout below
-          // is driven by tokens to match the mobile FlatList rhythm.
-          className="card-grid grid w-full mx-auto max-w-[1440px] md:[--cards-gap:var(--space-4)]"
-          // Auto-fill grid + token gap set inline so the mobile single-column →
-          // calm multi-col rhythm wins over the legacy (unlayered) `.card-grid`
-          // desktop overrides in pages.css. Gap steps from spacing[3] (12px,
-          // tight mobile-list rhythm) to spacing[4] (16px) past the md
-          // breakpoint. Top/side padding is intentionally NOT set here — the
-          // shell `#main-content` (`px-6 py-4`) owns the single top/side inset
-          // for every route, so the grid (and the empty-state branch above)
-          // share one origin instead of stacking an extra grid pad on top.
-          style={{
-            // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
-            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
-            gap: 'var(--cards-gap, var(--space-3))',
-          }}
+          // detection, focus-visible, priority-button styling).
+          // Layout: one column on a phone. From md up, stage groups are side-by-side columns (one column of
+          // cards per stage), and time or A-Z groups flow down balanced columns, so a group of one to three
+          // cards no longer leaves most of a 1440px page blank. Top/side padding is intentionally NOT set
+          // here: the shell `#main-content` (`px-6 py-4`) owns the single inset for every route.
+          className={cn(
+            'card-grid w-full mx-auto max-w-[1440px] md:[--cards-gap:var(--space-4)]',
+            stageColumns
+              ? 'grid items-start'
+              : 'flex flex-col gap-[var(--cards-gap,var(--space-3))] md:block md:[column-width:300px] md:[column-gap:var(--space-4)]',
+          )}
+          style={
+            stageColumns
+              ? {
+                  // 300px keeps the Must/Want/Maybe row inside the card; 260px clipped Maybe.
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+                  gap: 'var(--cards-gap, var(--space-3))',
+                }
+              : undefined
+          }
           role="region"
           aria-label="Card view"
         >
           {earlier.length > 0 && !earlierForced && (
             <button
               type="button"
-              className="col-span-full inline-flex items-center justify-center gap-1.5 min-h-11 rounded-lg border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+              className="col-span-full [column-span:all] mb-3 inline-flex w-full items-center justify-center gap-1.5 min-h-11 rounded-lg border border-glass-border bg-bg-card text-sm font-medium text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               aria-expanded={showEarlier}
               aria-label={showEarlier ? undefined : `Earlier today (${earlier.length}), show sets that ended earlier`}
               onClick={() => setShowEarlier((v) => !v)}
             >
-              {showEarlier ? 'Hide earlier sets' : `Earlier today (${earlier.length})`}
+              {/* One label in both states: the count stays and the chevron says which way it goes. */}
+              {`Earlier today (${earlier.length})`}
               {showEarlier ? (
                 <ChevronUp className="w-4 h-4" aria-hidden="true" />
               ) : (
@@ -247,8 +256,11 @@ function CardsViewInner() {
             </button>
           )}
           {groups.map((group) => (
-            <Fragment key={group.key || 'other'}>
-              <h2 className="col-span-full mt-[var(--space-2)] text-[length:var(--font-size-14)] font-semibold text-text-secondary">
+            <section
+              key={group.key || 'other'}
+              className={cn('min-w-0 flex flex-col gap-[var(--cards-gap,var(--space-3))]', !stageColumns && 'md:mb-4 md:break-inside-avoid')}
+            >
+              <h2 className="mt-[var(--space-2)] text-[length:var(--font-size-14)] font-semibold text-text-secondary">
                 {group.label}
               </h2>
               {group.sets.map((set) => {
@@ -292,7 +304,7 @@ function CardsViewInner() {
                   </div>
                 );
               })}
-            </Fragment>
+            </section>
           ))}
         </div>
       )}

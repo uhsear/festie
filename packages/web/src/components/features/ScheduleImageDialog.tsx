@@ -13,12 +13,14 @@ import {
 import type { LockscreenMode, ScheduleImageFormat } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
-import LockscreenPanel, { optionClass } from './LockscreenPanel';
+import LockscreenPanel, { GROUP_LABEL, optionClass } from './LockscreenPanel';
 import ScheduleImagePoster from './ScheduleImagePoster';
 import { captureAndShareImage } from '../../lib/shareImage';
 import { useToast } from '../../lib/toastContext';
 
 const PREVIEW_WIDTH = 240;
+// The tallest shape's preview (Story, 1080 x 1920), so the other shapes sit in the same box.
+const PREVIEW_BOX_HEIGHT = Math.round((SCHEDULE_IMAGE_LAYOUT.story.height * PREVIEW_WIDTH) / SCHEDULE_IMAGE_LAYOUT.story.width);
 const FORMATS: Array<{ value: ScheduleImageFormat; label: string }> = [
   { value: 'story', label: 'Story' },
   { value: 'lockscreen', label: 'Lock screen' },
@@ -81,6 +83,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
           onOpenChange={setOpen}
           title="Lock screen image"
           description="Make a wallpaper of the schedule, sized for your phone."
+          wide
         >
           <LockscreenPanel initialMode={initialMode} />
         </Dialog>
@@ -89,6 +92,26 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
   }
   const layout = SCHEDULE_IMAGE_LAYOUT[format];
   const scale = PREVIEW_WIDTH / layout.width;
+  const shapeGroup = (
+    <div className="space-y-2">
+      <span id="schedule-image-shape" className={GROUP_LABEL}>
+        Shape
+      </span>
+      <div role="group" aria-labelledby="schedule-image-shape" className="flex gap-2">
+        {FORMATS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            aria-pressed={format === f.value}
+            className={optionClass(format === f.value)}
+            onClick={() => setFormat(f.value)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
   // Option labels reuse the model's day label so the picker matches the image.
   const dayLabels = days.map((_, i) =>
     buildScheduleImageModel({ festival, sets: [], stages, days, picks, dayIndex: i, format }).dayLabel,
@@ -149,82 +172,74 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
         onOpenChange={setOpen}
         title="Save your picks as an image"
         description="One day per image. If your picks don't all fit, Must See picks come first."
+        wide
       >
         {format === 'lockscreen' || (model && dayIndex !== null) ? (
-          <div className="space-y-4">
-            <span id="schedule-image-shape" className="block text-sm text-text-secondary">
-              Shape
-            </span>
-            <div role="group" aria-labelledby="schedule-image-shape" className="flex gap-2">
-              {FORMATS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  aria-pressed={format === f.value}
-                  className={optionClass(format === f.value)}
-                  onClick={() => setFormat(f.value)}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            {format === 'lockscreen' ? (
-              <LockscreenPanel initialMode="picks" />
-            ) : model && dayIndex !== null ? (
-              <>
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                Day
-                <select
-                  value={dayIndex}
-                  onChange={(e) => setDayChoice(Number(e.target.value))}
-                  className="min-h-11 rounded-xl border border-border-input bg-bg-card pl-2 pr-8 text-sm text-text-primary"
-                >
-                  {Array.from({ length: dayCount }, (_, i) => (
-                    <option key={i} value={i} disabled={!timedDays.has(i)}>
-                      {dayLabels[i] ?? `Day ${i + 1}`}
-                      {timedDays.has(i) ? '' : ' (no timed picks)'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div
-                aria-hidden="true"
-                className="mx-auto overflow-hidden rounded-lg border border-border pointer-events-none"
-                style={{ width: PREVIEW_WIDTH, height: layout.height * scale }}
-              >
-                <div
-                  style={{ width: layout.width, height: layout.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-                >
-                  <div ref={posterRef}>
-                    <ScheduleImagePoster model={model} format={format} />
+          shapeGroup && format === 'lockscreen' ? (
+            <LockscreenPanel initialMode="picks" lead={shapeGroup} />
+          ) : model && dayIndex !== null ? (
+            // Phones: preview and Save first, options below. From md up: options left, preview right.
+            <div className="flex flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-6">
+              <div className="order-2 space-y-4 md:order-1">
+                {shapeGroup}
+                <label className="flex items-center gap-2 text-sm text-text-secondary">
+                  Day
+                  <select
+                    value={dayIndex}
+                    onChange={(e) => setDayChoice(Number(e.target.value))}
+                    className="min-h-11 rounded-xl border border-border-input bg-bg-card pl-2 pr-8 text-sm text-text-primary"
+                  >
+                    {Array.from({ length: dayCount }, (_, i) => (
+                      <option key={i} value={i} disabled={!timedDays.has(i)}>
+                        {dayLabels[i] ?? `Day ${i + 1}`}
+                        {timedDays.has(i) ? '' : ' (no timed picks)'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="order-1 space-y-4 md:order-2 md:sticky md:top-0 md:self-start">
+                {/* One fixed-height box for every shape, so the Save button does not jump when Story and Print differ in height. */}
+                <div className="flex items-start justify-center" style={{ minHeight: PREVIEW_BOX_HEIGHT }}>
+                  <div
+                    aria-hidden="true"
+                    className="overflow-hidden rounded-lg border border-border pointer-events-none"
+                    style={{ width: PREVIEW_WIDTH, height: layout.height * scale }}
+                  >
+                    <div
+                      style={{ width: layout.width, height: layout.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+                    >
+                      <div ref={posterRef}>
+                        <ScheduleImagePoster model={model} format={format} />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              {format === 'print' ? (
-                <>
-                  <Button variant="primary" size="sm" type="button" fullWidth onClick={() => window.print()}>
-                    Print
+                {format === 'print' ? (
+                  <>
+                    <Button variant="primary" size="sm" type="button" fullWidth onClick={() => window.print()}>
+                      Print
+                    </Button>
+                    <style>{PRINT_CSS}</style>
+                    {createPortal(
+                      <div className="festie-print-poster" aria-hidden="true">
+                        <ScheduleImagePoster model={model} format="print" />
+                      </div>,
+                      document.body,
+                    )}
+                  </>
+                ) : (
+                  <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy}>
+                    {busy ? 'Making image…' : 'Save image'}
                   </Button>
-                  <style>{PRINT_CSS}</style>
-                  {createPortal(
-                    <div className="festie-print-poster" aria-hidden="true">
-                      <ScheduleImagePoster model={model} format="print" />
-                    </div>,
-                    document.body,
-                  )}
-                </>
-              ) : (
-                <Button variant="primary" size="sm" type="button" fullWidth onClick={save} disabled={busy}>
-                  {busy ? 'Making image…' : 'Save image'}
-                </Button>
-              )}
-              </>
-            ) : (
-              <p className="text-sm text-text-secondary">
-                None of your picks have a set time yet, so there is nothing to draw.
-              </p>
-            )}
-          </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              None of your picks have a set time yet, so there is nothing to draw.
+            </p>
+          )
         ) : (
           <p className="text-sm text-text-secondary">
             None of your picks have a set time yet, so there is nothing to draw.

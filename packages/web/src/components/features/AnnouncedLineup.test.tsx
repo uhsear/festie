@@ -69,12 +69,12 @@ function setFestival(lineup: unknown[], sets: unknown[] = [], extra: Record<stri
       name: 'Names Fest',
       b2bSeparator: 'b2b',
       publishedAt: '2098-12-15T00:00:00.000Z',
-      startDate: '2099-02-05',
-      endDate: '2099-02-06',
+      startDate: '2099-02-06',
+      endDate: '2099-02-07',
       lineup,
       ...extra,
     },
-    days: [day('2099-02-05', 'Fri'), day('2099-02-06', 'Sat')],
+    days: [day('2099-02-06', 'Fri'), day('2099-02-07', 'Sat')],
     sets,
     stages: [{ id: 'main', name: 'Main Stage' }],
     selectedDay: 0,
@@ -138,8 +138,8 @@ describe('AnnouncedLineup', () => {
   it("follows the selected day: that day's acts first, then the Day TBA acts", () => {
     setFestival([
       entry('1', 'Day TBA Act'),
-      entry('2', 'Friday Act', { dayDate: '2099-02-05' }),
-      entry('3', 'Saturday Act', { dayDate: '2099-02-06' }),
+      entry('2', 'Friday Act', { dayDate: '2099-02-06' }),
+      entry('3', 'Saturday Act', { dayDate: '2099-02-07' }),
     ]);
     const { container, rerender } = render(<AnnouncedLineup />);
     expect(names(container)).toEqual(['Friday Act', 'Day TBA Act']);
@@ -151,7 +151,7 @@ describe('AnnouncedLineup', () => {
 
   it('with some sets: leaves covered acts out of the default list and brings them back under "Full lineup"', async () => {
     setFestival(
-      [entry('1', 'Covered Act'), entry('2', 'Open Act', { dayDate: '2099-02-05' }), entry('3', 'Untimed Act')],
+      [entry('1', 'Covered Act'), entry('2', 'Open Act', { dayDate: '2099-02-06' }), entry('3', 'Untimed Act')],
       [set('s1', 'Covered Act', 0, '20:00'), set('s2', 'Untimed Act', 0)],
     );
     const { container } = render(<AnnouncedLineup />);
@@ -186,7 +186,7 @@ describe('AnnouncedLineup', () => {
     setFestival(
       [
         entry('1', 'Alpha'),
-        entry('2', 'Alpine', { dayDate: '2099-02-06' }),
+        entry('2', 'Alpine', { dayDate: '2099-02-07' }),
         entry('3', 'Alps'),
         entry('4', 'Beta'),
       ],

@@ -2,7 +2,7 @@ import type { FestivalSet, Stage, Priority, Profile } from '../types/domain';
 import type { FestivalPhase } from './festivalTime';
 import { foldLetters, setMatchesSearch } from './setSearch';
 import { byStartTime } from './scheduleFormat';
-import { artistDisplayName, formatTime } from './format';
+import { artistDisplayName } from './format';
 import { setGenres } from './discover';
 
 export type ScheduleView = 'cards' | 'timeline' | 'grid';
@@ -71,6 +71,16 @@ function groupRuns(
   return groups;
 }
 
+/** '4-5 PM' (en dash): a bucket of start hours, so it never reads as the time of a 4:30 set. */
+export function hourBucketLabel(hour: number): string {
+  const end = (hour + 1) % 24;
+  const h12 = (h: number) => h % 12 || 12;
+  const ap = (h: number) => (h < 12 ? 'AM' : 'PM');
+  return ap(hour) === ap(end)
+    ? `${h12(hour)}–${h12(end)} ${ap(hour)}`
+    : `${h12(hour)} ${ap(hour)}–${h12(end)} ${ap(end)}`;
+}
+
 /**
  * Cards sections. Time: by start hour in festival-day order, so after-midnight
  * sets stay at the end of their festival day (T1); TBA sets last. Stage: festival
@@ -107,7 +117,7 @@ export function groupScheduleSets(
   return groupRuns(
     sorted,
     (s) => (s.startTime ? s.startTime.slice(0, 2) : 'tba'),
-    (key) => (key === 'tba' ? 'TBA' : formatTime(`${key}:00`)),
+    (key) => (key === 'tba' ? 'TBA' : hourBucketLabel(Number(key))),
   );
 }
 
@@ -283,6 +293,11 @@ export function searchHiddenByFilters(
   stages: readonly Stage[],
 ): boolean {
   return query.trim() !== '' && daySets.some((s) => setMatchesSearch(s, query, stages as Stage[]));
+}
+
+/** True when the festival has sets but none has a start time yet (a days-only festival): nothing can be timed or downloaded. */
+export function setTimesPending(sets: readonly FestivalSet[] | null | undefined): boolean {
+  return !!sets && sets.length > 0 && sets.every((s) => !s.startTime);
 }
 
 /** True when any set on the day has a start and end time, whatever the filters hide. */

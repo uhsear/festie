@@ -275,6 +275,7 @@ describe('MeetingPointsTab', () => {
     setQuery({ data: [] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     expect(screen.getByText('No meeting points yet')).toBeInTheDocument();
+    expect(document.querySelector('.empty-state-illustration')).toBeNull();
   });
 
   it('links to the full map page', () => {

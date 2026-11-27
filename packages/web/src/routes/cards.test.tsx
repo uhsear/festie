@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const festivalState: Record<string, unknown> = {};
+const ready = { visible: false };
 const nowMs = Date.UTC(2026, 10, 7, 21, 0);
 
 vi.mock('@festie/shared/stores', () => ({
@@ -17,7 +18,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ setDetailSet: vi.fn(), setDetailAutoSpotify: vi.fn() }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
-  useFestivalReady: () => ({ visible: false, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
+  useFestivalReady: () => ({ visible: ready.visible, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
   useCanPick: () => true,
   usePicks: () => ({ getMyPick: () => null, getOtherPicks: () => [] }),
   useFestival: () => ({
@@ -48,6 +49,7 @@ vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => null
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
 vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));
+vi.mock('../components/features/FestivalReadyCard', () => ({ default: () => <div data-testid="ready-card" /> }));
 vi.mock('../components/features/LineupFlyer', () => ({ default: () => <div data-testid="lineup-flyer" /> }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div data-testid="cards-skeleton" /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -107,12 +109,26 @@ describe('CardsView order and earlier row', () => {
   it('expands and collapses the earlier sets', async () => {
     render(<CardsView />);
     await userEvent.click(screen.getByRole('button', { name: /Earlier today \(2\), show/ }));
-    const toggle = screen.getByRole('button', { name: 'Hide earlier sets' });
+    // One label with its count in both states; aria-expanded and the chevron carry the direction.
+    const toggle = screen.getByRole('button', { name: 'Earlier today (2)' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveTextContent('Hide earlier sets');
     expect(ids()).toEqual(['early', 'mid', 'now', 'late']);
     await userEvent.click(toggle);
     expect(ids()).toEqual(['now', 'late']);
+  });
+
+  it('flows time groups down balanced columns from md up, and stage groups as side-by-side columns', () => {
+    const { unmount } = render(<CardsView />);
+    const region = screen.getByRole('region', { name: 'Card view' });
+    expect(region.className).toContain('md:[column-width:300px]');
+    expect(region.classList.contains('grid')).toBe(false);
+    unmount();
+    festivalState.scheduleGroupBy = 'stage';
+    render(<CardsView />);
+    const stageRegion = screen.getByRole('region', { name: 'Card view' });
+    expect(stageRegion.classList.contains('grid')).toBe(true);
+    expect(stageRegion.className).not.toContain('column-width');
+    delete festivalState.scheduleGroupBy;
   });
 
   it('shows ended sets, with no fold row, when nothing is left today', () => {
@@ -255,6 +271,14 @@ describe('CardsView lineup flyer', () => {
     render(<CardsView />);
     expect(screen.getByTestId('lineup-flyer')).toBeInTheDocument();
     expect(screen.queryAllByTestId('set-card')).toHaveLength(0);
+  });
+
+  it('puts the flyer, which says times are not out, above the checklist', () => {
+    ready.visible = true;
+    render(<CardsView />);
+    ready.visible = false;
+    const flyer = screen.getByTestId('lineup-flyer');
+    expect(flyer.compareDocumentPosition(screen.getByTestId('ready-card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('brings the cards back, and drops the flyer, once one set has a time', () => {

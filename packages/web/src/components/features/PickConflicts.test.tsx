@@ -62,6 +62,7 @@ vi.mock('../ui/StageBadge', () => ({
 
 vi.mock('lucide-react', () => ({
   CalendarClock: () => <span data-testid="calendar-clock-icon" />,
+  ChevronRight: () => <span />,
   Loader: () => <span />,
   Star: () => <span />,
   Heart: () => <span />,
@@ -165,6 +166,22 @@ describe('PickConflicts', () => {
     overlapMin: 30,
     pairs: [],
     tight: false,
+  });
+
+  it('says how many sets overlap when a group has more than two, so the longest pair is not the whole group', () => {
+    const base = twoPickGroup();
+    const third = { ...base.picks[0]!, set: makeSet('s3', { artist: 'Third' }) as never };
+    render(<PickConflicts groups={[{ ...base, picks: [...base.picks, third], overlapMin: 50 }]} />);
+    expect(screen.getByText('3 sets overlap, up to 50 min')).toBeInTheDocument();
+    expect(screen.getByText('Choose which to keep')).toBeInTheDocument();
+  });
+
+  it('puts Details on a 44px chevron after a fixed badge column, and outlines Suggested', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const details = screen.getAllByRole('button', { name: /Open details for/ })[0]!;
+    expect(details).toHaveTextContent('');
+    expect(details.className).toContain('min-h-11');
+    expect(screen.getByText('Suggested').className).toContain('border-accent-aqua');
   });
 
   it('renders the groups prop without calling buildPickConflicts', () => {

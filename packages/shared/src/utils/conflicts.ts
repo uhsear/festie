@@ -155,7 +155,7 @@ export function clashBadgeBySetId(
       overlapMinutes: best.tight ? 0 : best.overlapMinutes,
       more,
       tight: best.tight,
-      label: more > 0 ? `${base} +${more}` : base,
+      label: more > 0 ? `${base} +${more} more` : base,
     });
   }
   return badges;

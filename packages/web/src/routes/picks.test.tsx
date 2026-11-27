@@ -432,6 +432,13 @@ describe('PicksView', () => {
     expect(radios[1]).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('leaves the zero count off the Reminders tab and fades the row edge so no tab is cut mid-word', () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    expect(screen.getByRole('tab', { name: 'Reminders' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Picks views' }).className).toContain('mask-image');
+  });
+
   it('keeps keyboard focus on the tab when arrowing from the plan views into Reminders and back', () => {
     setStoreState({
       sets: [makeSet('s1', 'Daft Punk')],

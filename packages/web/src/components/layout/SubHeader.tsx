@@ -19,6 +19,7 @@ import {
   resolveFestivalTimeZone,
   resolveStageColor,
   SCHEDULE_GROUP_BYS,
+  setTimesPending,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import type { FestivalDay } from '@festie/shared/types/domain';
@@ -216,11 +217,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {currentStatus && (
           <span
             className={cn(
-              'type-micro inline-block shrink-0 rounded-full px-2 py-1',
+              // 12px, because the 10px micro role is unreadable for a status the user needs.
+              'type-micro !text-[length:var(--font-size-12)] inline-block shrink-0 rounded-full px-2 py-1',
               // Live reads the `live` token group (OD-3).
               currentStatus === 'ongoing' && 'bg-live-fill text-[var(--text-on-light-accent)]',
               currentStatus === 'upcoming' && 'border border-[var(--color-aqua-a4)] text-accent-aqua',
-              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-muted',
+              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-secondary',
             )}
             data-testid="festival-status-pill"
           >
@@ -317,8 +319,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                         ? [
                             'active',
                             // Accent rule: aqua = selection/primary, dark ink = text.onLightAccent.
+                            // No glow: the scroller clips a shadow into a hard-edged rectangle, and the fill already marks the day.
                             'bg-day-tab-active text-[var(--text-on-light-accent)] border-day-tab-active font-bold',
-                            'shadow-[0_0_0_1px_var(--color-aqua-a4),var(--shadow-glow-aqua),0_4px_12px_rgba(0,0,0,0.25)]',
                           ]
                         : 'bg-bg-card border border-border-light text-text-secondary',
                     )}
@@ -372,7 +374,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         </div>
 
         {(currentProfile || onSchedulePath) && (
-          <ScheduleStatusLine showFreshness={onSchedulePath} className="max-md:order-3" />
+          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3" />
         )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}

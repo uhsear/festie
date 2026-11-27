@@ -59,6 +59,21 @@ describe('TimelineGrid', () => {
     expect(document.activeElement).toBe(open('gamma'));
   });
 
+  it('blanks the axis label under the NOW pill and prints the others', () => {
+    // 75% of a 240 minute axis from 10:00 is 13:00, an axis label.
+    const on = renderGrid(1024, 75);
+    const labels = (c: HTMLElement) => [...c.querySelectorAll('[class*="sticky left-0"]')].map((n) => n.textContent);
+    expect(labels(on.container)).not.toContain('1p');
+    expect(labels(on.container)).toContain('12p');
+    on.unmount();
+    const off = renderGrid(1024, null);
+    expect(labels(off.container)).toContain('1p');
+    off.unmount();
+    // 10:20 is 20 minutes from the 10:30 label and 20 from 10:00: neither is blanked.
+    const between = renderGrid(1024, (20 / 240) * 100 + 0);
+    expect(labels(between.container)).toContain('10a');
+  });
+
   it('places the now line inside a track spanning only the time rows', () => {
     const { getByTestId } = renderGrid(1024, 75);
     const track = getByTestId('now-track');

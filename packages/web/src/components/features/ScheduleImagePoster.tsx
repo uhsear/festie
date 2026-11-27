@@ -1,4 +1,4 @@
-import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, posterBand } from '@festie/shared/utils';
+import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, fitScheduleRowHeight, posterBand } from '@festie/shared/utils';
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
@@ -26,7 +26,8 @@ export default function ScheduleImagePoster({
   model: ScheduleImageModel;
   format: ScheduleImageFormat;
 }) {
-  const { width, height, topReserve, bottomReserve, rowHeight } = SCHEDULE_IMAGE_LAYOUT[format];
+  const { width, height, topReserve, bottomReserve } = SCHEDULE_IMAGE_LAYOUT[format];
+  const rowHeight = fitScheduleRowHeight(format, model.rows.length);
   const k = rowHeight / M.row.base;
   const r = (n: number) => Math.round(n * k);
   return (

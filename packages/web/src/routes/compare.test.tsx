@@ -78,8 +78,8 @@ describe('CompareView', () => {
   it('tells a solo crew to wait for crewmates instead of showing an empty grid', () => {
     mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], alone: true });
     render(<CompareView />);
-    expect(screen.getByText('No crew picks yet')).toBeInTheDocument();
-    expect(screen.getByText(/Once your crewmates save picks/)).toBeInTheDocument();
+    expect(screen.getByText('Invite a crewmate to compare')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite a crewmate' })).toBeInTheDocument();
     expect(screen.queryByText('No picks on this day yet')).not.toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe('CompareView', () => {
     mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], loading: true, refreshing: true });
     render(<CompareView />);
     expect(screen.getByText('Loading crew picks…')).toBeInTheDocument();
-    expect(screen.queryByText('No crew picks yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invite a crewmate to compare')).not.toBeInTheDocument();
   });
 
   it('shows the load error with Try again when the load failed and nothing is cached', () => {

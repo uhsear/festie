@@ -177,6 +177,9 @@ describe('CaughtPage', () => {
     mocks.wrap = { festival, planned: [] };
     renderPage();
     expect(await screen.findByText('Nothing to check off yet')).toBeInTheDocument();
+    // The hint is about rows, so an empty list does not print it; the one action is an outlined accent pill.
+    expect(screen.queryByText('Tap to rate this set')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add a set I caught' }).className).toContain('border-accent-aqua');
     expect(screen.getByRole('button', { name: 'Add a set I caught' })).toBeInTheDocument();
   });
 

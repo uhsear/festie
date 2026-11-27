@@ -6,6 +6,7 @@ import { useFestival } from '@festie/shared/hooks';
 import {
   selectNowNext,
   resolveFestivalTimeZone,
+  logicalDayIndexAt,
   artistDisplayName,
   fmtStartsIn,
   fmtTimeLeft,
@@ -25,6 +26,7 @@ export default function NowNextStrip() {
   const user = useAuthStore((s) => s.user);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { getStageName } = useFestival();
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
@@ -40,6 +42,9 @@ export default function NowNextStrip() {
   const current = selection?.current[0];
   const focus = current ?? selection?.upcoming[0];
   if (!focus) return null;
+  // While the festival is running, the strip belongs to today: a Tomorrow tab must not announce a set playing now.
+  const todayIndex = logicalDayIndexAt(days, nowMs, timeZone);
+  if (todayIndex !== null && typeof selectedDay === 'number' && selectedDay !== todayIndex) return null;
 
   const isNow = !!current;
   // The strip is about the clock, not the list: on another day's tab it says so rather than seem to describe that list.
@@ -57,8 +62,8 @@ export default function NowNextStrip() {
         key={focus.set.id}
         data-testid="now-next-strip"
         className={cn(
-          'fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-secondary px-4 text-left',
-          isNow && 'pb-4',
+          'fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-card px-4 text-left',
+          isNow && 'pb-4 border-l-[3px] border-l-live-fill',
         )}
       >
         <RowOpenButton

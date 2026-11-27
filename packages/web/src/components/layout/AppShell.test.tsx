@@ -53,6 +53,7 @@ vi.mock('../features/IOSInstallDrawer', () => ({ default: () => null }));
 vi.mock('../../hooks/useIOSInstall', () => ({ useIOSInstall: () => ({ shouldShow: false, dismiss: vi.fn() }) }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
+vi.mock('../features/NowNextStrip', () => ({ default: () => <div data-testid="now-strip" /> }));
 vi.mock('./SosDock', () => ({ default: () => null }));
 vi.mock('../features/Onboarding', () => ({ default: () => <div data-testid="onboarding" /> }));
 vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
@@ -175,6 +176,15 @@ describe('AppShell', () => {
       expect(screen.queryByRole('contentinfo', { name: 'Legal and help' })).not.toBeInTheDocument();
       r.unmount();
     }
+  });
+
+  it('shows the Now strip on the cards but not on the grid, which has its own now line', () => {
+    const cards = render(<AppShell />);
+    expect(screen.getByTestId('now-strip')).toBeInTheDocument();
+    cards.unmount();
+    mockPathname = '/grid';
+    render(<AppShell />);
+    expect(screen.queryByTestId('now-strip')).not.toBeInTheDocument();
   });
 
   it('shows the legal footer on sign-in pages', () => {
