@@ -48,7 +48,11 @@ export default function Sheet({
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             opener.current = document.activeElement as HTMLElement | null;
-            (e.currentTarget as HTMLElement).focus();
+            const sheet = e.currentTarget as HTMLElement;
+            // Opened from a URL there is no opener and no prior input: focus is programmatic, so the ring would show
+            // for a mouse or touch user. Opened from a control, the browser decides, so keyboard users keep the ring.
+            sheet.toggleAttribute('data-focus-sink', !opener.current || opener.current === document.body);
+            sheet.focus();
           }}
           onCloseAutoFocus={(e) => {
             e.preventDefault();
