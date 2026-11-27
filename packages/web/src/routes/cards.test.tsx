@@ -131,6 +131,15 @@ describe('CardsView order and earlier row', () => {
     delete festivalState.scheduleGroupBy;
   });
 
+  it('gives every card in the stage columns the same minimum height so the columns read as a tidy grid', () => {
+    festivalState.scheduleGroupBy = 'stage';
+    render(<CardsView />);
+    const wrapper = screen.getAllByTestId('set-card')[0]!.parentElement!;
+    expect(wrapper.className).toContain('md:min-h-[12.5rem]');
+    expect(wrapper.className).toContain('md:[&>*]:flex-1');
+    delete festivalState.scheduleGroupBy;
+  });
+
   it('shows ended sets, with no fold row, when nothing is left today', () => {
     festivalState.sets = [mkSet('early', '14:00', '15:00'), mkSet('mid', '18:00', '19:00')];
     render(<CardsView />);

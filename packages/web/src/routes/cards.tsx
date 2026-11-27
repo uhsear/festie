@@ -277,7 +277,12 @@ function CardsViewInner() {
                     // off-screen cards, with contain-intrinsic-size reserving an
                     // approximate box so the scrollbar stays stable. Cuts render cost
                     // on long single-day lineups without virtualization machinery.
-                    className="[content-visibility:auto] [contain-intrinsic-size:auto_240px]"
+                    className={cn(
+                      '[content-visibility:auto] [contain-intrinsic-size:auto_240px]',
+                      // Stage columns do not share time slots, so cards get one height instead: tall enough for
+                      // time, title, status chip, clash chip and pick row, with the card filling it.
+                      stageColumns && 'md:flex md:min-h-[12.5rem] md:[&>*]:min-w-0 md:[&>*]:flex-1',
+                    )}
                     // Softened stagger entrance on the motion tokens
                     // (duration.med + easing.out). Skipped entirely when the user
                     // prefers reduced motion.
