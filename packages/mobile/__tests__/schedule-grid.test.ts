@@ -24,6 +24,15 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(src).toContain('typeStyle');
   });
 
+  it('grid and timeline set blocks lay the pick and clash badge beside the title, not over it', () => {
+    for (const file of ['app/grid.tsx', 'components/TimelineView.tsx']) {
+      const src = read(file);
+      const iconRow = src.slice(src.indexOf('  iconRow: {'), src.indexOf('  },', src.indexOf('  iconRow: {')));
+      expect(iconRow).not.toContain("position: 'absolute'");
+      expect(src).toMatch(/titleRow: \{\s*flexDirection: 'row'/);
+    }
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

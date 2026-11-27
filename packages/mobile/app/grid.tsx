@@ -555,19 +555,22 @@ export default function GridScreen() {
           const inner = (
             <>
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
-              {mark || pick ? (
-                <View style={styles.iconRow}>
-                  {mark ? (
-                    <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {clashMinutes(mark.overlapMin)}
-                    </Text>
-                  ) : null}
-                  {pick ? <Ionicons name={priorityIconName(pick)} size={t.iconSize.xs} color={cellColor} aria-hidden /> : null}
-                </View>
-              ) : null}
-              <Text style={styles.cellArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {dn}
-              </Text>
+              {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
+              <View style={styles.titleRow}>
+                <Text style={[styles.cellArtist, styles.cellTitle]} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {dn}
+                </Text>
+                {mark || pick ? (
+                  <View style={styles.iconRow}>
+                    {mark ? (
+                      <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {clashMinutes(mark.overlapMin)}
+                      </Text>
+                    ) : null}
+                    {pick ? <Ionicons name={priorityIconName(pick)} size={t.iconSize.xs} color={cellColor} aria-hidden /> : null}
+                  </View>
+                ) : null}
+              </View>
               {height >= 48 ? (
                 <Text style={styles.cellTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {fmtShort(set.startTime!)}–{fmtShort(set.endTime!)}
@@ -1028,13 +1031,19 @@ const useStyles = makeStyles((t: Tokens) => ({
     ...typeStyle('micro', 700),
     color: t.colors.clash.mark,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  cellTitle: {
+    flex: 1,
+  },
   iconRow: {
-    position: 'absolute',
-    top: 3,
-    right: 5,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    marginTop: 2,
   },
   cellArtist: {
     ...typeStyle('caption'),

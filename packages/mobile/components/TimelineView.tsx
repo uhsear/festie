@@ -249,9 +249,24 @@ function StageColumn({
               accessibilityLabel={label}
             >
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
-              <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {name}
-              </Text>
+              {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
+              <View style={styles.titleRow}>
+                <Text style={[styles.setArtist, styles.setTitle]} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {name}
+                </Text>
+                {mark || myPick ? (
+                  <View style={styles.iconRow}>
+                    {mark ? (
+                      <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {clashMinutes(mark.overlapMin)}
+                      </Text>
+                    ) : null}
+                    {myPick && pickColor ? (
+                      <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
               {height > ROW_HEIGHT * 1.5 ? (
                 <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {timeText}
@@ -261,18 +276,6 @@ function StageColumn({
                 <Text style={styles.clashText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {mark.text}
                 </Text>
-              ) : null}
-              {mark || myPick ? (
-                <View style={styles.iconRow}>
-                  {mark ? (
-                    <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {clashMinutes(mark.overlapMin)}
-                    </Text>
-                  ) : null}
-                  {myPick && pickColor ? (
-                    <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
-                  ) : null}
-                </View>
               ) : null}
               {crew > 0 && height >= ROW_HEIGHT * 2 ? (
                 <View style={styles.crewBadge}>
@@ -806,13 +809,19 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro', 700),
     color: t.colors.clash.mark,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  setTitle: {
+    flex: 1,
+  },
   iconRow: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    marginTop: 2,
   },
   crewBadge: {
     position: 'absolute',
