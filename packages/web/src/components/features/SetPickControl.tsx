@@ -122,7 +122,7 @@ export default function SetPickControl({ artistName, myPick, syncState = null, d
               'flex items-center justify-center',
               'bg-[var(--color-overlay-3)] border border-border-light',
               'text-sm text-text-muted cursor-pointer',
-              'transition-[scale,box-shadow,background,border-color,color] duration-(--duration-fast) ease-[var(--ease-out)]',
+              'transition-[scale,box-shadow,background,border-color,color] duration-(--duration-fast) ease-(--ease-out)',
               'hover:border-text-secondary hover:bg-[var(--color-overlay-5)]',
               'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-[-2px]',
               'press-scale',

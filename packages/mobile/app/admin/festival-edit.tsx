@@ -20,6 +20,7 @@ import {
 import { MAX_ARTISTS_PER_SET } from '@festie/shared/constants';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import AppSwitch from '../../components/AppSwitch';
 import LoadingState from '../../components/LoadingState';
 import {
@@ -732,8 +733,7 @@ export default function FestivalEditScreen() {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: headerTitle, headerShown: true }} />
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load festival"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => void load() }}

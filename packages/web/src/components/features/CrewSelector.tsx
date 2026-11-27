@@ -152,7 +152,7 @@ export default function CrewSelector({
             'absolute top-full mt-1 left-0 right-0 z-[var(--z-modal)]',
             'bg-bg-secondary border border-border rounded-xl overflow-hidden',
             'shadow-lg',
-            'animate-[card-in_180ms_var(--ease-out,ease-out)_both] origin-top motion-reduce:!animate-none',
+            'animate-[card-in_var(--duration-med)_var(--ease-out)_both] origin-top motion-reduce:!animate-none',
           )}
         >
           {crews.length > 0 && (

@@ -10,9 +10,9 @@ describe('T26 mobile crew layout', () => {
   });
 
   it('keeps the crew lists clear of the floating SOS control', () => {
-    expect(crew).toContain('SOS_CONTROL_SIZE');
+    expect(crew).toContain('SOS_CONTROL_CLEARANCE');
     expect(crew).toContain('paddingBottom: tabBottomPad');
-    expect(crew).toContain('useListBottomInset({ base: t.spacing[4], includeSafeArea: false }) + SOS_CONTROL_SIZE');
+    expect(crew).toContain('useListBottomInset({ base: SOS_CONTROL_CLEARANCE, includeSafeArea: false })');
   });
 
   it('no longer reads map-pin params', () => {

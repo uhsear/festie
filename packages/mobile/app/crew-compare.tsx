@@ -13,6 +13,7 @@ import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import CrewSuggestionStrip from '../components/CrewSuggestionStrip';
 import CrewCompareSummary from '../components/CrewCompareSummary';
@@ -92,8 +93,7 @@ export default function CrewCompareScreen() {
   if (status === 'error') {
     return (
       <Wrapper>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load your crew"
           message="Check your connection, then try again."
           action={{ label: 'Try again', onPress: retryCrew }}
@@ -104,8 +104,7 @@ export default function CrewCompareScreen() {
   if (status === 'joining') {
     return (
       <Wrapper>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Joining when you're back online"
           message="Your join is saved on this device. The crew opens once you reconnect."
         />
@@ -134,8 +133,7 @@ export default function CrewCompareScreen() {
   if (festivalSwitch.state === 'failed') {
     return (
       <Wrapper>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={`Couldn't open ${festivalSwitch.festivalName}`}
           message={`${activeCrew.name} is planning ${festivalSwitch.festivalName}. Connect to the internet, then try again.`}
           action={{ label: 'Try again', onPress: festivalSwitch.retry }}
@@ -166,8 +164,7 @@ export default function CrewCompareScreen() {
   if (error && rows.length === 0) {
     return (
       <Wrapper>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load crew picks"
           message={error}
           action={{ label: 'Try again', onPress: () => void refresh() }}

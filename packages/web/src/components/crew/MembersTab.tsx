@@ -79,7 +79,7 @@ export default function MembersTab({
               <div
                 key={m.userId}
                 className="stagger-item motion-reduce:!animate-none"
-                style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
+                style={{ '--i': index } as React.CSSProperties}
               >
                 <div className="crew-member-row relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5">
                   <Avatar name={displayName} image={memberAvatarUrl(m)} size="sm" />

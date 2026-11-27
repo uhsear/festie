@@ -9,8 +9,8 @@ import type { Page } from '@playwright/test';
  * animations.css, which targets `*, *::before, *::after` and sets
  * `animation-duration`/`transition-duration` to `0.01ms !important`.
  *
- * We probe that rule with `.skeleton-shimmer` (theme.css), the app's real
- * loading-shimmer utility (`animation: skeleton-loading 1.4s linear
+ * We probe that rule with `.skeleton-shimmer::after` (theme.css), the app's real
+ * loading-shimmer overlay (`animation: skeleton-sweep 1.4s linear
  * infinite`, used unconditionally by Skeleton.tsx and every `*Skeleton.tsx`
  * loading state — no JS-level reduced-motion gate of its own). A live
  * skeleton is only on screen for the brief window before the seeded server
@@ -25,14 +25,14 @@ async function gotoApp(page: Page, app: { baseUrl: string }) {
   await expect(page.locator('#app')).toBeVisible();
 }
 
-// Computed `animation-duration` (seconds) of a detached `.skeleton-shimmer`
+// Computed `animation-duration` (seconds) of a detached `.skeleton-shimmer::after`
 // probe. Un-collapsed this is ~1.4s; under reduced motion, ~0.00001s (0.01ms).
 async function skeletonShimmerAnimationDurationSeconds(page: Page): Promise<number> {
   const raw = await page.evaluate(() => {
     const probe = document.createElement('div');
     probe.className = 'skeleton-shimmer';
     document.body.appendChild(probe);
-    const value = getComputedStyle(probe).animationDuration;
+    const value = getComputedStyle(probe, '::after').animationDuration;
     probe.remove();
     return value;
   });
@@ -70,4 +70,48 @@ test.describe('prefers-reduced-motion', () => {
     const durationSeconds = await skeletonShimmerAnimationDurationSeconds(page);
     expect(durationSeconds).toBeGreaterThan(0.02);
   });
+
+  test('low-power mode stops every ambient loop', async ({ app, page }) => {
+    await gotoApp(page, app);
+    const running = await page.evaluate(() => {
+      document.documentElement.setAttribute('data-low-power', '');
+      const probe = document.createElement('div');
+      probe.className = 'skeleton-shimmer';
+      document.body.appendChild(probe);
+      const name = getComputedStyle(probe, '::after').animationName;
+      probe.remove();
+      return name;
+    });
+    expect(running).toBe('none');
+  });
 });
+
+// Entrance delays and fill modes must not hide content under reduced motion
+// (staggered lists and the /cards skeleton held opacity 0 for up to 420 ms).
+for (const route of ['/cards', '/crew', '/festival-mode']) {
+  test(`reduced motion on ${route}: nothing hides at opacity 0 and no loop runs`, async ({ app, page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${app.baseUrl}${route}`);
+    await expect(page.locator('#app')).toBeVisible();
+    await page.waitForTimeout(50);
+
+    const { hidden, loops } = await page.evaluate(() => {
+      const animated = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(
+        (el) => getComputedStyle(el).animationName !== 'none',
+      );
+      const hiddenNames = animated
+        .filter((el) => getComputedStyle(el).opacity === '0')
+        .map((el) => el.className.toString());
+      const loopNames = document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations === Infinity)
+        .map((a) => ((a.effect as KeyframeEffect).target as HTMLElement | null)?.className.toString() ?? '')
+        .filter((name) => !/sos/i.test(name));
+      return { hidden: hiddenNames, loops: loopNames };
+    });
+
+    expect(hidden).toEqual([]);
+    expect(loops).toEqual([]);
+  });
+}
+

@@ -144,7 +144,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
         <Button
           variant={copiedCode ? 'primary' : 'secondary'}
           onClick={handleCopy}
-          className={`!py-1 !px-2.5 text-xs ${copiedCode ? 'animate-[crew-copy-pulse_260ms_var(--ease-out,ease-out)] motion-reduce:!animate-none' : ''}`}
+          className={`!py-1 !px-2.5 text-xs ${copiedCode ? 'animate-[crew-copy-pulse_var(--duration-slow)_var(--ease-out)] motion-reduce:!animate-none' : ''}`}
         >
           {copiedCode ? <><Check className="w-4 h-4" aria-hidden="true" /> Copied</> : 'Copy link'}
         </Button>

@@ -6,6 +6,7 @@ import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants/inboxCopy';
 import { timeAgo } from '@festie/shared/utils';
 import { openInboxItem } from '../lib/pushTargetPath';
 import ArtistName from '../components/features/ArtistName';
+import EmptyState from '../components/ui/EmptyState';
 
 const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
@@ -61,9 +62,23 @@ export default function InboxView() {
         </div>
       )}
 
-      {error && <ErrorLine onRetry={() => void load()} />}
+      {error && items.length > 0 && <ErrorLine onRetry={() => void load()} />}
 
-      {loaded && items.length === 0 && !error && <p className="py-6 text-text-secondary">{INBOX_COPY.empty}</p>}
+      {error && items.length === 0 && (
+        <EmptyState
+          illustration="offline"
+          title={INBOX_COPY.error}
+          cta={{ label: INBOX_COPY.retry, onClick: () => void load() }}
+        />
+      )}
+
+      {loaded && items.length === 0 && !error && (
+        <EmptyState
+          ghostRow="inbox"
+          title={INBOX_COPY.emptyTitle}
+          description={INBOX_COPY.emptyBody}
+        />
+      )}
 
       {items.length > 0 && (
         <ul className="m-0 list-none divide-y divide-border-subtle p-0">

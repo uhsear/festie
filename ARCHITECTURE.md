@@ -68,6 +68,7 @@ server.ts ─── orchestrator
 | `spotify.ts` | Spotify API client for artist metadata |
 | `socket-setup.ts` | Socket.IO server creation + Redis adapter attachment |
 | `crypto-auth.ts` | Password hashing (scrypt) + session token hashing (SHA-256) |
+| `design-css.ts` | Design tokens as CSS for the server-rendered pages and the transactional email, read from the shared token files |
 
 Smaller modules: `pagination.ts`, `tracing.ts`, `response.ts` (also defines `ErrorCodes`), `swagger-ui-setup.ts`, `avatar-worker.ts`, `export-worker.ts`, `constants.ts`. The two worker files are separate esbuild entry points, so `dist/` holds `avatar-worker.js` and `export-worker.js` next to `server.js`.
 
@@ -100,7 +101,7 @@ Push notification subsystem (FCM for Android, APNs for iOS, Web Push for browser
 
 ### Data Access: `lib/db/stores/`
 
-22 store modules, each exporting CRUD functions that accept a `pool` (pg Pool) parameter. All queries use parameterized SQL (`$1, $2`).
+35 store modules, each exporting CRUD functions that accept a `pool` (pg Pool) parameter. All queries use parameterized SQL (`$1, $2`).
 
 | Store | Tables |
 |-------|--------|
@@ -128,10 +129,23 @@ Push notification subsystem (FCM for Android, APNs for iOS, Web Push for browser
 | `artist-visibility.ts` | Which artists an organizer may see: published, own festivals, or created by the viewer itself |
 | `festival-lock.ts` | Festival row locks shared by the artist and lineup-import stores |
 | `time-releases.ts` | `festival_time_releases` -- per-date "set times are out" claims |
+| `organizations.ts` | `organizations`, `organization_members`, `organization_pending_members` -- organizations, members and by-email invitations; a member counts only with a confirmed email |
+| `festival-review.ts` | An organizer's publish request (two columns on `festivals`) and `festival_held_schedule_changes`, the attendee alerts held for admin review |
+| `artist-suggestions.ts` | `artist_suggestions` -- the rules for an organizer's artist edit and the suggestion rows, called inside the artist store's transaction |
+| `analytics.ts` | Read-only admin reports over festivals, crews and picks |
+| `ratings-crew-wrap.ts` | Crew wrap queries: members and ratings for the post-festival wrap |
+| `crews-days.ts` | `crew_member_days` -- which festival days each member attends |
+| `crews-meeting-points.ts` | `crew_meeting_points`, `crew_meeting_point_coming` |
+| `crews-packing.ts` | `crew_packing_items` -- the shared packing list |
+| `crews-rides.ts` | `crew_ride_offers`, `crew_ride_passengers` |
+| `crews-status.ts` | `crew_member_status` -- last-synced "on my way" status |
+| `crews-topic-subs.ts` | `notification_topic_subs` -- per-festival topic subscriptions |
+
+`artists-helpers.ts` and `profiles-helpers.ts` hold shared helpers for their stores and export no store.
 
 ### Routes: `routes/`
 
-51 route modules, each a factory function receiving the `deps` object and returning an Express Router. The types live in `lib/types/`.
+55 route modules, each a factory function receiving the `deps` object and returning an Express Router. The types live in `lib/types/`.
 
 ```ts
 import { Router } from 'express';
@@ -198,6 +212,9 @@ export function createFeatureRoutes({ stores, log, sendSuccess, sendError }: Rou
 | `manage-artists.ts` | Organizer artist routes under `/api/v1/manage/artists`: visible artists only, create, direct edit or suggestion |
 | `lineup-interest.ts` | Admin demand view of lineup interest counts |
 | `time-releases.ts` | Admin "set times are out" release for one festival date |
+| `manage.ts` | The organizer router at `/api/v1/manage`: the only place an organization member gets a role. It lists the paths it forwards to other routers |
+| `organizations.ts` | Admin organizations at `/api/v1/admin/organizations`: create, activate, verify, suspend, members, and the review queue for publish requests and held alerts |
+| `admin-policy-notice.ts` | Admin policy-notice email: dry-run count, batched send, once per user |
 
 ---
 
@@ -281,9 +298,9 @@ About 48 React hooks in `packages/shared/src/hooks/` bridge Zustand stores and s
 
 ## Database
 
-PostgreSQL 16 with connection pooling (pg, min 2 / max 20). 94 SQL files in `migrations/`, numbered from `004_postgresql_baseline.sql` through `112_artists_merge_refs.sql` with gaps. The app applies them at boot and they follow an additive, idempotent convention.
+PostgreSQL 16 with connection pooling (pg, min 2 / max 20). 106 SQL files in `migrations/`, numbered from `004_postgresql_baseline.sql` through `123_refresh_token_family_login_ip_failures.sql` with gaps. The app applies them at boot and they follow an additive, idempotent convention.
 
-Key tables: `users`, `user_sessions`, `festivals`, `festival_stages`, `festival_days`, `festival_sets`, `festival_profiles`, `crews`, `crew_members`, `crew_activity`, `crew_polls`, `crew_expenses`, `device_tokens`, `audit_log`, `user_roles`.
+Key tables: `users`, `user_sessions`, `festivals`, `festival_stages`, `festival_days`, `festival_sets`, `festival_profiles`, `crews`, `crew_members`, `crew_activity`, `crew_polls`, `crew_expenses`, `device_tokens`, `audit_log`, `user_roles`, `organizations`, `organization_members`, `organization_pending_members`, `artists`, `artist_suggestions`, `artist_match_reviews`, `refresh_tokens`, `login_failure_ips`.
 
 ---
 
@@ -378,9 +395,9 @@ API docs available at `/api/docs` (Swagger UI), generated by `lib/openapi.ts`.
 ## Runtime
 
 - **Single process.** The server runs as one Node process. `npm run build` (`scripts/build.mjs`, esbuild) creates `dist/` and the worker bundles. `dist/` is gitignored, so it is built on each target.
+- **One PM2 instance is a deliberate limit.** The `shortcut:` comments in `lib/` and `routes/` (for example in `lib/emitter.ts` and `lib/lineup.ts`) assume it, so read them before you scale out.
 - **Cluster mode stays off.** `lib/email.ts` send idempotency and two limiters in `routes/email-auth.ts` hold per-process state.
 - **Redis 7** serves rate limits, the Socket.IO adapter, presence, the live-location cache, and the cache invalidation bus.
-- **Docker**: multi-stage build, Node 22.22.1 slim, non-root user, health check at `/api/ready`. The image starts the source with `tsx` (`node --import tsx/esm server.ts`).
 - Deployment and operations are run privately and are not documented in this repository.
 
 ### Environment Variables
@@ -391,14 +408,14 @@ In production the server refuses to start without `PUBLIC_ORIGIN`, `DATABASE_URL
 
 ## Testing
 
-Tests use Node's built-in test runner (`node:test` + `node:assert`). 258 backend test files in `tests/*.test.ts` covering:
+Tests use Node's built-in test runner (`node:test` + `node:assert`). 309 backend test files in `tests/*.test.ts` covering:
 
 - Unit tests (`tests/unit.test.ts`)
 - Integration tests (`tests/integration-*.test.ts`) -- auth, festivals, picks, crews, notifications, admin, export, sockets
 - Critical path tests (`tests/critical-paths.test.ts`) -- end-to-end user journeys
 - Hardening tests (`tests/hardening.test.ts`) -- security, rate limits, session edge cases
 - Feature tests -- email-auth, crew-features, lineup-import, share, profiles, ratings, notifications
-- E2E tests (`tests/e2e/*.spec.ts`, 7 specs) -- Playwright browser automation
+- E2E tests (`tests/e2e/*.spec.ts`, 17 specs) -- Playwright browser automation
 - Web, shared and mobile packages use vitest (`pnpm --filter <package> test`)
 
 ```bash

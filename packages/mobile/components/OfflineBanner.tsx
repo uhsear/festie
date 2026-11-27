@@ -67,9 +67,10 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const showSyncing = !offlineMode && pendingSync > 0;
   const active = showFailed || showOffline || showSyncing;
 
-  // Report the bar's live presence to the chrome so the top safe-area inset is
-  // applied exactly once (banner when shown, ScreenHeader otherwise). Reset to
-  // false on unmount so a stale "active" can't strand the header inset.
+  // Report the bar's live presence to the chrome so the stack below it knows whether a bar
+  // already paints behind the status bar. Every bar is one line high and ends inside a screen
+  // header's top padding, so it floats over the screen without covering the header. Reset to
+  // false on unmount so a stale "active" can't strand the inset.
   useEffect(() => {
     onActiveChange?.(active);
     return () => onActiveChange?.(false);
@@ -79,31 +80,32 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
     if (showFailed) {
       return (
         <TouchableOpacity
-          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top + t.spacing[2] }]}
+          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top }]}
+          hitSlop={{ bottom: t.spacing[2] }}
           onPress={() => setSheetOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync — review`}
         >
-          <Ionicons name="warning" size={t.iconSize.sm} color={t.colors.bg.primary} />
-          <Text style={styles.text} numberOfLines={2}>
+          <Ionicons name="warning" size={t.iconSize.compact} color={t.colors.bg.primary} />
+          <Text style={styles.text} numberOfLines={1}>
             {failedCount} change{failedCount === 1 ? '' : 's'} couldn&apos;t sync — tap to review
           </Text>
-          <Ionicons name="chevron-forward" size={t.iconSize.action} color={t.colors.bg.primary} />
+          <Ionicons name="chevron-forward" size={t.iconSize.compact} color={t.colors.bg.primary} />
         </TouchableOpacity>
       );
     }
     if (showOffline) {
       return (
         <View
-          style={[styles.statusRow, { paddingTop: insets.top + t.spacing[1] }]}
+          style={[styles.statusRow, { paddingTop: insets.top }]}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >
           {/* The root status bar flips its icons for the coloured bars; this row is neutral ground, so
               the later-mounted bar restores the theme's icon colour while the row shows. */}
           <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
-          <Ionicons name="cloud-offline" size={t.iconSize.sm} color={t.colors.accent.amber} />
-          <Text style={styles.statusText} numberOfLines={2}>
+          <Ionicons name="cloud-offline" size={t.iconSize.compact} color={t.colors.accent.amber} />
+          <Text style={styles.statusText} numberOfLines={1}>
             {pendingSync > 0
               ? `Offline, ${pendingSync} change${pendingSync === 1 ? '' : 's'} waiting`
               : 'Offline, showing your saved schedule'}
@@ -114,12 +116,12 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
     if (showSyncing) {
       return (
         <View
-          style={[styles.banner, styles.bannerSyncing, { paddingTop: insets.top + t.spacing[2] }]}
+          style={[styles.banner, styles.bannerSyncing, { paddingTop: insets.top }]}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >
           <View style={styles.dot} />
-          <Text style={styles.text} numberOfLines={2}>
+          <Text style={styles.text} numberOfLines={1}>
             Syncing {pendingSync} change{pendingSync === 1 ? '' : 's'}…
           </Text>
         </View>
@@ -218,14 +220,12 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
-    paddingBottom: t.spacing[2],
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
-    paddingBottom: t.spacing[1],
     backgroundColor: t.colors.bg.secondary,
     borderBottomWidth: 1,
     borderBottomColor: t.colors.border.default,
