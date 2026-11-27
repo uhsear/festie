@@ -35,6 +35,13 @@ describe('RatingButtons', () => {
       'Fire (5 of 5)',
     ]);
     await screen.findByRole('button', { name: 'Fire (5 of 5)', pressed: true });
+    // Full size names every step, so the mixed thumbs and faces are never left to guess.
+    for (const word of ['Nope', 'Meh', 'Okay', 'Good', 'Fire']) expect(screen.getAllByText(word)).toHaveLength(1);
+  });
+
+  it('names only the active step in a compact list row', async () => {
+    renderButtons({ compact: true });
+    await screen.findByRole('button', { name: 'Fire (5 of 5)', pressed: true });
     expect(screen.getAllByText('Fire')).toHaveLength(1);
     expect(screen.queryByText('Nope')).toBeNull();
   });
