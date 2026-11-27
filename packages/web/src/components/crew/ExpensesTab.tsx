@@ -286,6 +286,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const nonZeroBalances = selectNonZeroBalances(balances);
   const toConfirm = paymentsToConfirm(expenses, currentUserId);
   const memberIds = members.map((m) => m.userId);
+  const ownerPicksCurrency = isOwner && currency !== 'USD';
 
   if (isLoading)
     return (
@@ -309,32 +310,48 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   return (
     <div className="space-y-3">
       <StaleNote show={isError} onRetry={() => void refetch()} />
+      {/* The primary action leads the tab. The currency is a caption beside it, never a field-looking box. */}
+      {editTarget ? null : !showForm ? (
+        <div className="flex items-center gap-3">
+          <Button variant="primary" onClick={() => setShowForm(true)} className="flex-1 min-h-11">
+            <Plus className="w-4 h-4" aria-hidden="true" /> Add expense
+          </Button>
+          {!ownerPicksCurrency && <p className="shrink-0 text-xs text-text-muted">Amounts in {currency}</p>}
+        </div>
+      ) : (
+        <ExpenseForm
+          key={crewId}
+          members={members}
+          currentUserId={currentUserId}
+          currency={currency}
+          busy={addExpense.isPending}
+          onSubmit={(request) => addExpense.mutate(request)}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+
       {/* Currency label. A label only: changing it never converts amounts. */}
-      <div className="p-3 rounded-xl bg-bg-card border border-border space-y-1">
-        {isOwner && currency !== 'USD' ? (
-          <>
-            <label htmlFor="expense-currency" className="block text-xs text-text-muted uppercase tracking-wide">
-              Currency
-            </label>
-            <select
-              id="expense-currency"
-              value={currency}
-              disabled={changeCurrency.isPending}
-              onChange={(e) => changeCurrency.mutate(e.target.value)}
-              className={cn(inputBase, 'min-h-11')}
-            >
-              {[currency, ...CREW_CURRENCIES.filter((c) => c !== currency)].map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-text-secondary">Changing the currency does not convert amounts.</p>
-          </>
-        ) : (
-          <p className="text-sm text-text-secondary">Amounts in {currency}</p>
-        )}
-      </div>
+      {ownerPicksCurrency && (
+        <div className="p-3 rounded-xl bg-bg-card border border-border space-y-1">
+          <label htmlFor="expense-currency" className="block text-xs text-text-muted uppercase tracking-wide">
+            Currency
+          </label>
+          <select
+            id="expense-currency"
+            value={currency}
+            disabled={changeCurrency.isPending}
+            onChange={(e) => changeCurrency.mutate(e.target.value)}
+            className={cn(inputBase, 'min-h-11')}
+          >
+            {[currency, ...CREW_CURRENCIES.filter((c) => c !== currency)].map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-text-secondary">Changing the currency does not convert amounts.</p>
+        </div>
+      )}
 
       {/* Summary */}
       {expenses.length > 0 && (
@@ -370,8 +387,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           options={EXPENSE_VIEWS}
           value={view}
           onChange={setView}
-          className="flex gap-1 rounded-xl bg-bg-card"
-          tabClassName="flex-1 rounded-md capitalize"
+          className="grid grid-cols-3 gap-1 rounded-xl bg-bg-card"
+          tabClassName="rounded-md capitalize text-sm"
         />
       )}
 
@@ -432,8 +449,8 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         />
       )}
 
-      {/* Add / edit form, or the add button */}
-      {editTarget ? (
+      {/* Edit form. The add form and button lead the tab. */}
+      {editTarget && (
         <ExpenseForm
           key={editTarget.id}
           members={members}
@@ -446,20 +463,6 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           busy={editExpense.isPending}
           onSubmit={(request) => editExpense.mutate({ id: editTarget.id, request })}
           onCancel={() => setEditTarget(null)}
-        />
-      ) : !showForm ? (
-        <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-          <Plus className="w-4 h-4" aria-hidden="true" /> Add expense
-        </Button>
-      ) : (
-        <ExpenseForm
-          key={crewId}
-          members={members}
-          currentUserId={currentUserId}
-          currency={currency}
-          busy={addExpense.isPending}
-          onSubmit={(request) => addExpense.mutate(request)}
-          onCancel={() => setShowForm(false)}
         />
       )}
 
