@@ -97,18 +97,21 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
                     : tab.label
               }
             >
-              {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
-              <Ionicons name={TAB_ICONS[tab.key]} size={t.iconSize.sm} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
-              {!largeText || active ? (
-                // Trailing NBSP absorbs Fabric's single-line under-measure that clipped "Money" to "Mone" (see OfflineStatusChip).
-                <Text
-                  style={[styles.label, active && styles.labelActive]}
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  textBreakStrategy="simple"
-                >
-                  {tab.label + ' '}
-                </Text>
+              {/* Large text: labels carry the meaning (WCAG 2.5.3) and icon + label for four tabs
+                  is ~397dp at 1.3x, over the 349dp a 393dp phone leaves. Label-only is ~317dp, so
+                  all four names stay visible; narrower screens still scroll with the EndFade. */}
+              {!largeText ? (
+                // DC25: 15 is off-grid; snap to iconSize.sm (16).
+                <Ionicons name={TAB_ICONS[tab.key]} size={t.iconSize.sm} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
               ) : null}
+              {/* Trailing NBSP absorbs Fabric's single-line under-measure that clipped "Money" to "Mone" (see OfflineStatusChip). */}
+              <Text
+                style={[styles.label, active && styles.labelActive]}
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+                textBreakStrategy="simple"
+              >
+                {tab.label + ' '}
+              </Text>
               {typeof badge === 'number' && badge > 0 ? (
                 <View style={styles.countBadge}>
                   <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -151,7 +154,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[2],
     minHeight: 44, // WCAG 2.5.5 / Apple HIG minimum touch target
-    minWidth: 44, // icon-only tabs under large text are ~42pt wide without this
+    minWidth: 44, // keeps a short label such as Find a full touch target
     borderRadius: t.radii.pill,
     borderWidth: 1,
     borderColor: t.colors.border.default,

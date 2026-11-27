@@ -17,9 +17,11 @@ describe('T10 crew large-text guards', () => {
     expect(src).not.toContain('Alerts your whole crew');
   });
 
-  it('CrewTabBar hides inactive labels at large text but keeps a11y and testID', () => {
+  it('CrewTabBar drops icons, not labels, at large text and keeps a11y and testID', () => {
     const src = read('components/CrewTabBar.tsx');
     expect(src).toContain('useLargeText()');
+    expect(src).toContain('{!largeText ? (');
+    expect(src).not.toContain('!largeText || active');
     expect(src).toContain('accessibilityLabel=');
     expect(src).toContain('testID={`crew-tab-${tab.key}`}');
   });
