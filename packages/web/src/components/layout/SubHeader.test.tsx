@@ -129,6 +129,11 @@ describe('SubHeader layout density', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(screen.getByRole('search')).toBeInTheDocument();
   });
+
+  it('keeps a minimum search width from sm up so the toolbar wraps instead of clipping the placeholder', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('search')).toHaveClass('sm:min-w-56');
+  });
 });
 
 describe('SubHeader My picks toggle', () => {
