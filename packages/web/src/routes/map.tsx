@@ -97,7 +97,8 @@ function MapViewInner() {
   }
 
   return (
-    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4">
+    // The empty state (an unmapped festival) is centred, so its action centres with it; under a real map the action stays at the left edge.
+    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4 [&:has(.empty-state)>a]:self-center">
       <h1 className="sr-only">Map</h1>
       {/* So a user offline can see how stale the shown pins are, as on mobile. */}
       {user && (

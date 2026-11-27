@@ -554,6 +554,14 @@ describe('SubHeader desktop row plan', () => {
     expect(stageChips.className).toContain('md:flex-[1_1_8rem]');
   });
 
+  it.each([
+    ['festival-only', true, false],
+    ['day-only', false, true],
+  ])('has no row break on a %s page, so no empty second row sits under the picker', (_name, festivalOnly, dayOnly) => {
+    render(<SubHeader dayOnly={dayOnly} festivalOnly={festivalOnly} />);
+    expect(screen.queryByTestId('subheader-row-break')).toBeNull();
+  });
+
   it('leaves the phone path alone: the fold, the order-3 and order-4 wrappers and the full-width chips stay', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(document.getElementById('subheader-filters')).toHaveClass('max-md:order-4', 'max-md:hidden');

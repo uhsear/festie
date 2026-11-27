@@ -383,11 +383,14 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {/* md up: a full-width zero-height line between row 1 (picker, view, days, search, Group by from xl) and row 2 (stage chips, My picks, status). A flex line never shrinks below zero, so the two row gaps around it stay. */}
-        <div
-          aria-hidden="true"
-          data-testid="subheader-row-break"
-          className="hidden md:order-1 md:block md:h-0 md:basis-full"
-        />
+        {/* Only when there is a row 2: festival-only and day-only pages have just the status line there, which sits on row 1. */}
+        {!dayOnly && !festivalOnly && (
+          <div
+            aria-hidden="true"
+            data-testid="subheader-row-break"
+            className="hidden md:order-1 md:block md:h-0 md:basis-full"
+          />
+        )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div
