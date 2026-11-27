@@ -79,7 +79,7 @@ import ScheduleResultsRow from '../components/ScheduleResultsRow';
 const GUTTER_W = 44;
 // Fits "12PM" in the micro role at the 1.4 cap plus the right inset and a left margin.
 const GUTTER_W_LARGE = 56;
-// Stage-column width is twoUpColumnWidth(windowW, GUTTER_W): two stages fill
+// Stage-column width is twoUpColumnWidth(windowW, gutterW): two stages fill
 // the width next to the gutter (clamped to 120-220 px), and the horizontal
 // scroll snaps by one column.
 // Header row height (stage name labels) above the scrollable body.
