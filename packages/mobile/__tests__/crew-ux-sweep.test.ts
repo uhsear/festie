@@ -19,6 +19,7 @@ describe('crew UX sweep guards', () => {
     const src = read('app/(tabs)/crew.tsx');
     expect(src).toContain(String.raw`.replace(/(\d+) (members?)/, '$1\u00A0$2')`);
     expect('5 members'.replace(/(\d+) (members?)/, '$1\u00A0$2')).toBe('5\u00A0members');
+    expect(src).toContain(String.raw`)}\u00A0\u00B7 ${countText}`);
   });
   it('crew tab clears a stale store error on focus', () => {
     const src = read('app/(tabs)/crew.tsx');
