@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Merged to `main` but not yet deployed to production.
 
+## [2026-11-27] deploy-20261127-081245
+
+This deploy carried the design release: tokens, brand, the reworked screens, motion and states, and the store listing text. It ran no migrations.
+
 ### Added
 - Design tokens for colour, type, motion and spacing, with drift guards in CI so web and mobile cannot stray from them.
 - A brand guide, and a fictional demo festival for store screenshots.
@@ -25,6 +29,7 @@ Merged to `main` but not yet deployed to production.
 - The mobile top banners are compact strips that float over the page, and the SOS control keeps clear of the tab bar.
 - The Play listing describes background location sharing correctly: opt-in, while the phone is locked, until the time you pick.
 - The web app's first load is smaller: modules used only by lazy screens stay out of the shared chunk.
+- Every page ends with room to scroll its last row clear of the SOS control.
 
 ### Docs
 - The README says the apps are in testing and links CI, uptime, privacy and support.
