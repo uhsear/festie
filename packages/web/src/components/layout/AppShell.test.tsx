@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { useFestivalModeStore } from '@festie/shared';
@@ -22,11 +24,12 @@ vi.mock('@festie/shared', async (importOriginal) => ({
     selector({ user: mockUser, checkSession: vi.fn(async () => {}) }),
 }));
 
+let mockDetailSet: { id: string } | null = null;
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: Object.assign(
     (selector: (s: Record<string, unknown>) => unknown) =>
       selector({
-        detailSet: null,
+        detailSet: mockDetailSet,
         setDetailSet: vi.fn(),
         detailAutoSpotify: false,
         setDetailAutoSpotify: vi.fn(),
@@ -93,6 +96,7 @@ describe('AppShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUser = null;
+    mockDetailSet = null;
     mockPathname = '/cards';
     mockJoinLoader = {
       pendingJoinCode: null,
@@ -108,6 +112,18 @@ describe('AppShell', () => {
       expect(screen.getByTestId('sub-header')).toHaveAttribute('data-festival-only', 'true');
     },
   );
+
+  // The sheet mounts only after a tap, so a static import would put its whole tree in the entry chunk.
+  it('loads the set sheet on demand instead of importing it into the entry chunk', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/components/layout/AppShell.tsx'), 'utf8');
+    expect(source).not.toContain("import DetailPanel from '../features/DetailPanel'");
+    expect(source).toContain("import('../features/DetailPanel')");
+    render(<AppShell />);
+    expect(screen.queryByTestId('detail-panel')).not.toBeInTheDocument();
+    mockDetailSet = { id: 's1' };
+    render(<AppShell />);
+    expect(await screen.findByTestId('detail-panel')).toBeInTheDocument();
+  });
 
   it('syncs the theme on sign-in pages, which render no Header', () => {
     mockPathname = '/login';
