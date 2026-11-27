@@ -139,6 +139,29 @@ describe('WrapPage', () => {
     expect(carousel.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('names the tabs My wrap and Crew wrap', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    renderPage();
+    await screen.findByRole('tablist', { name: 'Wrap view' });
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['My wrap', 'Crew wrap']);
+  });
+
+  it('shows one invite card, not a hero of zeros and two non-results, for a crew of one', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    mocks.get.mockResolvedValue({
+      ...response,
+      crew: { id: 'c1', name: 'Solo' },
+      wrap: { memberCount: 1, topOverlap: null, setsSeenTogether: [], totalSplit: 0, biggestSpender: null, perMember: [], currency: 'USD' },
+    });
+    renderPage();
+    fireEvent.click((await screen.findAllByRole('tab'))[1]!);
+    expect(await screen.findByText('Invite a crewmate to see your Crew Wrap')).toBeTruthy();
+    expect(screen.queryByText('Most-overlapping taste')).toBeNull();
+    expect(screen.queryByText('Biggest spender')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Invite a crewmate' }));
+    expect(mocks.navigate).toHaveBeenCalledWith({ to: '/crew' });
+  });
+
   it('keeps the same tablist element, outside its panel, when switching between You and Crew', async () => {
     mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
     renderPage();

@@ -145,7 +145,7 @@ function WrapPageInner() {
       <div className="max-w-lg mx-auto min-h-[calc(100dvh-200px)] flex items-center justify-center">
         <Card padding="lg">
           <EmptyState
-            icon={<WrapIcon className="w-16! h-16! text-accent-aqua" aria-hidden="true" />}
+            icon={<WrapIcon className="w-16! h-16!" aria-hidden="true" />}
             title={COPY.wrap.pending.title}
             description={COPY.wrap.pending.description}
           />
@@ -161,12 +161,12 @@ function WrapPageInner() {
         label="Wrap view"
         panelId="wrap-tab-panel"
         options={[
-          { value: 'me', label: 'You' },
-          { value: 'crew', label: COPY.wrap.crewName },
+          { value: 'me', label: 'My wrap' },
+          { value: 'crew', label: 'Crew wrap' },
         ]}
         value={tab}
         onChange={setTab}
-        tone="solid"
+        tone="soft"
         className="grid grid-cols-2 gap-1 rounded-lg bg-bg-card"
         tabClassName="min-h-[40px] rounded-xl text-sm transition-colors"
       />
@@ -216,7 +216,7 @@ function WrapPageInner() {
       <div id="wrap-tab-panel" className="max-w-lg mx-auto pt-4">
         <Card padding="lg">
           <EmptyState
-            icon={<WrapIcon className="w-16! h-16! text-accent-aqua" aria-hidden="true" />}
+            icon={<WrapIcon className="w-16! h-16!" aria-hidden="true" />}
             title={COPY.wrap.empty.title}
             description={COPY.wrap.empty.description}
             cta={{ label: 'Open the lineup', onClick: () => navigate({ to: '/' }) }}
@@ -344,6 +344,7 @@ function CrewWrapTab({
   photoAlbumUrl: string | null;
   onPhotosSaved: () => void | Promise<void>;
 }) {
+  const navigate = useNavigate();
   const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
   const slug = useFestivalStore((s) => s.festivals.find((f) => f.id === festivalId)?.slug);
@@ -427,41 +428,61 @@ function CrewWrapTab({
         <p className="text-sm text-text-secondary">{festivalName}</p>
       </header>
 
-      <WrapHero
-        value={wrap.setsSeenTogether.length}
-        label="sets seen together"
-        detail={[
-          `${wrap.memberCount} in the crew`,
-          wrap.totalSplit > 0
-            ? `${formatAmount(wrap.totalSplit, wrap.currency)} split`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
-      />
+      {hasData ? (
+        <>
+          <WrapHero
+            value={wrap.setsSeenTogether.length}
+            label="sets seen together"
+            detail={[
+              `${wrap.memberCount} in the crew`,
+              wrap.totalSplit > 0
+                ? `${formatAmount(wrap.totalSplit, wrap.currency)} split`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          />
 
-      {/* Superlatives */}
-      <section className="flex flex-col gap-3">
-        <Superlative
-          label="Most-overlapping taste"
-          value={wrap.topOverlap ? `${wrap.topOverlap.aName} + ${wrap.topOverlap.bName}` : 'Rate more sets together'}
-          sub={
-            wrap.topOverlap
-              ? `${wrap.topOverlap.shared} shared favourite${wrap.topOverlap.shared === 1 ? '' : 's'}` +
-                (wrap.topOverlap.sharedSets.length ? ` · ${wrap.topOverlap.sharedSets.slice(0, 3).join(', ')}` : '')
-              : undefined
-          }
-        />
-        <Superlative
-          label="Biggest spender"
-          value={wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
-          sub={
-            wrap.biggestSpender
-              ? `fronted ${formatAmount(wrap.biggestSpender.amount, wrap.currency)}`
-              : undefined
-          }
-        />
-      </section>
+          {/* Superlatives: only a result gets a card. A missing one is left out, not shown as a call to action. */}
+          <section className="flex flex-col gap-3">
+            {wrap.topOverlap && (
+              <Superlative
+                label="Most-overlapping taste"
+                value={`${wrap.topOverlap.aName} + ${wrap.topOverlap.bName}`}
+                sub={
+                  `${wrap.topOverlap.shared} shared favourite${wrap.topOverlap.shared === 1 ? '' : 's'}` +
+                  (wrap.topOverlap.sharedSets.length ? ` · ${wrap.topOverlap.sharedSets.slice(0, 3).join(', ')}` : '')
+                }
+              />
+            )}
+            {wrap.biggestSpender && (
+              <Superlative
+                label="Biggest spender"
+                value={wrap.biggestSpender.name}
+                sub={`fronted ${formatAmount(wrap.biggestSpender.amount, wrap.currency)}`}
+              />
+            )}
+          </section>
+        </>
+      ) : (
+        // One empty card with one action, instead of a hero of zeros and two cards that are not results.
+        <Card padding="lg">
+          <EmptyState
+            icon={<Users className="w-12 h-12" aria-hidden="true" />}
+            title={wrap.memberCount < 2 ? 'Invite a crewmate to see your Crew Wrap' : 'Nothing to show yet'}
+            description={
+              wrap.memberCount < 2
+                ? 'The Crew Wrap compares your crew: sets you saw together, shared taste and who fronted the money.'
+                : 'Rate sets and add expenses together, and the Crew Wrap fills in.'
+            }
+            cta={
+              wrap.memberCount < 2
+                ? { label: 'Invite a crewmate', onClick: () => void navigate({ to: '/crew' }) }
+                : { label: 'Rate your sets', onClick: () => void navigate({ to: '/rate' }) }
+            }
+          />
+        </Card>
+      )}
 
       <CrewPhotosCard crewId={crewId} currentUrl={photoAlbumUrl} onSaved={onPhotosSaved} />
 
