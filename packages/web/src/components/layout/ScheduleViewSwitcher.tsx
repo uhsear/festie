@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { LayoutGrid, Columns3 } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared';
-import { SCHEDULE_VIEWS, isScheduleView } from '@festie/shared/utils';
+import { SCHEDULE_VIEWS, isScheduleView, lineupFlyerModel } from '@festie/shared/utils';
+import { useNow } from '../../hooks/useSetStatus';
 import { cn } from '../../lib/utils';
 
 /**
@@ -34,6 +35,13 @@ export default function ScheduleViewSwitcher({ className }: { className?: string
   const scheduleView = useFestivalStore((s) => s.scheduleView);
   const setScheduleView = useFestivalStore((s) => s.setScheduleView);
 
+  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const days = useFestivalStore((s) => s.days);
+  const sets = useFestivalStore((s) => s.sets);
+  const nowMs = useNow();
+  // While no set has a time the lineup is a flyer that only Cards renders: a Grid link would open an empty box.
+  const views = lineupFlyerModel(currentFestival, days, sets, nowMs) ? VIEWS.filter((v) => v.key !== '/grid') : VIEWS;
+
   const activeKey = location.pathname === '/' ? '/cards' : location.pathname;
 
   // Remember the view the person chose. `/` is an alias nobody chose, so it is not recorded.
@@ -45,7 +53,7 @@ export default function ScheduleViewSwitcher({ className }: { className?: string
   return (
     <nav className={cn('ml-auto shrink-0', className)} aria-label="Schedule view">
       <div className="flex gap-0.5 p-0.5 rounded-full bg-bg-secondary">
-        {VIEWS.map(({ key, label, Icon }) => {
+        {views.map(({ key, label, Icon }) => {
           const active = key === activeKey;
           return (
             <Link
