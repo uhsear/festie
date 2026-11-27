@@ -10,6 +10,7 @@ import {
 } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import Avatar from './Avatar';
 import Button from './Button';
 import CreateCrewForm from './CreateCrewForm';
 import SheetShell from './SheetShell';
@@ -96,7 +97,7 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
                       accessibilityLabel={`Switch to crew ${c.name}${g.label ? `, ${g.label}` : ''}`}
                       accessibilityState={{ selected }}
                     >
-                      <Text style={styles.emoji}>{c.totem_emoji || '🎪'}</Text>
+                      {c.totem_emoji ? <Text style={styles.emoji}>{c.totem_emoji}</Text> : <Avatar name={c.name} size="md" />}
                       <View style={styles.rowBody}>
                         <Text style={styles.rowName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                           {c.name}

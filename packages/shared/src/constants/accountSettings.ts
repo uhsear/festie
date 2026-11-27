@@ -18,14 +18,15 @@ export const ACCOUNT_SECTIONS = [
 export type AccountSectionId = (typeof ACCOUNT_SECTIONS)[number]['id'];
 
 export const ACCOUNT_COPY = {
-  title: 'Account',
+  // The Account screen title and the fifth tab label are one string (APP_SECTIONS reads it).
+  title: 'More',
   subtitle: 'Settings & preferences',
   motionNote: "Motion follows your device's Reduce Motion setting.",
   adminTitle: 'Admin',
   adminHint: 'Dashboard, activity & festivals',
   manageTitle: 'Manage your festivals',
   manageHint: 'Drafts, team and review for your organization',
-  privacyTitle: 'Privacy Policy',
+  privacyTitle: 'Privacy policy',
   privacyHint: 'How we handle your data',
   displayNamePlaceholder: 'How your name appears to your crew',
   emailLabel: 'Email',
@@ -51,7 +52,7 @@ export const ACCOUNT_COPY = {
   verifySendLink: 'Send link',
   verifyResendLink: 'Resend link',
   verifySendA11y: 'Send a confirmation link to your email',
-  deleteTitle: 'Delete Account',
+  deleteTitle: 'Delete account',
   deleteHelp: 'How to delete your account',
   deleteFailed: "Couldn't delete account. Try again.",
   changePasswordFailed: "Couldn't change password. Try again.",

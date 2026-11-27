@@ -179,8 +179,8 @@ env:
       - inputText: "${OUTPUT_INVITE_CODE}"
       - hideKeyboard
       - tapOn:
-          text: "Join by Code"
-      # Join by Code opens the invite screen; the join happens only on "Join crew".
+          text: "Join with code"
+      # Join with code opens the invite screen; the join happens only on "Join crew".
       - extendedWaitUntil:
           visible: "Join crew"
           timeout: 20000

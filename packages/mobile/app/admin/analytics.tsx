@@ -463,8 +463,8 @@ const useStyles = makeStyles((t) => ({
     paddingBottom: t.spacing[4],
   },
   backButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -476,8 +476,8 @@ const useStyles = makeStyles((t) => ({
     flex: 1,
   },
   refreshBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,

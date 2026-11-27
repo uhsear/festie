@@ -76,6 +76,7 @@ export default function Button({
       style={[
         styles.base,
         size === 'sm' && styles.sizeSm,
+        icon && !loading && (size === 'sm' ? styles.iconPadSm : styles.iconPad),
         VARIANT_CONTAINER[variant](styles),
         isDisabled && variant !== 'ghost' && styles.disabled,
         style,
@@ -159,6 +160,13 @@ const useStyles = makeStyles((t) => ({
     minHeight: 44,
     paddingVertical: t.spacing[2],
     paddingHorizontal: t.spacing[3],
+  },
+  // Optical alignment: the icon side gets 2px less padding than the text side.
+  iconPad: {
+    paddingLeft: t.spacing[4] - 2,
+  },
+  iconPadSm: {
+    paddingLeft: t.spacing[3] - 2,
   },
   // accent rule: aqua primary + dark ink (coral = danger/SOS only; coral-on-white failed AA)
   primary: {

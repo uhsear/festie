@@ -18,6 +18,24 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  describe('leading icon padding', () => {
+    it.each([
+      ['sm', 'px-3', 'pl-2.5'],
+      ['md', 'px-4', 'pl-3.5'],
+      ['lg', 'px-5', 'pl-4.5'],
+    ] as const)('takes 2px less padding on the icon side at size %s', (size, px, pl) => {
+      render(<Button size={size} icon={<svg data-testid="i" />}>Go</Button>);
+      const cls = screen.getByRole('button').className;
+      expect(cls).toContain(px);
+      expect(cls).toContain(pl);
+    });
+
+    it('keeps symmetric padding without an icon', () => {
+      render(<Button>Go</Button>);
+      expect(screen.getByRole('button').className).not.toMatch(/(^|\s)pl-/);
+    });
+  });
+
   describe('variants', () => {
     it('applies primary variant by default', () => {
       render(<Button>Primary</Button>);

@@ -119,7 +119,7 @@ export default function DangerZone() {
             onClick={() => setShowDeleteConfirm(true)}
             className="min-h-[44px]"
           >
-            Delete My Account
+            Delete my account
           </Button>
         ) : (
           <form
