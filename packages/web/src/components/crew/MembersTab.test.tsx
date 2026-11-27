@@ -47,6 +47,26 @@ describe('MembersTab', () => {
     expect(ownerBadges.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('keeps every member row one height, with the Owner role as a trailing chip', () => {
+    const { container } = render(<MembersTab {...makeProps()} />);
+    const rows = container.querySelectorAll('.crew-member-row');
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(row).toHaveClass('min-h-14');
+    const chip = screen.getByText(/Owner/);
+    expect(chip.closest('.crew-member-row')).toBe(rows[0]);
+    expect(chip).toHaveClass('rounded-full', 'shrink-0');
+    expect(chip.parentElement).toBe(rows[0]);
+  });
+
+  it('lists the people before the Your days card', () => {
+    useFestivalStore.setState({ currentFestival: { id: 'f1' } as never, days: [{ id: 'd0', festivalId: 'f1', date: '2026-11-06', label: 'Friday' }] as never });
+    useCrewStore.setState({ activeCrew: { id: 'c1', festivalId: 'f1' } as never, crewDays: [] } as never);
+    render(<MembersTab {...makeProps()} />);
+    const lastMember = screen.getByText('Charlie');
+    const days = screen.getByRole('heading', { name: 'Your days' });
+    expect(lastMember.compareDocumentPosition(days) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows owner badge for member matching ownerId even without role', () => {
     const members = [
       { userId: 'u1', name: 'Alice', username: 'alice' }, // no role set

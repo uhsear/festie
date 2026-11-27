@@ -67,7 +67,6 @@ export default function MembersTab({
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Members</h3>
           <span className="text-xs text-text-secondary">{memberCountLabel(members.length, maxMembers)}</span>
         </div>
-        <MyDaysCard currentUserId={currentUserId} />
         <div className="space-y-0.5">
           {members.map((m, index) => {
             const rowIsOwner = memberIsOwner(m, ownerId);
@@ -81,19 +80,19 @@ export default function MembersTab({
                 className="stagger-item motion-reduce:!animate-none"
                 style={{ '--i': index } as React.CSSProperties}
               >
-                <div className="crew-member-row relative py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5">
+                <div className="crew-member-row relative min-h-14 py-2 px-2.5 rounded-md bg-bg-card border border-glass-border flex items-center gap-2.5">
                   <Avatar name={displayName} image={memberAvatarUrl(m)} size="sm" />
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-text-primary truncate">
                       {m.userId === currentUserId ? `${displayName} (you)` : displayName}
                     </div>
                     <MemberDayChips userId={m.userId} name={displayName} days={festivalDays} />
-                    {rowIsOwner && (
-                      <div className="text-xs text-text-secondary inline-flex items-center gap-1">
-                        <Crown className="w-4 h-4" aria-hidden="true" /> Owner
-                      </div>
-                    )}
                   </div>
+                  {rowIsOwner && (
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-text-secondary">
+                      <Crown className="w-4 h-4" aria-hidden="true" /> Owner
+                    </span>
+                  )}
                   {canManage && (
                     <Button
                       variant="secondary"
@@ -132,6 +131,7 @@ export default function MembersTab({
             );
           })}
         </div>
+        <MyDaysCard currentUserId={currentUserId} />
         </>
       ) : (
         <EmptyState
