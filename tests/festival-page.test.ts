@@ -145,7 +145,7 @@ describe('festival page: GET /f/:slug', () => {
         'content="Lineup and set times for EDC Orlando · Nov 6 – Nov 7, 2026 · Tinker Field. Plan your days with Festie."',
       ),
     );
-    assert.ok(html.includes('href="https://festie.us/?festival=fest%201%2Fx&amp;ref=festival-page"'));
+    assert.ok(html.includes('href="/?festival=fest%201%2Fx&amp;ref=festival-page"'));
     assert.ok(html.includes('Plan your days in Festie'));
     assert.ok(html.includes('Times are local to the festival (EST).'));
     assert.ok(html.includes('<h2>Stages</h2>'));
@@ -185,9 +185,9 @@ describe('festival page: GET /f/:slug', () => {
     };
     const tagged = await follow({ ref: 'share-festival' });
     assert.equal(tagged.label, 'Get alerts (free account)');
-    assert.equal(tagged.href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=share-festival');
+    assert.equal(tagged.href, '/?festival=fest%201%2Fx&amp;ref=share-festival');
     for (const ref of ['evil', 'festival-page', '"><script>', undefined]) {
-      assert.equal((await follow({ ref })).href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=festival-page-follow');
+      assert.equal((await follow({ ref })).href, '/?festival=fest%201%2Fx&amp;ref=festival-page-follow');
     }
   });
 
@@ -231,7 +231,7 @@ describe('festival page: GET /f/:slug', () => {
       assert.equal(res._headers['X-Robots-Tag'], 'noindex');
       assert.equal(res._headers['Content-Security-Policy'], CSP);
       assert.ok(res._sent.includes('<h1>Festival not found</h1>'));
-      assert.ok(res._sent.includes('href="https://festie.us/"'));
+      assert.ok(res._sent.includes('href="/"'));
     }
     assert.equal(unknown._sent, vanished._sent);
     assert.deepEqual(unknown._headers, vanished._headers);

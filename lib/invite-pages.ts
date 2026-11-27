@@ -79,9 +79,11 @@ export function renderInviteJoinPage({
   const title = escapeHtml(`Join ${crewName} on Festie`);
   const code = encodeURIComponent(inviteCode);
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
-  const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}&ref=crew-invite`);
+  // In-page links stay relative so they keep the origin the visitor is on (and its session); only the
+  // tags and the calendar file, which other apps read, carry the configured public origin.
+  const joinUrl = escapeHtml(`/?joinCrew=${code}&ref=crew-invite`);
   const saveLink = dates
-    ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="iv-link" download>Save for later</a>
+    ? `      <a href="${escapeHtml(`/join/${code}/save.ics`)}" class="iv-link" download>Save for later</a>
       <p class="iv-small">Adds the festival dates and this invite to your calendar.</p>
 `
     : '';
@@ -158,7 +160,7 @@ export function renderInviteIcs({ festivalName, crewName, startDate, endDate, in
   return buildVCalendar([event], { calendarName: festivalName || 'Festie', prodId: '-//Festie//Invite//EN' });
 }
 
-export function renderInviteErrorPage(origin: string, message: string) {
+export function renderInviteErrorPage(message: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -173,10 +175,10 @@ export function renderInviteErrorPage(origin: string, message: string) {
 <body>
   <main>
     <div class="iv">
-      ${festieLockupHtml(`${origin}/`)}
+      ${festieLockupHtml('/')}
       <h1>This invite doesn't work</h1>
       <p>${escapeHtml(message)}</p>
-      <a href="${escapeHtml(`${origin}/`)}" class="ds-cta">Open Festie</a>
+      <a href="${escapeHtml('/')}" class="ds-cta">Open Festie</a>
     </div>
   </main>
 </body>

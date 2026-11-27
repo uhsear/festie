@@ -51,11 +51,11 @@ export default function createPageRoutes(deps: RouteDeps) {
       }
       return res
         .status(INVITE_ERROR_STATUS[result.status])
-        .send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES[result.status]));
+        .send(renderInviteErrorPage(INVITE_ERROR_MESSAGES[result.status]));
     } catch (error: any) {
       log.error('crew invite page failed', { error: error.message });
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+      return res.status(500).send(renderInviteErrorPage(INVITE_ERROR_MESSAGES.failed));
     }
   });
 

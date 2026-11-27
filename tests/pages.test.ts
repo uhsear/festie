@@ -166,7 +166,7 @@ describe('pages: /join/:code', () => {
     assert.equal(res._status, 200);
     assert.ok(res._sent.includes('og:title" content="Join Bass Gang on Festie"'));
     assert.ok(res._sent.includes('EDC Orlando'));
-    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123&amp;ref=crew-invite"'));
+    assert.ok(res._sent.includes('href="/?joinCrew=ABC123&amp;ref=crew-invite"'));
     assert.ok(res._sent.includes('og:url" content="https://festie.us/join/ABC123"'));
     assert.equal(res._redirectUrl, null);
     assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
@@ -236,7 +236,7 @@ describe('pages: /join/:code', () => {
 
   it('links Save for later on a dated invite page', async () => {
     const res = await get(inviteDeps({ crew: CREW }), 'abc123');
-    assert.ok(res._sent.includes('href="https://festie.us/join/ABC123/save.ics"'));
+    assert.ok(res._sent.includes('href="/join/ABC123/save.ics"'));
   });
 });
 
