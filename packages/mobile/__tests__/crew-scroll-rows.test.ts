@@ -9,6 +9,13 @@ describe('crew horizontal rows fit or hint that they scroll', () => {
     expect(src).toMatch(/tab: \{\s*flexGrow: 1,/);
   });
 
+  it('CrewFacesRow gaps leave four 80dp faces inside a 361dp row and fade when more exist', () => {
+    const src = read('components/crew/CrewFacesRow.tsx');
+    expect(src).toContain('row: { gap: t.spacing[2] }');
+    expect(src).toContain('width: 80');
+    expect(src).toContain('<EndFade visible={more}');
+  });
+
   it('EndFade draws from tokens only and never intercepts touches', () => {
     const src = read('components/EndFade.tsx');
     expect(src).toContain('pointerEvents="none"');
