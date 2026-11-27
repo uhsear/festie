@@ -25,7 +25,7 @@ function setHook(overall: string, extra: Record<string, unknown> = {}) {
   h.hook = {
     summary: { overall, hasDownloaded: overall !== 'none', lastSyncedAt: Date.now(), hidden: false, ...extra },
     isDownloading: overall === 'syncing',
-    hasMap: false,
+    hasMap: true,
   };
 }
 
@@ -41,6 +41,7 @@ describe('OfflineStatusChip', () => {
   it('shows the day-before banner on the home from 18:00 festival time until the pack is ready', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     h.days = [{ date: '2026-11-10' }];
+    h.hook.hasMap = false;
     vi.setSystemTime(Date.UTC(2026, 10, 9, 17, 59));
     const before = render(<OfflineStatusChip remind />);
     expect(before.queryByText(/Open Festie on wifi/)).toBeNull();
@@ -80,6 +81,13 @@ describe('OfflineStatusChip', () => {
   it('starts the download from a Download for offline button', () => {
     render(<OfflineStatusChip />);
     fireEvent.click(screen.getByRole('button', { name: 'Download for offline' }));
+    expect(h.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to save the schedule, not a download, when the festival has no map', () => {
+    h.hook.hasMap = false;
+    render(<OfflineStatusChip />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedule offline' }));
     expect(h.download).toHaveBeenCalledTimes(1);
   });
 

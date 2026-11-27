@@ -32,7 +32,7 @@ function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
   const { overall } = summary;
   // Coral and "incomplete" only when a step failed; unsaved steps are neutral.
   const failed = overall === 'partial' && summary.hasError;
-  const label = failed ? 'Offline download incomplete · Retry' : offlineStatusLabel(summary);
+  const label = failed ? 'Offline download incomplete · Retry' : offlineStatusLabel(summary, undefined, hasMap);
   const a11yLabel =
     overall === 'partial' && summary.pending.length ? `${label}. Not saved yet: ${summary.pending.join(', ')}` : label;
   const icon = overall === 'ready' ? 'checkmark-circle' : failed ? 'alert-circle' : 'download-outline';
