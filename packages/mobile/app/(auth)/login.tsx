@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  type ScrollViewInstance,
   type TextInputInstance,
 } from 'react-native';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
@@ -24,6 +25,7 @@ import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 const useStyles = makeStyles((t) => ({
   container: {
@@ -153,6 +155,17 @@ export default function LoginScreen() {
   );
 
   const passwordRef = useRef<TextInputInstance>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const reduceMotion = useReduceMotion();
+
+  // The keyboard scrolls the focused field into view. Once it closes the offset stays, and the
+  // form (taller by the error line) can leave the logo under the status bar, so return to the top.
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidHide', () =>
+      scrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion }),
+    );
+    return () => sub.remove();
+  }, [reduceMotion]);
 
   // iOS lacks Android's input ripple, so give TextInputs an explicit focus
   // affordance: accent border + subtle aqua ring (paired per token note).
@@ -186,6 +199,7 @@ export default function LoginScreen() {
           there's room. Insets ride on the content so nothing hides under the
           status bar / home indicator. */}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.inner,
           { paddingTop: insets.top + t.spacing[6], paddingBottom: insets.bottom + t.spacing[6] },

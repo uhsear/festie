@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -312,77 +313,89 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
     </View>
   );
 
+  // A Modal is its own window, so TalkBack and VoiceOver stay inside the intro and cannot reach the
+  // screen behind it. The earlier absolute overlay only hid that screen and left the intro out of the Android tree.
   return (
-    <View style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.skipRow}>
-        <TouchableOpacity
-          testID="intro-skip"
-          style={styles.skipButton}
-          onPress={handleSkip}
-          accessibilityRole="button"
-          accessibilityLabel={ONBOARDING_COPY.skipA11y}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.skip} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ONBOARDING_COPY.skip}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Paging ScrollView — each step gets exactly one screen-width slot. */}
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        style={styles.pager}
-        contentContainerStyle={styles.pagerContent}
+    <Modal
+      visible
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={handleSkip}
+    >
+      <View
+        style={[styles.overlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+        accessibilityViewIsModal
       >
-        {steps.map((step, i) => (
-          <ScrollView
-            key={step}
-            accessibilityElementsHidden={i !== index}
-            importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
-            style={{ width: screenWidth }}
-            contentContainerStyle={[styles.slide, largeText && styles.slideCentered]}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+        <View style={styles.skipRow}>
+          <TouchableOpacity
+            testID="intro-skip"
+            style={styles.skipButton}
+            onPress={handleSkip}
+            accessibilityRole="button"
+            accessibilityLabel={ONBOARDING_COPY.skipA11y}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            {step === 'festival' ? renderFestivalStep() : step === 'going' ? renderGoingStep() : renderSlide(step)}
-          </ScrollView>
-        ))}
-      </ScrollView>
-
-      <View style={styles.footer}>
-        {/* The adjustable role lives here, not on the pager: iOS folds an
-            adjustable element's children into one stop, which hid the slide copy. */}
-        <View
-          style={styles.dots}
-          accessible
-          accessibilityRole="adjustable"
-          accessibilityLabel="Intro slides"
-          accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Step ${index + 1} of ${steps.length}` }}
-          accessibilityActions={[
-            { name: 'increment', label: 'Next step' },
-            { name: 'decrement', label: 'Previous step' },
-          ]}
-          onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
-        >
-          {steps.map((step) => (
-            <View key={step} style={[styles.dot, step === steps[index] && styles.dotActive]} />
-          ))}
+            <Text style={styles.skip} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ONBOARDING_COPY.skip}</Text>
+          </TouchableOpacity>
         </View>
-        {isLast ? null : <Button label={ONBOARDING_COPY.next} onPress={handleNext} style={styles.button} />}
+
+        {/* Paging ScrollView — each step gets exactly one screen-width slot. */}
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          style={styles.pager}
+          contentContainerStyle={styles.pagerContent}
+        >
+          {steps.map((step, i) => (
+            <ScrollView
+              key={step}
+              accessibilityElementsHidden={i !== index}
+              importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
+              style={{ width: screenWidth }}
+              contentContainerStyle={[styles.slide, largeText && styles.slideCentered]}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {step === 'festival' ? renderFestivalStep() : step === 'going' ? renderGoingStep() : renderSlide(step)}
+            </ScrollView>
+          ))}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          {/* The adjustable role lives here, not on the pager: iOS folds an
+              adjustable element's children into one stop, which hid the slide copy. */}
+          <View
+            style={styles.dots}
+            accessible
+            accessibilityRole="adjustable"
+            accessibilityLabel="Intro slides"
+            accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Step ${index + 1} of ${steps.length}` }}
+            accessibilityActions={[
+              { name: 'increment', label: 'Next step' },
+              { name: 'decrement', label: 'Previous step' },
+            ]}
+            onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
+          >
+            {steps.map((step) => (
+              <View key={step} style={[styles.dot, step === steps[index] && styles.dotActive]} />
+            ))}
+          </View>
+          {isLast ? null : <Button label={ONBOARDING_COPY.next} onPress={handleNext} style={styles.button} />}
+        </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
 const useStyles = makeStyles((t) => ({
   overlay: {
-    ...({ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const),
+    flex: 1,
     backgroundColor: t.colors.bg.primary,
-    zIndex: 100,
   },
   skipRow: {
     flexDirection: 'row',
