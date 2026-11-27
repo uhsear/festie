@@ -90,7 +90,7 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
       {chosen ? (
         <View style={styles.festivalRow}>
           <Text style={styles.festivalText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {crewCopy.createFor(festivalLabel(chosen))}
+            {crewCopy.createFor(festivalLabel(chosen, festivals))}
           </Text>
           {choices.length >= 2 ? (
             <TouchableOpacity
@@ -133,7 +133,7 @@ export default function CreateCrewForm({ onCreated, autoFocus }: CreateCrewFormP
       <FestivalChoiceSheet
         visible={choosing}
         title="Choose a festival"
-        options={choices.map((f) => ({ id: f.id, label: festivalLabel(f) }))}
+        options={choices.map((f) => ({ id: f.id, label: festivalLabel(f, festivals) }))}
         onSelect={(id) => {
           setPickedId(id);
           setChoosing(false);

@@ -4,6 +4,9 @@
 // Public crew-invite preview, shared by GET /crews/join-preview/:inviteCode and
 // the server-rendered /join/:code page so both describe an invite the same way.
 
+import { FESTIVAL_STATUS_LABEL } from '../packages/shared/src/constants/copy';
+import { festivalStatus, resolveFestivalTimeZone } from '../packages/shared/src/utils/festivalTime';
+
 export interface InvitePreview {
   crewName: string;
   ownerName: string | null;
@@ -18,7 +21,7 @@ export interface InvitePreview {
 }
 
 export type InvitePreviewResult =
-  | { status: 'ok'; preview: InvitePreview; memberInitials: string[] }
+  | { status: 'ok'; preview: InvitePreview; memberInitials: string[]; festivalTimeZone: string | null }
   | { status: 'expired' }
   | { status: 'invalid' }
   | { status: 'locked' };
@@ -68,6 +71,8 @@ export async function loadInvitePreview(
   return {
     status: 'ok',
     memberInitials: initialsOf(members),
+    // Not part of the public preview contract: the invite page needs it to place "now" in the festival's day.
+    festivalTimeZone: festival?.timeZone || null,
     preview: {
       crewName: crew.name,
       ownerName: owner?.name || owner?.username || null,
@@ -100,20 +105,29 @@ export function formatInviteDateRange(startDate: string | null, endDate: string 
 const MS_PER_DAY = 86_400_000;
 
 /**
- * "Fri in 9 days", "Fri tomorrow", "Starts today" or "On now"; null once the festival is over or
- * without dates. Compared as UTC calendar days: the preview carries no festival time zone, so
- * the line can be a day early or late near midnight (upgrade when the preview carries the zone).
+ * "Fri in 9 days", "Fri tomorrow", "Happening now" or "Ended"; null without dates. The phase
+ * comes from the shared festivalStatus, so this page agrees with the festival pill in the app:
+ * a festival is live from 00:00 on its first day in the festival's own zone. "Starts today" is
+ * what remains when the festival has no zone and the server clock is a day behind its UTC date.
  */
-export function inviteCountdown(startDate: string | null, endDate: string | null, now: Date = new Date()): string | null {
+export function inviteCountdown(
+  startDate: string | null,
+  endDate: string | null,
+  now: Date = new Date(),
+  timeZone: string | null = null,
+): string | null {
   if (!startDate || !endDate) return null;
   const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T00:00:00Z`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-  const today = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
-  if (today > end.getTime()) return null;
-  if (today > start.getTime()) return 'On now';
+  if (Number.isNaN(start.getTime())) return null;
+  const festival = { startDate, endDate, timeZone: timeZone ?? undefined } as Parameters<typeof festivalStatus>[0];
+  const phase = festivalStatus(festival, null, now);
+  if (!phase) return null;
+  if (phase === 'past') return 'Ended';
+  if (phase === 'ongoing') return FESTIVAL_STATUS_LABEL.ongoing;
+  const zone = resolveFestivalTimeZone({ timeZone });
+  const today = Date.parse(`${now.toLocaleDateString('en-CA', { timeZone: zone ?? 'UTC' })}T00:00:00Z`);
   const days = Math.round((start.getTime() - today) / MS_PER_DAY);
-  if (days === 0) return 'Starts today';
+  if (days <= 0) return 'Starts today';
   const weekday = start.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
   return days === 1 ? `${weekday} tomorrow` : `${weekday} in ${days} days`;
 }

@@ -188,19 +188,28 @@ describe('CrewSelector', () => {
       render(<CrewSelector {...props} />);
       await user.click(screen.getByRole('button', { name: /^Select crew/ }));
       const groups = screen.getAllByRole('group');
-      expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['EDC Orlando 2026', 'Lost Lands 2025']);
+      expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['EDC Orlando', 'Lost Lands 2025']);
       expect(groups[1]).toHaveClass('opacity-60');
       expect(groups[0]).not.toHaveClass('opacity-60');
     });
 
+    it('adds the year to the trigger label only when two festivals share a name', () => {
+      const twins = [
+        ...festivals,
+        { id: 'f-next', name: 'EDC Orlando', startDate: '2027-11-05', endDate: '2027-11-07' },
+      ] as unknown as Festival[];
+      render(<CrewSelector {...props} festivals={twins} />);
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('New CrewEDC Orlando 2026');
+    });
+
     it('shows the festival label of the selected crew under its name in the trigger', () => {
       render(<CrewSelector {...props} />);
-      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('New CrewEDC Orlando 2026');
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('New CrewEDC Orlando');
     });
 
     it('adds the member count after the festival, so the switcher is the whole header', () => {
       render(<CrewSelector {...props} memberCount={4} />);
-      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('EDC Orlando 2026 · 4 members');
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('EDC Orlando · 4 members');
     });
 
     it('uses the singular for a crew of one and shows the count without a festival', () => {

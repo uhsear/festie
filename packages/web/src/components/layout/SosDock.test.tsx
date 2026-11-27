@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import type { SosEntry } from '@festie/shared/types';
 
@@ -63,7 +65,23 @@ describe('SosDock', () => {
     const { unmount } = render(<SosDock />);
     expect(document.documentElement.style.getPropertyValue('--sos-dock-h')).toBe('72px');
     expect(document.documentElement.style.getPropertyValue('--sos-dock-w')).toBe('88px');
+    expect(document.documentElement.style.getPropertyValue('--sos-band-h')).toContain('72px');
     unmount();
     expect(document.documentElement.style.getPropertyValue('--sos-dock-h')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--sos-band-h')).toBe('');
+  });
+
+  // jsdom has no layout, so the no-overlap guarantee is checked as a contract between the three
+  // places that must agree: the dock's offset, the band it publishes, and the scroller's margin.
+  it('reserves exactly the band the dock occupies, so the page scroller ends above it', () => {
+    const dock = readFileSync(resolve(process.cwd(), 'src/components/layout/SosDock.tsx'), 'utf8');
+    const button = readFileSync(resolve(process.cwd(), 'src/components/crew/SosRaiseButton.tsx'), 'utf8');
+    const pages = readFileSync(resolve(process.cwd(), 'src/styles/pages.css'), 'utf8');
+    const gap = /const DOCK_GAP = (\d+);/.exec(dock)![1];
+    expect(dock).toContain(`+var(--sticky-bar-h,0px)+${gap}px+env(safe-area-inset-bottom,0px))]`);
+    expect(dock).toContain('const DOCK_H = `${64 + 2 * DOCK_GAP}px`;');
+    expect(button).toContain('h-16 w-16');
+    expect(pages).toMatch(/#main-content \{[^}]*margin-bottom: var\(--sos-band-h, 0px\);/);
+    expect(pages).toMatch(/#main-content:has\(\.map-page\) \{[^}]*margin-bottom: 0;/);
   });
 });

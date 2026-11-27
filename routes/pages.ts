@@ -47,15 +47,15 @@ export default function createPageRoutes(deps: RouteDeps) {
     try {
       const result = await loadInvitePreview({ stores, getFestivalById }, code);
       if (result.status === 'ok') {
-        return res.status(200).send(renderInviteJoinPage({ ...result.preview, memberInitials: result.memberInitials, inviteCode: code, origin }));
+        return res.status(200).send(renderInviteJoinPage({ ...result.preview, memberInitials: result.memberInitials, festivalTimeZone: result.festivalTimeZone, inviteCode: code, origin }));
       }
       return res
         .status(INVITE_ERROR_STATUS[result.status])
-        .send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES[result.status]));
+        .send(renderInviteErrorPage(INVITE_ERROR_MESSAGES[result.status]));
     } catch (error: any) {
       log.error('crew invite page failed', { error: error.message });
       res.setHeader('Cache-Control', 'no-store');
-      return res.status(500).send(renderInviteErrorPage(origin, INVITE_ERROR_MESSAGES.failed));
+      return res.status(500).send(renderInviteErrorPage(INVITE_ERROR_MESSAGES.failed));
     }
   });
 

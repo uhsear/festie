@@ -140,7 +140,7 @@ export default function CrewSelector({
           {(selectedFestival || memberCount !== undefined) && (
             <span className="block truncate text-sm font-normal text-text-secondary">
               {[
-                selectedFestival ? festivalLabel(selectedFestival) : null,
+                selectedFestival ? festivalLabel(selectedFestival, festivals) : null,
                 memberCount === undefined ? null : `${memberCount} ${memberCount === 1 ? 'member' : 'members'}`,
               ]
                 .filter(Boolean)

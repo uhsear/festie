@@ -37,8 +37,21 @@ const past = fest('past', 'Lost Lands 2026', '2026-09-18');
 const oldPast = fest('old', 'Tomorrowland', '2025-07-18');
 
 describe('festivalLabel', () => {
-  it('adds the start year when the name has none', () => {
-    expect(festivalLabel({ name: 'EDC Orlando', startDate: '2026-11-06' })).toBe('EDC Orlando 2026');
+  it('keeps the plain name when no other festival shares it', () => {
+    expect(festivalLabel({ name: 'EDC Orlando', startDate: '2026-11-06' })).toBe('EDC Orlando');
+    expect(festivalLabel(current, [current, upcoming, past])).toBe('EDC Orlando');
+  });
+  it('adds the start year only when two festivals share a name', () => {
+    const a = { id: 'a', name: 'Sunfest', startDate: '2026-05-01' };
+    const b = { id: 'b', name: 'Sunfest', startDate: '2027-05-01' };
+    expect(festivalLabel(a, [a, b])).toBe('Sunfest 2026');
+    expect(festivalLabel(b, [a, b])).toBe('Sunfest 2027');
+  });
+  it('matches names ignoring a year and case', () => {
+    const a = { id: 'a', name: 'Fest', startDate: '2026-05-01' };
+    const b = { id: 'b', name: 'FEST 2027', startDate: '2027-05-01' };
+    expect(festivalLabel(a, [a, b])).toBe('Fest 2026');
+    expect(festivalLabel(b, [a, b])).toBe('FEST 2027');
   });
   it('keeps a name that has a year', () => {
     expect(festivalLabel({ name: 'Lost Lands 2026', startDate: '2026-09-18' })).toBe('Lost Lands 2026');
@@ -58,6 +71,7 @@ describe('groupCrewsByFestival', () => {
     expect(groups[0]!.isCurrent).toBe(true);
     expect(groups[2]!.status).toBe('past');
     expect(groups[3]!.label).toBeNull();
+    expect(groups[0]!.label).toBe('EDC Orlando');
     expect(groups[3]!.crews.map((c) => c.id)).toEqual(['d', 'e']);
   });
 

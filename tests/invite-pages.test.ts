@@ -62,7 +62,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.ok(html.includes("font-family: 'Clash Display'"));
     assert.ok(html.includes('@media (prefers-color-scheme: light)'));
     assert.ok(!/d6154f|ff5c85|Crew invite|border-top: 4px/i.test(html));
-    assert.ok(renderInviteErrorPage('https://festie.us', 'x').includes('@media (prefers-color-scheme: light)'));
+    assert.ok(renderInviteErrorPage('x').includes('@media (prefers-color-scheme: light)'));
   });
 
   it('leads with the faces, the festival name and the countdown', () => {
@@ -73,9 +73,17 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.ok(html.includes('<p>Test Crew</p>'), 'the crew name stays on the page');
   });
 
-  it('shows no faces row content without initials, and no countdown once the festival is over', () => {
-    const html = renderInviteJoinPage({ ...defaultArgs, now: new Date('2026-12-01T00:00:00Z') });
-    assert.ok(!html.includes('iv-face"') && !html.includes('iv-when">'));
+  it('shows no faces row content without initials', () => {
+    const html = renderInviteJoinPage({ ...defaultArgs, now: NOW });
+    assert.ok(!html.includes('iv-face"'));
+  });
+
+  it('says Happening now for a running festival and Ended after it', () => {
+    const args = { ...defaultArgs, festivalTimeZone: 'America/New_York' };
+    const live = renderInviteJoinPage({ ...args, now: new Date('2026-11-06T15:30:00Z') });
+    assert.ok(live.includes('<p class="iv-when">Happening now</p>') && !live.includes('Starts today'));
+    const over = renderInviteJoinPage({ ...args, now: new Date('2026-12-01T00:00:00Z') });
+    assert.ok(over.includes('<p class="iv-when">Ended</p>'));
   });
 
   it('returns valid HTML document', () => {
@@ -134,9 +142,9 @@ describe('invite-pages: renderInviteJoinPage', () => {
     assert.deepEqual([...order].sort((a, b) => a - b), order);
   });
 
-  it('links Join to the app with the code and sets og:url and og:image', () => {
+  it('links Join relative to the app with the code, and keeps og:url and og:image absolute', () => {
     const html = renderInviteJoinPage(defaultArgs);
-    assert.ok(html.includes('href="https://festie.us/?joinCrew=ABC123&amp;ref=crew-invite"'));
+    assert.ok(html.includes('href="/?joinCrew=ABC123&amp;ref=crew-invite"'));
     assert.ok(html.includes('og:url" content="https://festie.us/join/ABC123"'));
     assert.ok(html.includes('og:type" content="website"'));
     assert.ok(html.includes('og:image" content="https://festie.us/og-image.png"'));
@@ -157,7 +165,6 @@ describe('invite-pages: renderInviteJoinPage', () => {
     });
     assert.ok(!html.includes('<script>alert(1)</script>'));
     assert.ok(!html.includes('<img src=x>'));
-    assert.ok(!html.includes('"><b>'));
     assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
     assert.ok(html.includes('Rock &amp; Roll'));
     assert.ok(html.includes('joinCrew=A%22B'));
@@ -171,7 +178,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
   it('offers Save for later under Join when the festival has dates', () => {
     const html = renderInviteJoinPage(defaultArgs);
     assert.ok(
-      html.includes('<a href="https://festie.us/join/ABC123/save.ics" class="iv-link" download>Save for later</a>'),
+      html.includes('<a href="/join/ABC123/save.ics" class="iv-link" download>Save for later</a>'),
     );
     assert.ok(html.includes('Adds the festival dates and this invite to your calendar.'));
     assert.ok(html.indexOf('>Join Test Crew</a>') < html.indexOf('Save for later'));
@@ -188,7 +195,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
 
   it('encodes and escapes the code in the Save for later link', () => {
     const html = renderInviteJoinPage({ ...defaultArgs, inviteCode: 'A"B<x>' });
-    assert.ok(html.includes('href="https://festie.us/join/A%22B%3Cx%3E/save.ics"'));
+    assert.ok(html.includes('href="/join/A%22B%3Cx%3E/save.ics"'));
     assert.ok(!html.includes('A"B<x>'));
   });
 });
@@ -268,56 +275,56 @@ describe('invite-pages: renderInviteIcs', () => {
 
 describe('invite-pages: renderInviteErrorPage', () => {
   it('returns valid HTML document', () => {
-    const html = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.expired);
+    const html = renderInviteErrorPage(INVITE_ERROR_MESSAGES.expired);
     assert.ok(html.startsWith('<!DOCTYPE html>'));
     assert.ok(html.includes('</html>'));
   });
 
   it('contains the error title', () => {
-    const html = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.invalid);
+    const html = renderInviteErrorPage(INVITE_ERROR_MESSAGES.invalid);
     assert.ok(html.includes("<title>This invite doesn't work</title>"));
   });
 
   it('has the locked message', () => {
     assert.equal(INVITE_ERROR_MESSAGES.locked, "This crew isn't taking new members.");
-    const html = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.locked);
+    const html = renderInviteErrorPage(INVITE_ERROR_MESSAGES.locked);
     assert.ok(html.includes('This crew isn&#39;t taking new members.'));
   });
 
   it('contains the escaped error message', () => {
-    const expired = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.expired);
+    const expired = renderInviteErrorPage(INVITE_ERROR_MESSAGES.expired);
     assert.ok(expired.includes('This invite has expired. Ask someone in the crew for a new link.'));
-    const invalid = renderInviteErrorPage('https://festie.us', INVITE_ERROR_MESSAGES.invalid);
+    const invalid = renderInviteErrorPage(INVITE_ERROR_MESSAGES.invalid);
     assert.ok(invalid.includes('We couldn&#39;t find a crew with this code. Check the link or ask for a new one.'));
   });
 
-  it('contains an Open Festie link with origin', () => {
-    const html = renderInviteErrorPage('https://festie.us', 'error');
-    assert.ok(html.includes('href="https://festie.us/"'));
+  it('links Open Festie relative, so it keeps the origin the visitor is on', () => {
+    const html = renderInviteErrorPage('error');
+    assert.ok(html.includes('href="/"'));
+    assert.ok(!html.includes('https://'));
     assert.ok(html.includes('Open Festie'));
   });
 
-  it('HTML-escapes the message and the origin', () => {
-    const html = renderInviteErrorPage('https://x.test"><b>', '<script>alert("xss")</script>');
+  it('HTML-escapes the message', () => {
+    const html = renderInviteErrorPage('<script>alert("xss")</script>');
     assert.ok(!html.includes('<script>'));
-    assert.ok(!html.includes('"><b>'));
     assert.ok(html.includes('&lt;script&gt;'));
   });
 
   it('escapes ampersands in error message', () => {
-    const html = renderInviteErrorPage('https://festie.us', 'A & B');
+    const html = renderInviteErrorPage('A & B');
     assert.ok(html.includes('A &amp; B'));
   });
 
   it('carries the mark and an aqua Open Festie button', () => {
-    const html = renderInviteErrorPage('https://festie.us', 'error');
+    const html = renderInviteErrorPage('error');
     assert.ok(html.includes('class="ds-lockup"') && html.includes('aria-label="Festie"'));
-    assert.ok(html.includes('<a href="https://festie.us/" class="ds-cta">Open Festie</a>'));
+    assert.ok(html.includes('<a href="/" class="ds-cta">Open Festie</a>'));
     assert.ok(!/d6154f|ff5c85/i.test(html));
   });
 
   it('contains viewport meta tag', () => {
-    const html = renderInviteErrorPage('https://festie.us', 'error');
+    const html = renderInviteErrorPage('error');
     assert.ok(html.includes('width=device-width, initial-scale=1.0'));
   });
 });
