@@ -63,7 +63,9 @@ export default function TBASection({
           TBA — Times Not Yet Announced
         </div>
       )}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,340px))] gap-[var(--space-4)]">
+      {/* Columns flex from 220px up to 560px and the grid centres when capped, so two or three stages fill the card
+            instead of leaving the right half empty. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,560px))] justify-center gap-[var(--space-4)]">
         {groups.map((g) => (
           <div key={g.stage?.id ?? 'unknown-stage'}>
             <div

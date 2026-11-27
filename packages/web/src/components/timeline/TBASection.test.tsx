@@ -39,6 +39,13 @@ describe('TBASection', () => {
     expect(screen.getByText(/Pick sets now/)).toBeTruthy();
   });
 
+  it('lets few stages fill the card: columns grow to a cap and the grid centres', () => {
+    const { container } = renderTba([mk('a', 's1'), mk('b', 's2')], true);
+    const grid = container.querySelector('[data-stage-header]')!.parentElement!.parentElement!;
+    expect(grid.className).toContain('minmax(220px,560px)');
+    expect(grid.className).toContain('justify-center');
+  });
+
   it('labels each pick button with its word and keeps the card inside the page gutter', () => {
     const { container } = render(
       <TBASection
