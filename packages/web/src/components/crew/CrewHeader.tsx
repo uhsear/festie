@@ -1,47 +1,21 @@
-import { crewFestivalName, memberCountLabel } from '@festie/shared/utils';
-import { useFestivalStore } from '@festie/shared/stores';
-import type { Crew, CrewMember } from '@festie/shared/types';
-import Avatar from '../ui/Avatar';
-
-const MAX_FACES = 5;
+import type { ReactNode } from 'react';
+import type { Crew } from '@festie/shared/types';
 
 interface CrewHeaderProps {
   crew: Crew;
-  members: CrewMember[];
-  onOpenMembers: () => void;
+  /** The crew switcher. It is the visible title, so the crew name and festival print once. */
+  selector: ReactNode;
+  /** Owner actions that sit beside the title (rename). */
+  action?: ReactNode;
 }
 
-export default function CrewHeader({ crew, members, onOpenMembers }: CrewHeaderProps) {
-  const festivals = useFestivalStore((s) => s.festivals);
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festival = crewFestivalName(crew, festivals, currentFestival);
-  const count = members.length;
-  const extra = count - MAX_FACES;
-
+export default function CrewHeader({ crew, selector, action }: CrewHeaderProps) {
   return (
-    <header className="flex items-center justify-between gap-3 min-w-0">
-      <div className="min-w-0">
-        <h1 className="text-xl font-display font-bold text-text-primary truncate">{crew.name}</h1>
-        <p className="text-sm text-text-secondary">
-          {festival ? `${festival} · ` : ''}
-          {count} {count === 1 ? 'member' : 'members'}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onOpenMembers}
-        className="flex items-center min-h-11 shrink-0 rounded-full"
-      >
-        <span className="flex -space-x-2" aria-hidden="true">
-          {members.slice(0, MAX_FACES).map((m) => (
-            <span key={m.userId} className="rounded-full ring-2 ring-surface">
-              <Avatar name={m.name || m.username || 'User'} size="sm" />
-            </span>
-          ))}
-        </span>
-        {extra > 0 && <span aria-hidden="true" className="ml-1 text-xs font-semibold text-text-secondary">+{extra}</span>}
-        <span className="sr-only">See all {memberCountLabel(count)}</span>
-      </button>
+    <header className="flex items-center gap-2 min-w-0">
+      {/* The switcher below is the visible title; this keeps the page outline and screen readers on the crew name. */}
+      <h1 className="sr-only">{crew.name}</h1>
+      <div className="flex-1 min-w-0">{selector}</div>
+      {action}
     </header>
   );
 }

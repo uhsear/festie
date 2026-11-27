@@ -122,6 +122,27 @@ describe('Header', () => {
     expect(screen.getByText('Offline')).toBeInTheDocument();
   });
 
+  it('floats the Crew count over the tab padding, so Map and More do not shift when it appears', () => {
+    const { rerender } = render(<Header />);
+    const crewLink = () => screen.getByRole('link', { name: /^Crew/ });
+    const withoutBadge = crewLink().className;
+    mockBadge.value = { count: 2, dot: false, label: '2' };
+    rerender(<Header />);
+    const badge = crewLink().querySelector('span[aria-hidden="true"]') as HTMLElement;
+    expect(badge).toHaveTextContent('2');
+    expect(badge).toHaveClass('absolute');
+    expect(crewLink()).toHaveClass('relative');
+    expect(crewLink().className).toBe(withoutBadge);
+  });
+
+  it('draws the bell count as a 16px circle at the shared badge size', () => {
+    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
+    useInboxStore.setState({ items: unreadItems(3), seenAt: '2026-11-01T00:00:00.000Z' });
+    render(<Header />);
+    const pill = screen.getByText('3');
+    expect(pill).toHaveClass('min-w-4', 'h-4', 'rounded-full', 'text-[length:var(--font-size-10)]');
+  });
+
   it('renders main navigation landmark', () => {
     render(<Header />);
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();

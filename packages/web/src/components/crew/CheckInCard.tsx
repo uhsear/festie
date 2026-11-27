@@ -80,9 +80,16 @@ export default function CheckInCard({ crewId }: Props) {
         <>
           <p className="font-bold text-text-primary">{CHECKIN_COPY.title}</p>
           <p className="text-sm text-text-secondary">{CHECKIN_COPY.idleBody}</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-4 gap-2" data-testid="checkin-presets">
             {CHECKIN_DURATIONS.map((d) => (
-              <Button key={d.minutes} variant="secondary" size="sm" disabled={busy} onClick={() => begin(d.minutes)}>
+              <Button
+                key={d.minutes}
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => begin(d.minutes)}
+                className="w-full !px-2"
+              >
                 {d.label}
               </Button>
             ))}

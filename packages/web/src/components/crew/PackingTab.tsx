@@ -154,7 +154,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
   }
 
   return (
-    <div className="space-y-3 px-4">
+    <div className="space-y-3">
       {!showForm ? (
         <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
           <Plus className="w-4 h-4" aria-hidden="true" /> Add packing item
@@ -204,6 +204,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
         <>
           <EmptyState
             illustration="emptyList"
+            compact
             title="Nothing on the list yet"
             description="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
           />

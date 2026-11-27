@@ -9,6 +9,7 @@ import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
 import { useCrewAttention } from '../../hooks/useCrewAttention';
+import CountBadge from '../ui/CountBadge';
 
 // Per-tab chunk prefetchers. Called from onPointerDown so the tap-up navigation
 // happens with the chunk already loaded — no chunk-load pause that made the
@@ -142,12 +143,9 @@ export default function BottomNav() {
                   {badge.label === '' ? (
                     <span aria-hidden="true" className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-accent-aqua" />
                   ) : (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -top-1 -right-2 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold tabular-nums leading-none text-center"
-                    >
+                    <CountBadge aria-hidden="true" className="absolute -top-1 -right-2">
                       {badge.label}
-                    </span>
+                    </CountBadge>
                   )}
                 </span>
               ) : (

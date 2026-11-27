@@ -183,6 +183,21 @@ describe('CrewPlanView', () => {
     expect(screen.getByRole('link', { name: 'Back to crew' })).toHaveClass('min-h-11', 'min-w-11');
   });
 
+  it('puts Meet up and Home Base in one card, with no rule under the card titles', () => {
+    render(<CrewPlanView />);
+    const meet = screen.getByRole('heading', { name: 'Meet up' });
+    const home = screen.getByRole('heading', { name: 'Home Base' });
+    expect(meet.closest('.divide-y')).toBe(home.closest('.divide-y'));
+    expect(meet.parentElement).toHaveClass('border-b-0');
+  });
+
+  it('uses the page gutter, like the crew page, with no extra inset', () => {
+    const { container } = render(<CrewPlanView />);
+    const page = container.firstElementChild!;
+    expect(page.className).not.toMatch(/px-\d/);
+    expect(page).toHaveClass('max-w-[600px]');
+  });
+
   it('shows a recurring meet-up time in the festival zone, not the device zone', () => {
     festivalState.currentFestival = { id: 'f1', name: 'Forbidden Kingdom', timeZone: 'Asia/Tokyo' };
     festivalState.days = [];
@@ -268,6 +283,8 @@ describe('CrewPlanView', () => {
     render(<CrewPlanView />);
     expect(screen.getByText('How the crew did')).toBeInTheDocument();
     expect(screen.getByText('See your Festival Wrap')).toBeInTheDocument();
+    // The wrap link is an outlined 44px pill like the buttons around it, not underlined text.
+    expect(screen.getByText('See your Festival Wrap')).toHaveClass('rounded-full', 'min-h-11', 'border');
     expect(screen.getByText(/2 of 2 picked it/)).toBeInTheDocument();
     expect(screen.queryByText('Browse the lineup')).not.toBeInTheDocument();
   });

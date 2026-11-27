@@ -419,11 +419,21 @@ describe('CrewView', () => {
     expect(within(footer).queryByText('Compare schedules')).not.toBeInTheDocument();
   });
 
-  it('opens Members from the header faces', () => {
+  it('prints the crew once: the switcher is the title and there is no second avatar stack', () => {
     crewWithActive();
     render(<CrewView />);
-    fireEvent.click(screen.getByRole('button', { name: /See all \d+ members/ }));
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew', search: { tab: 'members' }, replace: true });
+    expect(screen.getAllByTestId('crew-selector')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /See all \d+ members/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('sr-only');
+  });
+
+  it('puts the tab bar directly under the header, before the faces, chips and invite rows', () => {
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    const tabs = screen.getByTestId('crew-tab-bar');
+    const faces = screen.getByTestId('crew-faces');
+    expect(tabs.compareDocumentPosition(faces) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.crew-content')!.firstElementChild).toBe(tabs);
   });
 
   it('puts the tab in the URL when a tab is clicked', () => {
@@ -579,12 +589,20 @@ describe('CrewView', () => {
     expect(screen.getAllByTestId('crew-invite-bar')).toHaveLength(1);
   });
 
-  it('leads a multi-member crew with the faces row, above the invite bar', () => {
+  it('leads the Find tab of a multi-member crew with the faces row, above the invite bar', () => {
     ownerCrew([me, bob]);
     render(<CrewView />);
     const faces = screen.getByTestId('crew-faces');
     const invite = screen.getByTestId('crew-invite-bar');
     expect(faces.compareDocumentPosition(invite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(document.querySelector('.crew-content')!.firstElementChild).toBe(faces);
+    expect(screen.getByRole('tabpanel').querySelector(':scope > div')!.firstElementChild).toBe(faces);
+  });
+
+  it('keeps the faces row and invite card off the other tabs', () => {
+    h.search = { tab: 'money' };
+    ownerCrew([me]);
+    render(<CrewView />);
+    expect(screen.queryByTestId('crew-faces')).not.toBeInTheDocument();
+    expect(screen.queryByText('Invite your crew')).not.toBeInTheDocument();
   });
 });

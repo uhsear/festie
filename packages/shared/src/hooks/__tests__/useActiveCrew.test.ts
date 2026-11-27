@@ -57,6 +57,13 @@ describe('useActiveCrew', () => {
     expect(result.current.status).toBe('loading');
   });
 
+  it('selects the crew of the festival on screen over crews[0]', async () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f2'), crew('c2', 'f1')] });
+    renderHook(() => useActiveCrew());
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c2'));
+    expect(selectCrew).not.toHaveBeenCalledWith('c1');
+  });
+
   it('revalidates a persisted active crew once after a cold load', async () => {
     useCrewStore.setState({ crews: [crew('c1')], activeCrew: crew('c1') });
     const { rerender } = renderHook(() => useActiveCrew());

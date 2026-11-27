@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { ChevronRight } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
 import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants/inboxCopy';
@@ -53,7 +54,7 @@ export default function InboxView() {
   const open = (item: InboxItem) => openInboxItem(item, navigate as unknown as Parameters<typeof openInboxItem>[1]);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4">
+    <div className="max-w-[600px] mx-auto py-4">
       <h1 className="text-xl font-display font-bold text-text-primary mb-2">{INBOX_COPY.title}</h1>
 
       {!loaded && loading && (
@@ -98,11 +99,19 @@ export default function InboxView() {
                     className={`mt-2 h-2 w-2 shrink-0 rounded-full ${unread ? 'bg-accent-aqua' : 'bg-transparent'}`}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold text-text-primary">{item.title}</span>
-                    <span className="block text-text-secondary [overflow-wrap:anywhere]">{item.body}</span>
-                    <span className="block text-xs text-text-muted">{ago}</span>
-                    {item.festivalName && <span className="block text-xs text-text-muted">{item.festivalName}</span>}
+                    <span className="block text-base font-semibold text-text-primary">{item.title}</span>
+                    <span className="block text-sm text-text-secondary [overflow-wrap:anywhere]">{item.body}</span>
+                    <span className="block text-xs text-text-muted">
+                      <span>{ago}</span>
+                      {item.festivalName && (
+                        <>
+                          <span aria-hidden="true"> · </span>
+                          <span>{item.festivalName}</span>
+                        </>
+                      )}
+                    </span>
                   </span>
+                  <ChevronRight aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-text-muted" />
                 </button>
                 <InboxArtist setId={item.data.setId} />
               </li>

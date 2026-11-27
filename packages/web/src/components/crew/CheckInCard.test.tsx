@@ -33,6 +33,14 @@ describe('CheckInCard', () => {
     }
   });
 
+  it('lays the four presets in one row of equal columns, never 3 and 1', () => {
+    render(<CheckInCard crewId="c1" />);
+    const row = screen.getByTestId('checkin-presets');
+    expect(row).toHaveClass('grid', 'grid-cols-4');
+    expect(row.children).toHaveLength(4);
+    for (const button of Array.from(row.children)) expect(button).toHaveClass('w-full');
+  });
+
   it('starts a 30 minute timer without GPS and toasts', async () => {
     render(<CheckInCard crewId="c1" />);
     fireEvent.click(screen.getByRole('button', { name: '30 min' }));

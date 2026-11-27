@@ -98,14 +98,21 @@ vi.mock('@festie/shared', async () => {
 // MeetingPointsTab reads the festival timezone + days from the festival store to
 // render recurring-point badges in the festival frame. The list tests don't care
 // about the value, so a null festival / empty days is enough.
+const { festivalState } = vi.hoisted(() => ({
+  festivalState: { currentFestival: null as { id: string } | null, days: [] as unknown[], stages: [] as unknown[] },
+}));
 vi.mock('@festie/shared/stores', () => ({
-  useFestivalStore: (selector: (s: { currentFestival: unknown; days: unknown[] }) => unknown) =>
-    selector({ currentFestival: null, days: [] }),
+  useFestivalStore: (selector: (s: typeof festivalState) => unknown) => selector(festivalState),
 }));
 
-const { setComing } = vi.hoisted(() => ({ setComing: vi.fn(() => Promise.resolve('sent')) }));
+const { setComing, activeCrewState } = vi.hoisted(() => ({
+  setComing: vi.fn(() => Promise.resolve('sent')),
+  activeCrewState: { activeCrew: null as { festivalId?: string } | null },
+}));
 vi.mock('@festie/shared/stores/crewStore', () => ({
-  useCrewStore: { getState: () => ({ setMeetingPointComing: setComing }) },
+  useCrewStore: Object.assign((selector: (s: typeof activeCrewState) => unknown) => selector(activeCrewState), {
+    getState: () => ({ setMeetingPointComing: setComing }),
+  }),
 }));
 
 // P4 adds imports to CrewStatus; it is not under test here.
@@ -114,13 +121,16 @@ vi.mock('./CrewStatus', () => ({ default: () => null }));
 // CrewMap is lazy (maplibre); stand in a button that fires a map click.
 vi.mock('./CrewMap', () => ({
   default: ({
+    festival,
     onMapClick,
     onSetMeetingPoint,
   }: {
+    festival?: { id: string } | null;
     onMapClick?: (c: { latitude: number; longitude: number }) => void;
     onSetMeetingPoint?: (p: { id: string; kind: 'stage'; name: string; kindLabel: string; coord: { latitude: number; longitude: number } }) => void;
   }) => (
     <>
+      <span data-testid="map-festival">{festival?.id ?? 'none'}</span>
       <button type="button" onClick={() => onMapClick?.({ latitude: 1, longitude: 2 })}>
         fake map click
       </button>
@@ -201,6 +211,8 @@ function setQuery(overrides: Partial<typeof queryState> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   festivalZone.value = undefined;
+  festivalState.currentFestival = null;
+  activeCrewState.activeCrew = null;
   pastData = [];
   setQuery();
   // jsdom has no scrollIntoView; the form scrolls into view on a map click.
@@ -213,7 +225,9 @@ describe('MeetingPointsTab', () => {
     const { container } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     // No "Add meeting point" button while loading.
     expect(screen.queryByRole('button', { name: /add meeting point/i })).not.toBeInTheDocument();
-    expect(container.querySelector('.px-4')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    // The tab sits on the page gutter: no extra inset of its own.
+    expect(container.querySelector('.px-4')).not.toBeInTheDocument();
   });
 
   it('renders the error state with a Retry action', async () => {
@@ -393,6 +407,31 @@ describe('MeetingPointsTab', () => {
     await user.click(screen.getByRole('switch', { name: /Repeats daily/ }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+  });
+
+  it('labels the list and draws its empty state in the compact icon style, like Activity below', () => {
+    const { container } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByRole('heading', { name: 'Meeting points' })).toHaveClass('uppercase');
+    expect(screen.getByText('No meeting points yet')).toBeInTheDocument();
+    expect(container.querySelector('.empty-state-illustration')).not.toBeInTheDocument();
+  });
+
+  it('maps the festival on screen for a crew of that festival', async () => {
+    festivalState.currentFestival = { id: 'f1' };
+    activeCrewState.activeCrew = { festivalId: 'f1' };
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('tab', { name: /Map/ }));
+    expect(await screen.findByTestId('map-festival')).toHaveTextContent('f1');
+  });
+
+  it('plots no stages of another festival for a crew that belongs elsewhere', async () => {
+    festivalState.currentFestival = { id: 'f-moonlit' };
+    activeCrewState.activeCrew = { festivalId: 'f-edc' };
+    const user = userEvent.setup();
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('tab', { name: /Map/ }));
+    expect(await screen.findByTestId('map-festival')).toHaveTextContent('none');
   });
 
   it('adds a meeting point from a map click', async () => {

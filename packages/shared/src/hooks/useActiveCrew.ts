@@ -6,14 +6,16 @@ import type { Crew } from '../types';
 import { crewForFestival, crewFestivalName, crewScreenStatus, type CrewScreenStatus } from '../utils/crewPlan';
 
 /**
- * The crew a crew screen shows. Loads the crews once, selects the first when
- * none is open, and reports what to render (skeleton, error card, "No crew yet").
+ * The crew a crew screen shows. Loads the crews once, selects one when none is open
+ * (the crew of the festival on screen, else the first), and reports what to render
+ * (skeleton, error card, "No crew yet").
  */
 export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; crews: Crew[]; retry: () => void } {
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
   const crew = useCrewStore((s) => s.activeCrew);
   const crewLoading = useCrewStore((s) => s.crewLoading);
+  const festivalId = useFestivalStore((s) => s.currentFestival?.id);
   // Only this hook's own load and select failures count. crewStore.error is also
   // written by createCrew and joinByCode, which must not turn "No crew yet" into an error card.
   const [failed, setFailed] = useState(false);
@@ -37,6 +39,8 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
 
   // Skip an offline-join placeholder: it has no server crew to select until the join replays.
   const firstCrewId = crews.find((c) => !c._optimistic)?.id;
+  // With crews at two festivals, open the one that belongs to the festival on screen.
+  const autoCrewId = (festivalId && crews.find((c) => !c._optimistic && c.festivalId === festivalId)?.id) || firstCrewId;
   // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
   const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {
@@ -45,10 +49,10 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
       return;
     }
     // A pending select of another crew clears activeCrew; do not override it with the first crew.
-    if (!user || !firstCrewId || crewLoading || autoSelectedId.current === firstCrewId) return;
-    autoSelectedId.current = firstCrewId;
-    track(useCrewStore.getState().selectCrew(firstCrewId));
-  }, [user, crew, firstCrewId, crewLoading, track]);
+    if (!user || !autoCrewId || crewLoading || autoSelectedId.current === autoCrewId) return;
+    autoSelectedId.current = autoCrewId;
+    track(useCrewStore.getState().selectCrew(autoCrewId));
+  }, [user, crew, autoCrewId, crewLoading, track]);
 
   // A persisted activeCrew is a cold-start read cache; refetch it once per crew so members
   // who joined while this device was closed appear. selectCrew keeps same-crew data on screen.
