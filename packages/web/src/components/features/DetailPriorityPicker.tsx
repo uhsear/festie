@@ -40,7 +40,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
   const pending = sync?.state === 'saving' || sync?.state === 'queued';
   const pendingSuffix = sync?.state === 'queued' ? ' (saved on this device, will sync)' : ' (saving)';
   return (
-    <div className="mb-6">
+    <div data-testid="pick-controls">
     <div className="flex gap-4">
       {priorityOptions.map(({ value: p, Icon, label, short }) => {
         const active = myPick === p;
