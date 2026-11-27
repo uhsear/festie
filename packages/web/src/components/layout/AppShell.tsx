@@ -1,4 +1,4 @@
-import { useEffect, Suspense, lazy } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { Outlet, useLocation } from '@tanstack/react-router';
 import { Loader } from 'lucide-react';
 import { useAuthStore, useFestivalModeStore } from '@festie/shared';
@@ -38,10 +38,11 @@ import { useThemeSync } from '../../lib/theme';
 
 const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password', '/verify-email'];
 
-// The set sheet only mounts once a set is picked, so it stays out of the entry chunk and
-// loads on idle (below) before the first tap.
-const loadDetailPanel = () => import('../features/DetailPanel');
-const DetailPanel = lazy(loadDetailPanel);
+// The set sheet only mounts once a set is picked, so it stays out of the entry chunk. React.lazy is avoided on
+// purpose: it suspends on first render even with the chunk cached, and React then holds the sheet back ~300 ms.
+type DetailPanelComponent = typeof import('../features/DetailPanel').default;
+let loadedDetailPanel: DetailPanelComponent | null = null;
+const loadDetailPanel = () => import('../features/DetailPanel').then((m) => (loadedDetailPanel = m.default));
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
@@ -131,14 +132,25 @@ export default function AppShell() {
   // Prefetch main-tab chunks on idle so switching between tabs is instant.
   useEffect(() => {
     prefetchMainRoutes();
-    const warmDetailPanel = () => void loadDetailPanel().catch(() => {});
+  }, []);
+
+  // Fetch the set sheet on idle so the first tap does not wait on the network, or at once if a set is tapped first.
+  const [DetailPanel, setDetailPanel] = useState<DetailPanelComponent | null>(() => loadedDetailPanel);
+  const wantsDetailPanel = detailSet !== null;
+  useEffect(() => {
+    if (DetailPanel) return;
+    const load = () => void loadDetailPanel().then((c) => setDetailPanel(() => c), (err) => console.error('Set sheet failed to load:', err));
+    if (wantsDetailPanel) {
+      load();
+      return;
+    }
     if ('requestIdleCallback' in window) {
-      const id = window.requestIdleCallback(warmDetailPanel, { timeout: 3000 });
+      const id = window.requestIdleCallback(load, { timeout: 3000 });
       return () => window.cancelIdleCallback(id);
     }
-    const id = setTimeout(warmDetailPanel, 1000);
+    const id = setTimeout(load, 1000);
     return () => clearTimeout(id);
-  }, []);
+  }, [DetailPanel, wantsDetailPanel]);
 
   // Auth routes don't use app shell layout
   if (isAuthRoute) {
@@ -234,18 +246,16 @@ export default function AppShell() {
         <SosDock />
         <ArtistSheetHost />
 
-        {detailSet && (
-          <Suspense fallback={null}>
-            <DetailPanel
-              key={detailSet.id}
-              set={detailSet}
-              autoOpenSpotify={detailAutoSpotify}
-              onClose={() => {
-                setDetailSet(null);
-                setDetailAutoSpotify(false);
-              }}
-            />
-          </Suspense>
+        {detailSet && DetailPanel && (
+          <DetailPanel
+            key={detailSet.id}
+            set={detailSet}
+            autoOpenSpotify={detailAutoSpotify}
+            onClose={() => {
+              setDetailSet(null);
+              setDetailAutoSpotify(false);
+            }}
+          />
         )}
       </div>
       </OfflineQueueContext.Provider>

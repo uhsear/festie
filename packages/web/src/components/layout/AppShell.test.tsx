@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { useFestivalModeStore } from '@festie/shared';
 
 // Mock all external dependencies to keep this a unit test on AppShell's
@@ -123,6 +123,14 @@ describe('AppShell', () => {
     mockDetailSet = { id: 's1' };
     render(<AppShell />);
     expect(await screen.findByTestId('detail-panel')).toBeInTheDocument();
+  });
+
+  // React.lazy would hold a cached chunk back ~300 ms (Suspense fallback throttle) on the first tap.
+  it('shows the set sheet without the Suspense throttle once its chunk is cached', async () => {
+    await import('../features/DetailPanel');
+    mockDetailSet = { id: 's1' };
+    render(<AppShell />);
+    await waitFor(() => expect(screen.getByTestId('detail-panel')).toBeInTheDocument(), { timeout: 200, interval: 10 });
   });
 
   it('syncs the theme on sign-in pages, which render no Header', () => {
