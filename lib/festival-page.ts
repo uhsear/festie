@@ -311,7 +311,7 @@ ${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}   
 }
 
 /** The one 404 page for drafts, archived festivals and unknown slugs, so a 404 reveals nothing. */
-export function renderFestivalNotFoundPage(origin: string) {
+export function renderFestivalNotFoundPage(_origin: string) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

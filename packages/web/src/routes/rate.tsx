@@ -145,14 +145,13 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     return (
       <div className="max-w-[480px] mx-auto w-full py-4">
         <h1 className="text-lg font-bold text-text-primary">{RATE_TITLE}</h1>
+        {/* Say which festival this is about, so an empty page is not mistaken for a missing one. */}
         <p className="text-sm text-text-secondary mt-1">{data.festival.name}</p>
         <EmptyState
           icon={<Music className="w-9 h-9" aria-hidden="true" />}
           title={`No ended picks at ${data.festival.name} yet`}
           description="Sets you picked show up here after they end."
         />
-        {/* Say which festival this is about, so an empty page is not mistaken for a missing one. */}
-        <p className="text-center text-sm text-text-secondary">{data.festival.name}</p>
         <div className="mt-4 flex justify-center">
           <Link to="/caught" search={{ festival: festivalId }} className={outlineLinkClass}>
             See the full list

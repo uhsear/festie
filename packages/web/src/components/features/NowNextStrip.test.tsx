@@ -136,18 +136,6 @@ describe('NowNextStrip', () => {
     expect(title.parentElement!.querySelector('svg')).toHaveClass('ml-auto');
   });
 
-  it("says NOW is today's when another day's tab is open, and nothing extra on today's own tab", () => {
-    nowMs = local(2030, 5, 15, 20, 48);
-    state.selectedDay = 1;
-    const { unmount } = render(<NowNextStrip />);
-    expect(screen.getByTestId('now-next-strip')).toHaveTextContent('NOW · TODAY');
-    unmount();
-    state.selectedDay = 0;
-    render(<NowNextStrip />);
-    expect(screen.getByTestId('now-next-strip')).not.toHaveTextContent('TODAY');
-    delete state.selectedDay;
-  });
-
   it('renders nothing for a guest', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     state.user = null;

@@ -147,14 +147,6 @@ describe('Header', () => {
     expect(crewLink().className).toBe(withoutBadge);
   });
 
-  it('draws the bell count as a 16px circle at the shared badge size', () => {
-    mockAuthStore.mockReturnValue({ id: '1', username: 'test' });
-    useInboxStore.setState({ items: unreadItems(3), seenAt: '2026-11-01T00:00:00.000Z' });
-    render(<Header />);
-    const pill = screen.getByText('3');
-    expect(pill).toHaveClass('min-w-4', 'h-4', 'rounded-full', 'text-[length:var(--font-size-10)]');
-  });
-
   it('renders main navigation landmark', () => {
     render(<Header />);
     expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument();

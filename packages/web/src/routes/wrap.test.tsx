@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { renderWithQueryClient } from '../test-utils';
 import { COPY } from '@festie/shared/constants';
 
@@ -36,6 +36,7 @@ vi.mock('@festie/shared/stores', () => {
   return { useAuthStore: hook, useFestivalStore: hook, useCrewStore: hook, useUIStore: hook };
 });
 vi.mock('@festie/shared/utils', async (orig) => ({
+  ...(await orig<typeof import('@festie/shared/utils')>()),
   artistOf: (await orig<typeof import('@festie/shared/utils')>()).artistOf,
   sortRatingsForWrap: (await orig<typeof import('@festie/shared/utils')>()).sortRatingsForWrap,
   formatAmount: (cents: number) => `$${cents / 100}`,
@@ -178,7 +179,7 @@ describe('WrapPage', () => {
 
   describe('crew wrap with no data', () => {
     const emptyWrap = {
-      memberCount: 1,
+      memberCount: 3,
       setsSeenTogether: [],
       topOverlap: null,
       biggestSpender: null,
@@ -206,9 +207,9 @@ describe('WrapPage', () => {
       });
       renderPage();
       fireEvent.click((await screen.findAllByRole('tab'))[1]!);
-      expect(await screen.findByText('Ana')).toBeTruthy();
+      const spender = await screen.findByText('Ana');
       expect(screen.queryByTestId('crew-wrap-empty')).toBeNull();
-      expect(screen.queryByText('Most-overlapping taste')).toBeNull();
+      expect(within(spender.closest('section')!).queryByText('Most-overlapping taste')).toBeNull();
     });
   });
 });

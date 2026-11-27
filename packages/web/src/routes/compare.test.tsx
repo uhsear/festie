@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   refresh: vi.fn(),
   days: [
-    { id: 'd0', date: '2999-11-06', label: 'Friday' },
-    { id: 'd1', date: '2999-11-07', label: 'Saturday' },
+    { id: 'd0', date: '2999-11-08', label: 'Friday' },
+    { id: 'd1', date: '2999-11-09', label: 'Saturday' },
   ] as unknown[],
 }));
 
@@ -65,8 +65,8 @@ beforeEach(() => {
   mocks.festival = { id: 'f1' };
   mocks.festivals = [];
   mocks.days = [
-    { id: 'd0', date: '2999-11-06', label: 'Friday' },
-    { id: 'd1', date: '2999-11-07', label: 'Saturday' },
+    { id: 'd0', date: '2999-11-08', label: 'Friday' },
+    { id: 'd1', date: '2999-11-09', label: 'Saturday' },
   ];
   mocks.compare.mockReturnValue({
     columns: [

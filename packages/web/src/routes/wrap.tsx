@@ -418,7 +418,8 @@ function CrewWrapTab({
   }
 
   const hasData =
-    wrap.memberCount > 0 && (wrap.topOverlap !== null || wrap.setsSeenTogether.length > 0 || wrap.totalSplit > 0);
+    wrap.memberCount > 0 &&
+    (wrap.topOverlap !== null || wrap.biggestSpender !== null || wrap.setsSeenTogether.length > 0 || wrap.totalSplit > 0);
 
   return (
     <div className="max-w-lg mx-auto flex flex-col gap-4 pt-4 pb-6">
@@ -468,22 +469,32 @@ function CrewWrapTab({
           </section>
         </>
       ) : (
-        // One empty card with one action, instead of a hero of zeros and two cards that are not results.
-        <Card padding="lg">
-          <EmptyState
-            icon={<Users className="w-12 h-12" aria-hidden="true" />}
-            title={wrap.memberCount < 2 ? 'Invite a crewmate to see your Crew Wrap' : 'Nothing to show yet'}
-            description={
-              wrap.memberCount < 2
-                ? 'The Crew Wrap compares your crew: sets you saw together, shared taste and who fronted the money.'
-                : 'Rate sets and add expenses together, and the Crew Wrap fills in.'
-            }
-            cta={
-              wrap.memberCount < 2
-                ? { label: 'Invite a crewmate', onClick: () => void navigate({ to: '/crew' }) }
-                : { label: 'Rate your sets', onClick: () => void navigate({ to: '/rate' }) }
-            }
-          />
+        // One empty card, instead of a hero of zeros and two cards that are not results. A crew of one is told to invite.
+        <Card padding="lg" data-testid="crew-wrap-empty">
+          {wrap.memberCount < 2 ? (
+            <EmptyState
+              icon={<Users className="w-12 h-12" aria-hidden="true" />}
+              title="Invite a crewmate to see your Crew Wrap"
+              description="The Crew Wrap compares your crew: sets you saw together, shared taste and who fronted the money."
+              cta={{ label: 'Invite a crewmate', onClick: () => void navigate({ to: '/crew' }) }}
+            />
+          ) : (
+            <>
+              <EmptyState
+                icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
+                title="Your crew wrap is still empty"
+                description="It fills with the sets you rated together and the money your crew split."
+              />
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link to="/rate" search={{ festival: festivalId }} className={CTA_LINK}>
+                  Rate your sets
+                </Link>
+                <Link to="/crew" search={{ tab: 'money' }} className={CTA_LINK}>
+                  Add an expense
+                </Link>
+              </div>
+            </>
+          )}
         </Card>
       )}
 

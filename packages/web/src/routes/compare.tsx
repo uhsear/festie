@@ -143,16 +143,18 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
-          title={past ? `Nothing was compared at ${festivalName}` : 'No crew picks yet'}
+          title={past ? `Nothing was compared at ${festivalName}` : 'Invite a crewmate to compare'}
           description={
             past
               ? 'Your crew saved no picks to compare before it ended.'
-              : 'Once your crewmates save picks for this festival, their schedules show up here side by side.'
+              : "Compare lines up your crew's picks side by side. Once a crewmate joins and saves picks, their schedule shows up here."
           }
           cta={
             liveElsewhere
               ? { label: `Open ${liveElsewhere.name}`, onClick: () => void selectFestival(liveElsewhere.id).catch(() => {}) }
-              : undefined
+              : past
+                ? undefined
+                : { label: 'Invite a crewmate', onClick: () => navigate({ to: '/crew' }).catch(() => {}) }
           }
         />
       </div>
