@@ -71,11 +71,6 @@ function groupRuns(
   return groups;
 }
 
-/**
- * Cards sections. Time: by start hour in festival-day order, so after-midnight
- * sets stay at the end of their festival day (T1); TBA sets last. Stage: festival
- * stage order. A-Z: first letter of the first artist, "#" last.
- */
 /** '4-5 PM' (en dash): a bucket of start hours, so it never reads as the time of a 4:30 set. */
 export function hourBucketLabel(hour: number): string {
   const end = (hour + 1) % 24;
@@ -86,6 +81,11 @@ export function hourBucketLabel(hour: number): string {
     : `${h12(hour)} ${ap(hour)}–${h12(end)} ${ap(end)}`;
 }
 
+/**
+ * Cards sections. Time: by start hour in festival-day order, so after-midnight
+ * sets stay at the end of their festival day (T1); TBA sets last. Stage: festival
+ * stage order. A-Z: first letter of the first artist, "#" last.
+ */
 export function groupScheduleSets(
   sets: readonly FestivalSet[],
   groupBy: ScheduleGroupBy,
