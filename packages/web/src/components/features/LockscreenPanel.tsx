@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { selectMyPicks, useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useCrewOverlapStatus } from '@festie/shared/hooks';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
@@ -13,6 +13,7 @@ import type { LockscreenCanvas, LockscreenMode, LockscreenStyle, LockscreenTheme
 import type { FestivalSet } from '@festie/shared/types';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
+import Switch from '../ui/Switch';
 import LockscreenPoster from './LockscreenPoster';
 import { captureAndShareImages } from '../../lib/shareImage';
 import { useToast } from '../../lib/toastContext';
@@ -79,10 +80,14 @@ function spanLabel(pageSets: FestivalSet[]): string {
   return `${short(pageSets[0]!.startTime)} – ${short(last.endTime || last.startTime)}`;
 }
 
+// Selected is a solid accent fill with dark ink: a pale tint on the card ground was barely visible.
 export const optionClass = (active: boolean) =>
   `rounded-full border px-3 min-h-11 text-xs font-semibold cursor-pointer transition-colors ${
-    active ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover' : 'border-border text-text-secondary'
+    active ? 'border-accent-aqua bg-accent-aqua text-[var(--text-on-light-accent)]' : 'border-border text-text-secondary'
   }`;
+
+/** A group heading: 12px caps, so it reads as a label and not as body text. */
+export const GROUP_LABEL = 'block text-xs font-semibold uppercase tracking-wide text-text-secondary';
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'festival';
 
@@ -96,7 +101,7 @@ export function deviceSize(): { width: number; height: number } {
 }
 
 /** Lock-screen options: what to show, theme, phone size, a page preview, and saving every page. */
-export default function LockscreenPanel({ initialMode }: { initialMode: LockscreenMode }) {
+export default function LockscreenPanel({ initialMode, lead }: { initialMode: LockscreenMode; lead?: ReactNode }) {
   const festival = useFestivalStore((s) => s.currentFestival);
   const sets = useFestivalStore((s) => s.sets);
   const stages = useFestivalStore((s) => s.stages);
@@ -291,8 +296,12 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const deviceEstimated = !LOCKSCREEN_PRESETS.some((p) => p.width === device.width && p.height === device.height);
   const noPicksAtAll = isPickMode && !Object.keys(picks ?? {}).length;
   return (
-    <div className="space-y-4">
-      <span id="lockscreen-show" className="block text-sm text-text-secondary">
+    // Phones show the preview and Save first and the options below. From md up the options sit left and the
+    // preview with Save stays in view on the right, so changing an option never happens blind.
+    <div className="flex flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_240px] md:gap-6">
+      <div className="order-2 space-y-4 md:order-1">
+      {lead}
+      <span id="lockscreen-show" className={GROUP_LABEL}>
         Show
       </span>
       <div role="group" aria-labelledby="lockscreen-show" className="flex flex-wrap gap-2">
@@ -313,7 +322,10 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
       </div>
 
       {isPickMode && (
-        <div role="group" aria-label="Priority" className="flex flex-wrap gap-2">
+        <div role="group" aria-labelledby="lockscreen-include" className="flex flex-wrap items-center gap-2">
+          <span id="lockscreen-include" className={GROUP_LABEL}>
+            Include
+          </span>
           {PRIORITIES.map((p) => (
             <button
               key={p}
@@ -378,13 +390,13 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
       </label>
 
       {isPickMode && (
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input type="checkbox" checked={fromNow} onChange={(e) => setFromNow(e.target.checked)} />
-          Only sets still to come
-        </label>
+        <div className="flex items-center justify-between gap-3 text-sm text-text-secondary">
+          <span id="lockscreen-from-now">Only sets still to come</span>
+          <Switch checked={fromNow} onChange={setFromNow} labelledBy="lockscreen-from-now" />
+        </div>
       )}
 
-      <span id="lockscreen-canvas" className="block text-sm text-text-secondary">
+      <span id="lockscreen-canvas" className={GROUP_LABEL}>
         Made for
       </span>
       <div role="group" aria-labelledby="lockscreen-canvas" className="flex flex-wrap gap-2">
@@ -397,7 +409,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
 
       {canvas === 'lockscreen' && (
         <>
-        <span id="lockscreen-clock" className="block text-sm text-text-secondary">
+        <span id="lockscreen-clock" className={GROUP_LABEL}>
           Your lock screen
         </span>
         <div role="group" aria-labelledby="lockscreen-clock" className="flex flex-wrap gap-2">
@@ -411,7 +423,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         </>
       )}
 
-      <span id="lockscreen-look" className="block text-sm text-text-secondary">
+      <span id="lockscreen-look" className={GROUP_LABEL}>
         Look
       </span>
       <div role="group" aria-label="Style" className="flex flex-wrap gap-2">
@@ -431,10 +443,10 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         </div>
       )}
       {(mode === 'full' || mode === 'stages') && (
-        <label className="flex items-center gap-2 text-sm text-text-secondary">
-          <input type="checkbox" checked={!onePage} onChange={(e) => setOnePage(!e.target.checked)} />
-          Split long days into 2 images
-        </label>
+        <div className="flex items-center justify-between gap-3 text-sm text-text-secondary">
+          <span id="lockscreen-split">Split long days into 2 images</span>
+          <Switch checked={!onePage} onChange={(on) => setOnePage(!on)} labelledBy="lockscreen-split" />
+        </div>
       )}
 
       <label className="flex items-center gap-2 text-sm text-text-secondary">
@@ -451,6 +463,16 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         </select>
       </label>
 
+      {isIos && <p className="text-xs text-text-muted">{HINT_IOS}</p>}
+      {isAndroid && <p className="text-xs text-text-muted">{HINT_ANDROID}</p>}
+      {!isIos && !isAndroid && (
+        <>
+          <p className="text-xs text-text-muted">{`iPhone: ${HINT_IOS}`}</p>
+          <p className="text-xs text-text-muted">{`Android: ${HINT_ANDROID}`}</p>
+        </>
+      )}
+      </div>
+      <div className="order-1 space-y-4 md:order-2 md:sticky md:top-0 md:self-start">
       {model && pages.length > 0 ? (
         <>
           <div
@@ -513,14 +535,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
           )}
         </div>
       )}
-      {isIos && <p className="text-xs text-text-muted">{HINT_IOS}</p>}
-      {isAndroid && <p className="text-xs text-text-muted">{HINT_ANDROID}</p>}
-      {!isIos && !isAndroid && (
-        <>
-          <p className="text-xs text-text-muted">{`iPhone: ${HINT_IOS}`}</p>
-          <p className="text-xs text-text-muted">{`Android: ${HINT_ANDROID}`}</p>
-        </>
-      )}
+      </div>
     </div>
   );
 }
