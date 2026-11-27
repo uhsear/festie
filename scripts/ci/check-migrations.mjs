@@ -18,6 +18,7 @@ const KNOWN_CHURN = new Set([
   'idx_crew_activity_user_id', // dropped 035, restored 039
   'idx_notification_counts_user_id', // dropped 029, restored 040
   'idx_set_ratings_user', // dropped 029, restored 044
+  'idx_audit_log_target_id', // dropped 016, restored 120 (audit.listForUser had no index to serve target_id = $1)
 ]);
 
 const CREATE = /\bcreate\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?(?:public\.)?(\w+)/gi;
