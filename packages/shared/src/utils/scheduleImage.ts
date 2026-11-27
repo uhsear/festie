@@ -50,6 +50,24 @@ export const SCHEDULE_POSTER_METRICS = {
   },
 } as const;
 
+/** A few rows grow to fill the poster, never past this multiple of the format's row height. */
+const MAX_ROW_GROWTH = 2;
+
+/**
+ * The row height for a poster with `rowCount` rows. The layout's rowHeight is sized for the format's
+ * maximum, so six picks used to fill a third of the page. Fewer rows grow, up to MAX_ROW_GROWTH times,
+ * and the text scales with the row (poster rows scale by rowHeight / 108). Lock screen keeps its height:
+ * its reserves frame the phone's clock and widgets.
+ */
+export function fitScheduleRowHeight(format: ScheduleImageFormat, rowCount: number): number {
+  const { height, topReserve, bottomReserve, rowHeight } = SCHEDULE_IMAGE_LAYOUT[format];
+  if (format === 'lockscreen' || rowCount <= 0) return rowHeight;
+  const m = SCHEDULE_POSTER_METRICS;
+  const chrome = m.titleLine + m.dayGapTop + m.dayLine + m.dayGapBottom + m.footerGapTop + m.footerLine;
+  const room = height - (topReserve || m.padY) - (bottomReserve || m.padY) - chrome;
+  return Math.max(rowHeight, Math.min(Math.floor(room / rowCount), rowHeight * MAX_ROW_GROWTH));
+}
+
 export interface ScheduleImageRow {
   setId: string;
   time: string;

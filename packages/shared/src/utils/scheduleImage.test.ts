@@ -6,6 +6,7 @@ import {
   scheduleImageFilename,
   SCHEDULE_IMAGE_LAYOUT,
   SCHEDULE_POSTER_METRICS,
+  fitScheduleRowHeight,
 } from './scheduleImage';
 import type { ScheduleImageFormat } from './scheduleImage';
 
@@ -147,6 +148,34 @@ describe('print format', () => {
     const m = buildScheduleImageModel({ festival, sets, stages: [stage('a')], days, picks, dayIndex: 0, format: 'print' });
     expect(m.rows).toHaveLength(24);
     expect(m.hiddenCount).toBe(6);
+  });
+});
+
+describe('fitScheduleRowHeight', () => {
+  const M = SCHEDULE_POSTER_METRICS;
+  const chrome = M.titleLine + M.dayGapTop + M.dayLine + M.dayGapBottom + M.footerGapTop + M.footerLine;
+
+  it('grows rows when few picks leave the page empty, up to twice the base height', () => {
+    expect(fitScheduleRowHeight('story', 6)).toBeGreaterThan(SCHEDULE_IMAGE_LAYOUT.story.rowHeight);
+    expect(fitScheduleRowHeight('story', 1)).toBe(SCHEDULE_IMAGE_LAYOUT.story.rowHeight * 2);
+  });
+
+  it('never shrinks below the base height, at the maximum row count or with no rows', () => {
+    for (const format of ['story', 'print'] as const) {
+      const L = SCHEDULE_IMAGE_LAYOUT[format];
+      expect(fitScheduleRowHeight(format, L.maxRows)).toBeGreaterThanOrEqual(L.rowHeight);
+      expect(fitScheduleRowHeight(format, 0)).toBe(L.rowHeight);
+    }
+  });
+
+  it('never overflows the page, and leaves the lock screen alone', () => {
+    for (const format of ['story', 'print'] as const) {
+      const L = SCHEDULE_IMAGE_LAYOUT[format];
+      for (let n = 1; n <= L.maxRows; n++) {
+        expect(n * fitScheduleRowHeight(format, n) + chrome).toBeLessThanOrEqual(L.height - 2 * M.padY);
+      }
+    }
+    expect(fitScheduleRowHeight('lockscreen', 2)).toBe(SCHEDULE_IMAGE_LAYOUT.lockscreen.rowHeight);
   });
 });
 
