@@ -73,9 +73,13 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   // festival so CrewMap can plot stage pins (+ amenities/camera from mapConfig).
   const festivalStages = useFestivalStore((s) => s.stages);
   const festivalTimeZone = resolveFestivalTimeZone(currentFestival);
+  // The stages in the store belong to the festival on screen. A crew of another festival gets no
+  // stage pins (and no "this festival isn't mapped" claim about the wrong festival).
+  const crewFestivalId = useCrewStore((s) => s.activeCrew?.festivalId);
+  const festivalFitsCrew = !crewFestivalId || crewFestivalId === currentFestival?.id;
   const mapFestival = useMemo(
-    () => (currentFestival ? { ...currentFestival, stages: festivalStages } : null),
-    [currentFestival, festivalStages],
+    () => (currentFestival && festivalFitsCrew ? { ...currentFestival, stages: festivalStages } : null),
+    [currentFestival, festivalFitsCrew, festivalStages],
   );
   const [showForm, setShowForm] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -408,7 +412,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       />
       <Link
         to="/map"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 min-w-11 text-accent-aqua hover:text-text-primary"
       >
         <Maximize2 className="w-4 h-4" aria-hidden="true" /> Open full map
       </Link>
@@ -450,7 +454,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           variant="secondary"
           aria-pressed={placing}
           onClick={() => setPlacing((v) => !v)}
-          className="w-full min-h-11"
+          className="w-full min-h-11 text-accent-aqua hover:text-text-primary"
         >
           {placing ? (
             'Cancel'

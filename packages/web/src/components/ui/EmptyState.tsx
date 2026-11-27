@@ -88,10 +88,10 @@ export default function EmptyState({
           )
         )}
 
-        <Heading className="type-title font-semibold text-text-primary">{title}</Heading>
+        <Heading className="type-title font-semibold text-text-primary text-balance">{title}</Heading>
 
         {description && (
-          <p className="text-sm text-text-secondary max-w-[280px]">{description}</p>
+          <p className="text-sm text-text-secondary max-w-[280px] text-pretty">{description}</p>
         )}
 
         {(cta || secondaryCta) && (

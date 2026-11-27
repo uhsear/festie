@@ -14,6 +14,12 @@ describe('EmptyState', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Empty');
   });
 
+  it('balances the title and description lines so a short title never leaves one orphan word', () => {
+    render(<EmptyState title="This festival isn't mapped yet" description="Add a location to see it here." />);
+    expect(screen.getByRole('heading', { level: 2 })).toHaveClass('text-balance');
+    expect(screen.getByText('Add a location to see it here.')).toHaveClass('text-pretty');
+  });
+
   it('renders the title as h1 when the empty state is the whole page', () => {
     render(<EmptyState title="Empty" headingLevel={1} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Empty');
