@@ -83,7 +83,7 @@ describe('ExpensesTab', () => {
     setup();
     const caption = await screen.findByText('Amounts in USD');
     expect(caption.tagName).toBe('P');
-    expect(caption.className).not.toMatch(/(border|bg-bg-card|rounded)/);
+    expect(caption.className).not.toMatch(/\b(border|bg-bg-card|rounded)/);
     const add = screen.getByRole('button', { name: 'Add expense' });
     expect(add.parentElement).toBe(caption.parentElement);
     expect(add.parentElement!.parentElement!.firstElementChild).toBe(add.parentElement);

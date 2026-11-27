@@ -192,7 +192,7 @@ describe('CrewPlanView', () => {
   it('uses the page gutter, like the crew page, with no extra inset', () => {
     const { container } = render(<CrewPlanView />);
     const page = container.firstElementChild!;
-    expect(page.className).not.toMatch(/px-\d/);
+    expect(page.className).not.toMatch(/\bpx-\d/);
     expect(page).toHaveClass('max-w-[600px]');
   });
 

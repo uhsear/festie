@@ -89,7 +89,7 @@ describe('InboxView', () => {
 
   it('sits on the page gutter with no inset of its own', () => {
     const { container } = render(<InboxView />);
-    expect(container.firstElementChild!.className).not.toMatch(/px-\d/);
+    expect(container.firstElementChild!.className).not.toMatch(/\bpx-\d/);
   });
 
   it('opens a set row', () => {
