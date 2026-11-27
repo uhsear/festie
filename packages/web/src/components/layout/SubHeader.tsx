@@ -382,11 +382,11 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3 md:order-3" />
         )}
 
-        {/* md up: a full-width zero-height line between row 1 (picker, view, days, search, Group by from xl) and row 2 (stage chips, My picks, status). The negative margin cancels the extra row gap. */}
+        {/* md up: a full-width zero-height line between row 1 (picker, view, days, search, Group by from xl) and row 2 (stage chips, My picks, status). A flex line never shrinks below zero, so the two row gaps around it stay. */}
         <div
           aria-hidden="true"
           data-testid="subheader-row-break"
-          className="hidden md:order-1 md:block md:h-0 md:basis-full md:mb-[calc(var(--space-2)*-1)]"
+          className="hidden md:order-1 md:block md:h-0 md:basis-full"
         />
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
