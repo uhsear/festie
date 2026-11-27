@@ -101,14 +101,23 @@ export function useCurrentFestivalCrew(): Crew | null {
 }
 
 /**
- * The crew the map shows layers for. The selected festival follows the Lineup tab, so the
- * active crew can belong to another festival. When the user has a crew for the selected
- * festival, this selects it (once per crew) so its members and meeting points load.
- * `crew` is null until that crew is the active one, so layers never mix two crews.
- * `otherFestivalName` names the active crew's festival when no crew fits the selected one.
+ * The crew a festival-scoped screen (map, compare, crew plan) shows. The selected festival
+ * follows the Lineup tab, so the active crew can belong to another festival. When the user
+ * has a crew for the selected festival, this selects it (once per crew) so its members and
+ * meeting points load. `crew` is null until that crew is the active one, so layers never
+ * mix two crews. `status` is `none` when no crew fits the selected festival, and
+ * `otherFestivalName` then names the active crew's festival. The screen never switches
+ * the festival to fit a crew: the festival picker owns that choice.
  */
-export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | null } {
-  const { crew: activeCrew, crews } = useActiveCrew();
+export function useFestivalCrew(): {
+  status: CrewScreenStatus;
+  crew: Crew | null;
+  festivalName: string | null;
+  hasCrews: boolean;
+  otherFestivalName: string | null;
+  retry: () => void;
+} {
+  const { status, crew: activeCrew, crews, retry } = useActiveCrew();
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const festivals = useFestivalStore((s) => s.festivals);
   const match = crewForFestival(crews, activeCrew, currentFestival);
@@ -123,13 +132,26 @@ export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | n
     useCrewStore
       .getState()
       .selectCrew(matchId)
-      .catch((err) => console.warn('map: could not switch to the crew for this festival', err));
+      .catch((err) => console.warn('could not switch to the crew for this festival', err));
   }, [matchId, activeId]);
 
+  const open = !!match && match.id === activeId;
+  let fitted = status;
+  if (status === 'ready' && currentFestival && !open) fitted = match ? 'loading' : 'none';
   return {
-    crew: match && match.id === activeId ? match : null,
+    status: fitted,
+    crew: open ? match : null,
+    festivalName: currentFestival?.name ?? null,
+    hasCrews: crews.length > 0,
     otherFestivalName: !match && activeCrew ? crewFestivalName(activeCrew, festivals, currentFestival) : null,
+    retry,
   };
+}
+
+/** The crew the map shows layers for, and the other festival's name when none fits. */
+export function useMapCrew(): { crew: Crew | null; otherFestivalName: string | null } {
+  const { crew, otherFestivalName } = useFestivalCrew();
+  return { crew, otherFestivalName };
 }
 
 /**

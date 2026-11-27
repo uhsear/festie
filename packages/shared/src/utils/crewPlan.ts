@@ -193,6 +193,15 @@ export function defaultCrewId<C extends { id: string; festivalId?: string | null
   return (real.find((c) => !!festivalId && c.festivalId === festivalId) ?? real[0])?.id;
 }
 
+/** What a festival-scoped crew screen says when the user has no crew for the selected festival. */
+export function noFestivalCrewCopy(festivalName: string | null): { title: string; description: string } {
+  const name = festivalName ?? 'this festival';
+  return {
+    title: `No crew for ${name}`,
+    description: `Start a crew for ${name} or join one with a code. Crews of other festivals stay on the Crew tab.`,
+  };
+}
+
 /** What the map says in place of crew layers: sign-in, no crew, or a crew that belongs to another festival. */
 export function mapCrewHintCopy(signedIn: boolean, otherFestivalName: string | null): string {
   if (!signedIn) return 'Sign in and join a crew to see friends and meeting points here.';

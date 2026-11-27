@@ -4,8 +4,10 @@ import CompareView from './compare';
 
 const mocks = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,
-  crewState: { status: 'ready', crew: { id: 'c1', name: 'Sam Crew' }, crews: [], retry: vi.fn() },
-  festState: { state: 'match', festivalName: 'Forbidden Kingdom', retry: vi.fn() },
+  crewState: { status: 'ready', crew: { id: 'c1', name: 'Sam Crew' }, festivalName: 'Forbidden Kingdom', hasCrews: true, retry: vi.fn() },
+  festival: { id: 'f1' } as Record<string, unknown>,
+  festivals: [] as unknown[],
+  selectFestival: vi.fn(() => Promise.resolve()),
   compare: vi.fn(),
   strip: vi.fn(),
   navigate: vi.fn(() => Promise.resolve()),
@@ -14,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   refresh: vi.fn(),
   days: [
-    { id: 'd0', date: '2026-11-06', label: 'Friday' },
-    { id: 'd1', date: '2026-11-07', label: 'Saturday' },
+    { id: 'd0', date: '2999-11-06', label: 'Friday' },
+    { id: 'd1', date: '2999-11-07', label: 'Saturday' },
   ] as unknown[],
 }));
 
@@ -23,11 +25,17 @@ const SET = { id: 's1', stageId: 'st', artist: 'Daft Punk', startTime: '14:00', 
 
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: mocks.user }),
-  useFestivalStore: (sel: (s: unknown) => unknown) => sel({ currentFestival: { id: 'f1' }, days: mocks.days, selectedDay: 1 }),
+  useFestivalStore: (sel: (s: unknown) => unknown) =>
+    sel({
+      currentFestival: mocks.festival,
+      days: mocks.days,
+      selectedDay: 1,
+      festivals: mocks.festivals,
+      selectFestival: mocks.selectFestival,
+    }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
-  useActiveCrew: () => mocks.crewState,
-  useCrewFestival: () => mocks.festState,
+  useFestivalCrew: () => mocks.crewState,
   useCrewCompare: (sort: string, ready: boolean) => mocks.compare(sort, ready),
   useFestival: () => ({ getStageColor: () => '#fff', getStageName: () => 'Main' }),
   usePicks: () => ({ savePick: mocks.savePick }),
@@ -53,8 +61,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.user = { id: 'u1' };
   mocks.savePick.mockImplementation(() => Promise.resolve());
-  mocks.crewState = { status: 'ready', crew: { id: 'c1', name: 'Sam Crew' }, crews: [], retry: vi.fn() };
-  mocks.festState = { state: 'match', festivalName: 'Forbidden Kingdom', retry: vi.fn() };
+  mocks.crewState = { status: 'ready', crew: { id: 'c1', name: 'Sam Crew' }, festivalName: 'Forbidden Kingdom', hasCrews: true, retry: vi.fn() };
+  mocks.festival = { id: 'f1' };
+  mocks.festivals = [];
+  mocks.days = [
+    { id: 'd0', date: '2999-11-06', label: 'Friday' },
+    { id: 'd1', date: '2999-11-07', label: 'Saturday' },
+  ];
   mocks.compare.mockReturnValue({
     columns: [
       { profileId: 'p1', userId: 'u1', name: 'Alice', isMe: true, color: 'rgb(1, 2, 3)' },
@@ -105,10 +118,10 @@ describe('CompareView', () => {
     expect(mocks.toast).toHaveBeenCalledWith('Offline', 'error');
   });
 
-  it('opens the compare only once the crew and festival have settled', () => {
+  it('opens the compare only once the crew of the selected festival is ready', () => {
     render(<CompareView />);
     expect(mocks.compare).toHaveBeenCalledWith('time', true);
-    mocks.festState = { state: 'switching', festivalName: 'Forbidden Kingdom', retry: vi.fn() };
+    mocks.crewState = { ...mocks.crewState, status: 'loading', crew: null as never };
     render(<CompareView />);
     expect(mocks.compare).toHaveBeenLastCalledWith('time', false);
   });
@@ -152,24 +165,31 @@ describe('CompareView', () => {
   });
 
   it('shows "No crew yet" with no crews', () => {
-    mocks.crewState = { ...mocks.crewState, status: 'none', crew: null as never };
+    mocks.crewState = { ...mocks.crewState, status: 'none', crew: null as never, hasCrews: false };
     render(<CompareView />);
     expect(screen.getByRole('heading', { level: 1, name: 'No crew yet' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create or join a crew' })).toBeInTheDocument();
   });
 
-  it('says which festival it is opening while switching', () => {
-    mocks.festState = { ...mocks.festState, state: 'switching' };
+  it('names the selected festival when the user has crews but none for it', () => {
+    mocks.crewState = { ...mocks.crewState, status: 'none', crew: null as never };
     render(<CompareView />);
-    expect(screen.getByText('Opening Forbidden Kingdom…')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'No crew for Forbidden Kingdom' })).toBeInTheDocument();
+    expect(mocks.selectFestival).not.toHaveBeenCalled();
   });
 
-  it('offers retry when the festival switch fails', () => {
-    mocks.festState = { ...mocks.festState, state: 'failed' };
+  it('says nothing was compared at a finished festival and offers the live one', () => {
+    mocks.festival = { id: 'f1', name: 'Forbidden Kingdom', startDate: '2020-01-01', endDate: '2020-01-02' };
+    mocks.festivals = [
+      mocks.festival,
+      { id: 'f2', name: 'Moonlit Orchard Fest', startDate: '2999-01-01', endDate: '2999-01-02' },
+    ];
+    mocks.days = [{ id: 'd0', date: '2020-01-01', label: 'Friday' }];
+    mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], alone: true });
     render(<CompareView />);
-    expect(screen.getByText("Couldn't open Forbidden Kingdom")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(mocks.festState.retry).toHaveBeenCalled();
+    expect(screen.getByText('Nothing was compared at Forbidden Kingdom')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Moonlit Orchard Fest' }));
+    expect(mocks.selectFestival).toHaveBeenCalledWith('f2');
   });
 
   it('names crew, festival and members in the header and renders artists', () => {

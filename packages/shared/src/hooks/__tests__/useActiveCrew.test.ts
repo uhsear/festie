@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useActiveCrew, useCrewFestival, useMapCrew } from '../useActiveCrew';
+import { useActiveCrew, useCrewFestival, useFestivalCrew, useMapCrew } from '../useActiveCrew';
 import { useCrewStore } from '../../stores/crewStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useFestivalDataStore } from '../../stores/festivalDataStore';
@@ -156,6 +156,32 @@ describe('useMapCrew', () => {
     const { result } = renderHook(() => useMapCrew());
     expect(result.current.crew).toBeNull();
     expect(result.current.otherFestivalName).toBe('Two');
+  });
+});
+
+describe('useFestivalCrew', () => {
+  it('is ready with the crew of the selected festival', () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f1')], activeCrew: crew('c1', 'f1') });
+    const { result } = renderHook(() => useFestivalCrew());
+    expect(result.current.status).toBe('ready');
+    expect(result.current.crew?.id).toBe('c1');
+  });
+
+  it('loads, never ready, while it opens the crew of the selected festival', async () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f2'), crew('c2', 'f1')], activeCrew: crew('c1', 'f2') });
+    const { result } = renderHook(() => useFestivalCrew());
+    expect(result.current.status).toBe('loading');
+    expect(result.current.crew).toBeNull();
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c2'));
+  });
+
+  it('reports none and keeps the selected festival when only another festival has a crew', () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f2')], activeCrew: crew('c1', 'f2') });
+    const { result } = renderHook(() => useFestivalCrew());
+    expect(result.current.status).toBe('none');
+    expect(result.current.crew).toBeNull();
+    expect(result.current.otherFestivalName).toBe('Two');
+    expect(selectFestival).not.toHaveBeenCalled();
   });
 });
 

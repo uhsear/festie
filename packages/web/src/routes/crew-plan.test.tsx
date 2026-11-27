@@ -9,8 +9,7 @@ const festivalState: Record<string, unknown> = {};
 const setDetailSet = vi.fn();
 const uiState: Record<string, unknown> = { offlineMode: false, pendingSync: 0, setDetailSet };
 
-const activeCrew = { status: 'ready', crew: null as unknown, crews: [] as unknown[], retry: vi.fn() };
-const crewFestival = { state: 'match', festivalName: 'Forbidden Kingdom', retry: vi.fn() };
+const activeCrew = { status: 'ready', crew: null as unknown, festivalName: 'Forbidden Kingdom' as string | null, hasCrews: false, retry: vi.fn() };
 const hubState: Record<string, unknown> = {};
 const savePick = vi.fn(() => Promise.resolve());
 const navigate = vi.fn(() => Promise.resolve());
@@ -22,8 +21,7 @@ vi.mock('@festie/shared/stores', () => ({
 }));
 
 vi.mock('@festie/shared/hooks', () => ({
-  useActiveCrew: () => activeCrew,
-  useCrewFestival: () => crewFestival,
+  useFestivalCrew: () => activeCrew,
   useCrewHub: () => hubState,
   usePicks: () => ({ savePick }),
 }));
@@ -147,8 +145,8 @@ beforeEach(() => {
   navigate.mockClear();
   activeCrew.status = 'ready';
   activeCrew.retry = vi.fn();
-  crewFestival.state = 'match';
-  crewFestival.retry = vi.fn();
+  activeCrew.festivalName = 'Forbidden Kingdom';
+  activeCrew.hasCrews = false;
   authState.user = { id: 'u-me' };
   uiState.offlineMode = false;
   uiState.pendingSync = 0;
@@ -249,18 +247,27 @@ describe('CrewPlanView', () => {
     expect(activeCrew.retry).toHaveBeenCalled();
   });
 
-  it('shows the opening line while the festival switches', () => {
-    crewFestival.state = 'switching';
+  it('names the selected festival when the user has no crew for it, and never switches festival', () => {
+    activeCrew.status = 'none';
+    activeCrew.crew = null;
+    activeCrew.hasCrews = true;
     render(<CrewPlanView />);
-    expect(screen.getByText('Opening Forbidden Kingdom…')).toBeInTheDocument();
+    expect(screen.getByText('No crew for Forbidden Kingdom')).toBeInTheDocument();
+    expect(screen.getByText(/Start a crew for Forbidden Kingdom/)).toBeInTheDocument();
   });
 
-  it('shows a retry when the festival switch fails', () => {
-    crewFestival.state = 'failed';
+  it('shows the loading skeleton while the crew of the selected festival opens', () => {
+    activeCrew.status = 'loading';
+    activeCrew.crew = null;
     render(<CrewPlanView />);
-    expect(screen.getByText("Couldn't open Forbidden Kingdom")).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Try again'));
-    expect(crewFestival.retry).toHaveBeenCalled();
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  it('hides How the crew did for a crew of one', () => {
+    Object.assign(hubState, baseHub({ isPast: true, upNext: [], memberCount: 1 }));
+    render(<CrewPlanView />);
+    expect(screen.queryByText('How the crew did')).not.toBeInTheDocument();
+    expect(screen.queryByText('Up next')).not.toBeInTheDocument();
   });
 
   it('after the festival, shows How the crew did and the Wrap link, not the add-picks links', () => {
