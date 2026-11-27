@@ -521,6 +521,7 @@ describe('SubHeader desktop row plan', () => {
       const belowXl = find(/^md:max-xl:order-(\d+)$/);
       if (belowXl) return Number(belowXl[1]);
     }
+    if (bp === 'xl' && tokens.includes('xl:order-none')) return 0;
     const m = find(/^md:order-(\d+)$/) ?? find(/^order-(\d+)$/);
     return m ? Number(m[1]) : 0;
   };
@@ -551,12 +552,15 @@ describe('SubHeader desktop row plan', () => {
     const rowBreak = screen.getByTestId('subheader-row-break');
     const rowBreak2 = screen.getByTestId('subheader-row-break-2');
 
-    // Row 1 holds the picker, view switch and day chips only, so the chips get the width Search and Group by used to take.
+    // Row 1 holds the picker, view switch and day chips (and Group by from xl), so the chips get the width Search used to take.
     for (const bp of ['md', 'xl'] as const) {
       for (const el of [rail, views]) expect(orderAt(el, bp)).toBe(0);
       expect(orderAt(rowBreak, bp)).toBe(1);
-      for (const el of [filters, search, groupBy, myPicks]) expect(orderAt(el, bp)).toBe(2);
+      for (const el of [filters, search, myPicks]) expect(orderAt(el, bp)).toBe(2);
     }
+    // Group by joins row 1 from xl, where the chips and the picker leave room for it, so the stage chips keep row 2's width.
+    expect(orderAt(groupBy, 'md')).toBe(2);
+    expect(orderAt(groupBy, 'xl')).toBe(0);
     expect(rowBreak.className).toContain('md:basis-full');
     // From xl the stage chips and the status line close row 2; below it they take a row 3 behind a second break.
     expect(orderAt(stageChips, 'xl')).toBe(2);

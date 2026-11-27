@@ -384,7 +384,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-4 md:order-3 md:max-xl:order-5" />
         )}
 
-        {/* md up: a full-width zero-height line between row 1 (picker, status pill, view, day chips) and row 2 (Filters, search, Group by, My picks, and from xl the stage chips and status; below xl those two take row 3). A flex line never shrinks below zero, so the two row gaps around it stay. */}
+        {/* md up: a full-width zero-height line between row 1 (picker, status pill, view, day chips, and from xl Group by) and row 2 (Filters, search, My picks, Group by below xl, and from xl the stage chips and status; below xl those two take row 3). A flex line never shrinks below zero, so the two row gaps around it stay. */}
         <div
           aria-hidden="true"
           data-testid="subheader-row-break"
@@ -446,7 +446,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showGroupBy && (
-          <div className="flex items-center gap-2 md:order-2" role="group" aria-labelledby="cards-group-by">
+          <div className="flex items-center gap-2 md:order-2 xl:order-none" role="group" aria-labelledby="cards-group-by">
             <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
               Group by
             </span>
