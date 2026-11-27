@@ -9,7 +9,7 @@ import SosRaiseButton from '../crew/SosRaiseButton';
  * way out) and for guests or users with no open crew. While shown it publishes the corner
  * it occupies as --sos-dock-h (height to clear) and --sos-dock-w (width to clear) on :root,
  * so toasts, floating buttons and map overlays keep out from under it. It also publishes
- * --sos-band-h: the page scroller (pages.css) ends that far above the nav, so no row ever
+ * --sos-band-h: the page area (.main-content in pages.css) ends that far above the nav, so no row ever
  * scrolls under the dock. The band is the 64px button plus DOCK_GAP above and below it, and
  * it follows the dock's own offsets (sticky bar, safe-area inset).
  */

@@ -81,7 +81,7 @@ describe('SosDock', () => {
     expect(dock).toContain(`+var(--sticky-bar-h,0px)+${gap}px+env(safe-area-inset-bottom,0px))]`);
     expect(dock).toContain('const DOCK_H = `${64 + 2 * DOCK_GAP}px`;');
     expect(button).toContain('h-16 w-16');
-    expect(pages).toMatch(/#main-content \{[^}]*margin-bottom: var\(--sos-band-h, 0px\);/);
-    expect(pages).toMatch(/#main-content:has\(\.map-page\) \{[^}]*margin-bottom: 0;/);
+    expect(pages).toMatch(/\n\.main-content \{[^}]*margin-bottom: var\(--sos-band-h, 0px\);/);
+    expect(pages).toMatch(/\.main-content:has\(\.map-page\) \{[^}]*margin-bottom: 0;/);
   });
 });
