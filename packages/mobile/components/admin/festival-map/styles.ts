@@ -75,7 +75,7 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
   },
   armBtn: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     borderWidth: 1,
@@ -94,8 +94,8 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.onLightAccent,
   },
   miniBtn: {
-    minHeight: 40,
-    minWidth: 40,
+    minHeight: 44,
+    minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -115,7 +115,7 @@ export const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.primary,
-    minHeight: 40,
+    minHeight: 44,
   },
   paletteGlyph: {
     width: 24,
@@ -156,7 +156,7 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
   },
   zoneBtn: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     borderWidth: 1,
@@ -169,7 +169,7 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
   },
   zoneBtnPrimary: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     backgroundColor: t.colors.accent.aqua,
@@ -181,7 +181,7 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.onLightAccent,
   },
   zoneBtnDanger: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     borderWidth: 1,
@@ -198,7 +198,7 @@ export const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
   },
   opacityChip: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.pill,
     borderWidth: 1,
@@ -222,7 +222,7 @@ export const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.primary,
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[2],
     borderRadius: t.radii.default,
     borderWidth: 1,
@@ -230,7 +230,7 @@ export const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.bg.primary,
   },
   moveBtn: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[2],
     alignItems: 'center',
     justifyContent: 'center',

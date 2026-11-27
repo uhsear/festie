@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ACCOUNT_COPY } from '../constants/accountSettings';
 import {
   APP_SECTIONS,
   CREW_TABS,
@@ -9,6 +10,8 @@ import {
 describe('navigation constants', () => {
   it('lists the five sections in order', () => {
     expect(APP_SECTIONS.map((s) => s.label)).toEqual(['Lineup', 'Picks', 'Crew', 'Map', 'More']);
+    // The Account screen title and the tab label are one constant.
+    expect(ACCOUNT_COPY.title).toBe(APP_SECTIONS.find((s) => s.key === 'more')?.label);
   });
 
   it('lists the four crew tabs in order', () => {

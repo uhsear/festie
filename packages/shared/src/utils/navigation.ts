@@ -1,4 +1,5 @@
 import type { FestivalPhase } from './festivalTime';
+import { ACCOUNT_COPY } from '../constants/accountSettings';
 import { COPY } from '../constants/copy';
 
 export type AppSectionKey = 'lineup' | 'myPlan' | 'crew' | 'map' | 'more';
@@ -7,7 +8,7 @@ export const APP_SECTIONS: readonly { key: AppSectionKey; label: string }[] = [
   { key: 'myPlan', label: COPY.picks.tab },
   { key: 'crew', label: 'Crew' },
   { key: 'map', label: 'Map' },
-  { key: 'more', label: 'More' },
+  { key: 'more', label: ACCOUNT_COPY.title },
 ];
 
 export type CrewTabKey = 'find' | 'members' | 'plan' | 'money';

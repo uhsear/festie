@@ -77,17 +77,17 @@ describe('DangerZone', () => {
     const user = userEvent.setup();
     mockDownload.mockResolvedValue(undefined);
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.click(screen.getByRole('button', { name: 'Download my data first' }));
     await waitFor(() => expect(mockDownload).toHaveBeenCalledTimes(1));
     expect(mockToast).toHaveBeenCalledWith('Your data is downloaded.', 'success');
     expect(mockDeleteAccount).not.toHaveBeenCalled();
   });
 
-  it('renders the Delete Account section', () => {
+  it('renders the Delete account section', () => {
     render(<DangerZone />);
-    expect(screen.getByText('Delete Account')).toBeInTheDocument();
-    expect(screen.getByText('Delete My Account')).toBeInTheDocument();
+    expect(screen.getByText('Delete account')).toBeInTheDocument();
+    expect(screen.getByText('Delete my account')).toBeInTheDocument();
   });
 
   it('does not show password field initially', () => {
@@ -95,10 +95,10 @@ describe('DangerZone', () => {
     expect(screen.queryByPlaceholderText('Password')).not.toBeInTheDocument();
   });
 
-  it('shows confirmation form after clicking Delete My Account', async () => {
+  it('shows confirmation form after clicking Delete my account', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
     expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('DangerZone', () => {
   it('disables Confirm Delete when password is empty', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     expect(screen.getByText('Confirm Delete').closest('button')).toBeDisabled();
   });
@@ -116,7 +116,7 @@ describe('DangerZone', () => {
   it('enables Confirm Delete after typing a password', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.type(screen.getByPlaceholderText('Password'), 'mypass123');
 
     expect(screen.getByText('Confirm Delete').closest('button')).not.toBeDisabled();
@@ -131,7 +131,7 @@ describe('DangerZone', () => {
       .mockResolvedValueOnce({ deletionDate: '30 November 2026' });
 
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     expect(screen.queryByPlaceholderText('Password')).not.toBeInTheDocument();
     expect(screen.getByText('Confirm Delete').closest('button')).not.toBeDisabled();
     await user.click(screen.getByText('Confirm Delete'));
@@ -145,13 +145,13 @@ describe('DangerZone', () => {
   it('hides confirmation and clears password on Cancel', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.type(screen.getByPlaceholderText('Password'), 'secret');
     await user.click(screen.getByText('Cancel'));
 
     // Back to initial state
     expect(screen.queryByPlaceholderText('Password')).not.toBeInTheDocument();
-    expect(screen.getByText('Delete My Account')).toBeInTheDocument();
+    expect(screen.getByText('Delete my account')).toBeInTheDocument();
   });
 
   it('deletes through the store, shows the deletion notice, and navigates', async () => {
@@ -159,7 +159,7 @@ describe('DangerZone', () => {
     mockDeleteAccount.mockResolvedValue({ deletionDate: '30 November 2026' });
 
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.type(screen.getByPlaceholderText('Password'), 'mypassword');
     await user.click(screen.getByText('Confirm Delete'));
 
@@ -185,7 +185,7 @@ describe('DangerZone', () => {
     );
 
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.type(screen.getByPlaceholderText('Password'), 'mypassword');
     await user.click(screen.getByText('Confirm Delete'));
 
@@ -202,7 +202,7 @@ describe('DangerZone', () => {
     mockDeleteAccount.mockRejectedValue(new Error('fail'));
 
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     await user.type(screen.getByPlaceholderText('Password'), 'mypassword');
     await user.click(screen.getByText('Confirm Delete'));
     expect(await screen.findByText("Couldn't delete account. Try again.")).toBeInTheDocument();
@@ -214,7 +214,7 @@ describe('DangerZone', () => {
   it('does not call handleDelete if password field is empty on submit', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     // Submit form without typing a password (button is disabled, but test the guard)
     const form = screen.getByPlaceholderText('Password').closest('form')!;
@@ -243,7 +243,7 @@ describe('DangerZone', () => {
     mockDeleteAccount.mockResolvedValue({ deletionDate: 'x' });
 
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     expect(screen.getByText('Crews you own')).toBeInTheDocument();
     const select = screen.getByLabelText('New owner for Night Owls') as HTMLSelectElement;
@@ -262,7 +262,7 @@ describe('DangerZone', () => {
     const user = userEvent.setup();
     mockCrews = [ownedCrew([])];
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     expect(screen.getByText(/only member of 1 crew/)).toBeInTheDocument();
     expect(screen.queryByText('Crews you own')).not.toBeInTheDocument();
@@ -272,7 +272,7 @@ describe('DangerZone', () => {
     const user = userEvent.setup();
     mockCrews = [{ ...ownedCrew([{ userId: 'u2', username: 'bea' }]), role: 'member', owner: 'u2' }];
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
 
     expect(screen.queryByText('Crews you own')).not.toBeInTheDocument();
     expect(screen.queryByText(/only member of/)).not.toBeInTheDocument();
@@ -281,7 +281,7 @@ describe('DangerZone', () => {
   it('loads crews when the store has none', async () => {
     const user = userEvent.setup();
     render(<DangerZone />);
-    await user.click(screen.getByText('Delete My Account'));
+    await user.click(screen.getByText('Delete my account'));
     expect(mockLoadCrews).toHaveBeenCalledTimes(1);
   });
 });

@@ -58,7 +58,7 @@ export const useStyles = makeStyles((t) => ({
     flex: 1,
   },
   locationBtn: {
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     borderWidth: 1,

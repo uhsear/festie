@@ -54,13 +54,16 @@ export default function Button({
     lg: 'px-5 py-2.5 text-lg min-h-11',
   };
 
+  // Optical alignment: the icon side gets 2px less padding than the text side.
+  const iconPadStyles: Record<string, string> = { sm: 'pl-2.5', md: 'pl-3.5', lg: 'pl-4.5' };
+
   // utility and delete variants have their own sizing — skip the size map
   const appliedSize =
     variant === 'utility'
       ? 'px-2.5 py-1.5 min-h-11 min-w-11'
       : variant === 'delete'
         ? '' // sizing baked into variant
-        : sizeStyles[size];
+        : cn(sizeStyles[size], icon && !isLoading && iconPadStyles[size]);
 
   // A busy button stays focusable (aria-disabled, not native disabled) so keyboard
   // focus is not dropped mid-request; activation is blocked here instead.

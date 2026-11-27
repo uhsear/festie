@@ -74,7 +74,7 @@ export default function CrewNoCrewView({
       <CreateCrewForm autoFocus={pendingStart === 'create'} />
 
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>Join by code</Text>
+        <Text style={styles.formLabel}>Join with code</Text>
         <Text style={styles.formHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           6-character code, or paste the invite link
         </Text>
@@ -93,7 +93,7 @@ export default function CrewNoCrewView({
           accessibilityLabel="Invite code"
         />
         <Button
-          label="Join by Code"
+          label="Join with code"
           variant="secondary"
           onPress={handleJoin}
           disabled={!inviteCode.trim()}

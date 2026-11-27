@@ -885,7 +885,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.accent.amber,
   },
   restoreBtn: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[3],
     borderRadius: t.radii.default,
     alignItems: 'center',

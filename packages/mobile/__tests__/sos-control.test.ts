@@ -43,8 +43,9 @@ describe('the one SOS control (DP-38)', () => {
     expect(layout).toMatch(/topOverlay: \{\s*position: 'absolute'/);
     // The overlay is painted after the navigator, and the banners are no longer siblings in the flow.
     expect(layout.indexOf('style={styles.topOverlay}')).toBeGreaterThan(layout.indexOf('style={styles.appShell}'));
-    expect(layout).not.toContain('TopBannerContext');
-    expect(read('components/ScreenHeader.tsx')).not.toContain('TopBannerContext');
+    // The header pads by the overlay's height instead (FU-P56), so nothing covers it.
+    expect(layout).toContain('setTopBannerHeight(Math.ceil(e.nativeEvent.layout.height))');
+    expect(read('components/ScreenHeader.tsx')).toContain('useTopBannerHeight()');
   });
 
   it('shrinks the SOS banner to a one-line strip after the arrival, so it never covers a header', () => {

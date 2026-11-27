@@ -2,7 +2,7 @@
 // (and thus before zustand-persist hydrates). See bootstrap.ts.
 import '../bootstrap';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, View, ActivityIndicator, StyleSheet, Appearance, useColorScheme } from 'react-native';
+import { AppState, View, StyleSheet, Appearance, useColorScheme } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigationState, router as globalRouter } from 'expo-router';
@@ -29,11 +29,13 @@ import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
+import { TopBannerProvider, useSetTopBannerHeight } from '../contexts/TopBannerContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
 import LiveSharePublisher from '../components/LiveSharePublisher';
 import AnnouncementBanner from '../components/AnnouncementBanner';
+import BootOverlay from '../components/BootOverlay';
 import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -51,7 +53,7 @@ import ArtistSheetHost from '../components/ArtistSheetHost';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
-// hideAsync is called when `loading` flips false inside AuthGate; the existing
+// hideAsync is called by BootOverlay once it has painted, and when `loading` flips false; the existing
 // 4-second bootTimedOut ceiling is the forced-hide backstop so the app never
 // wedges. preventAutoHideAsync must run at module scope (before any render).
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -345,6 +347,8 @@ function AuthGate() {
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
+  // Screen headers pad by the overlay's height, so no strip covers a header.
+  const setTopBannerHeight = useSetTopBannerHeight();
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -519,10 +523,9 @@ function AuthGate() {
   useQueueDrain(!loading);
   useOtaUpdatePrompt();
 
-  // Dismiss the native splash as soon as loading resolves. The overlay below
-  // stays as a fallback (same #0a0a0a bg) so any frame gap is invisible. The
-  // 4s bootTimedOut ceiling already triggers `loading = false`, so hideAsync
-  // is always called eventually even if fonts or rehydration hang.
+  // Backstop: BootOverlay lifts the native splash once it has painted.
+  // This covers an overlay that never lays out. The 4s bootTimedOut ceiling already triggers
+  // `loading = false`, so hideAsync is always called even if fonts or rehydration hang.
   useEffect(() => {
     if (!loading) {
       SplashScreen.hideAsync().catch(() => {});
@@ -653,7 +656,11 @@ function AuthGate() {
           </ErrorBoundary>
         </View>
       {!loading && (
-        <View style={styles.topOverlay} pointerEvents="box-none">
+        <View
+          style={styles.topOverlay}
+          pointerEvents="box-none"
+          onLayout={(e) => setTopBannerHeight(Math.ceil(e.nativeEvent.layout.height))}
+        >
           <OfflineBanner onActiveChange={setBannerActive} />
           <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />
           <AnnouncementBanner padTop={!bannerActive && !sosActive} />
@@ -661,22 +668,13 @@ function AuthGate() {
       )}
       {!loading && <Toaster />}
       <ArtistSheetHost />
-      {loading && (
-        <View style={[StyleSheet.absoluteFill, styles.splash, { backgroundColor: colors.bg.primary }]} pointerEvents="auto">
-          <ActivityIndicator size="large" color={colors.accent.aqua} />
-        </View>
-      )}
+      {loading && <BootOverlay hydrated={hydrated && uiHydrated} />}
       {introShowing && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   appShell: {
     flex: 1,
   },
@@ -696,7 +694,9 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <UIProvider>
-        <AuthGate />
+        <TopBannerProvider>
+          <AuthGate />
+        </TopBannerProvider>
       </UIProvider>
     </SafeAreaProvider>
   );

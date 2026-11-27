@@ -15,7 +15,7 @@ export const OAUTH_MESSAGES = {
   PROVIDER_NOT_CONFIGURED: 'This sign-in method is not available.',
   PROVIDER_TOKEN_INVALID: 'That sign-in did not work. Try again.',
   IDENTITY_EMAIL_IN_USE:
-    'An account already uses this email. Sign in with your password, then link this provider in Account.',
+    'An account already uses this email. Sign in with your password, then link this provider in More.',
   IDENTITY_LINKED_ELSEWHERE: 'This account is already linked to a different Festie account.',
   SIGNUP_EXPIRED: 'Sign-up took too long. Start again.',
 } as const;

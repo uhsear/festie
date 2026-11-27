@@ -387,7 +387,7 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
   },
   chip: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: t.spacing[4],
     borderRadius: t.radii.pill,
     borderWidth: 1,

@@ -108,6 +108,7 @@ export const COPY = {
   },
   status: { playing: 'Playing', playingA11y: 'Playing now', liveLocation: 'Live' },
   session: { signedOut: 'You were signed out on this device. Sign in again to continue.' },
+  boot: { offline: 'Opening your saved plan', restoring: 'Restoring your saved data', waiting: 'Getting Festie ready' },
 } as const;
 
 export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
@@ -160,7 +161,7 @@ export function meetingPointKind(type: string) {
 
 /** The calendar subscription link is a bearer link: web and mobile show the same warning. */
 export const CALENDAR_LINK_COPY = {
-  privacy: 'Anyone with this calendar link can see your picks. If it leaks, reset your links in Account.',
+  privacy: 'Anyone with this calendar link can see your picks. If it leaks, reset your links in More.',
 } as const;
 
 /** Share a festival's public page (T50), shared by the web picker and the mobile festival card. */

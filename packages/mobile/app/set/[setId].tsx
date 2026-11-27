@@ -715,7 +715,7 @@ export default function SetDetailScreen() {
                             onPress={() => router.push('/(tabs)/account')}
                             accessibilityRole="button"
                           >
-                            <Text style={styles.statusActionText}>Turn off in Account</Text>
+                            <Text style={styles.statusActionText}>Turn off in More</Text>
                           </TouchableOpacity>
                         </View>
                       ) : null}
@@ -751,7 +751,7 @@ export default function SetDetailScreen() {
                           <Text style={styles.statusWarn}>
                             {deliveryProblem === 'denied'
                               ? "Notifications are off for Festie, so this reminder can't reach you."
-                              : 'Set reminders are turned off in Account.'}
+                              : 'Set reminders are turned off in More.'}
                           </Text>
                           <TouchableOpacity
                             style={styles.statusAction}

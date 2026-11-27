@@ -163,12 +163,12 @@ env:
     timeout: 4000
 - takeScreenshot: ci-08-crew-tab-b
 
-# Only enter the join form when "Join by code" is visible (no active crew).
+# Only enter the join form when "Join with code" is visible (no active crew).
 # If account B already belongs to the same crew (self-join scenario) we still
 # assert "Invite code" below — proving membership either way.
 - runFlow:
     when:
-      visible: "Join by code"
+      visible: "Join with code"
     commands:
       - tapOn:
           text: "K7XQ2M"
@@ -178,9 +178,11 @@ env:
           optional: true
       - inputText: "${OUTPUT_INVITE_CODE}"
       - hideKeyboard
+      # The form label and the button both read "Join with code"; the button is the second match.
       - tapOn:
-          text: "Join by Code"
-      # Join by Code opens the invite screen; the join happens only on "Join crew".
+          text: "Join with code"
+          index: 1
+      # Join with code opens the invite screen; the join happens only on "Join crew".
       - extendedWaitUntil:
           visible: "Join crew"
           timeout: 20000

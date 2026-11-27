@@ -1,11 +1,13 @@
-import type { ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 import AppPressable from './AppPressable';
 import InboxBell from './InboxBell';
+import { headerTopPadding, useAddPaddedHeader, useTopBannerHeight } from '../contexts/TopBannerContext';
 
 interface ScreenHeaderProps {
   /** Primary heading text. */
@@ -59,6 +61,14 @@ export default function ScreenHeader({
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
+  const bannerHeight = useTopBannerHeight();
+  const addPaddedHeader = useAddPaddedHeader();
+  useFocusEffect(
+    useCallback(() => {
+      addPaddedHeader(1);
+      return () => addPaddedHeader(-1);
+    }, [addPaddedHeader]),
+  );
   const titleText = (
     <Text
       style={styles.title}
@@ -75,7 +85,7 @@ export default function ScreenHeader({
     </Text>
   );
   return (
-    <View style={[styles.row, { paddingTop: insets.top + t.spacing[4] }]}>
+    <View style={[styles.row, { paddingTop: headerTopPadding(insets.top, t.spacing[4], bannerHeight, t.spacing[2]) }]}>
       {icon ? (
         <Ionicons
           name={icon}
@@ -129,8 +139,8 @@ const useStyles = makeStyles((t) => ({
     alignItems: 'center',
     gap: t.spacing[3],
     paddingHorizontal: t.spacing[4],
-    // Top padding is supplied inline as `insets.top + spacing[4]` (the header
-    // owns the screen's top safe-area inset exactly once). Only the bottom is
+    // Top padding is supplied inline: `insets.top + spacing[4]`, or below the root banner overlay when one
+    // shows (the header owns the screen's top safe-area inset exactly once). Only the bottom is
     // declared here so the symmetric value doesn't read as a double-applied top.
     paddingBottom: t.spacing[4],
   },
