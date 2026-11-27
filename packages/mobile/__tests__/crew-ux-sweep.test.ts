@@ -49,6 +49,9 @@ describe('crew UX sweep guards', () => {
     expect(read('components/CrewSuggestionStrip.tsx')).toMatch(/titleRow: \{\s*flexDirection: 'row',\s*flexWrap: 'wrap'/);
     expect(read('components/CrewHomeBase.tsx')).toContain('styles.cardLocation} numberOfLines={3}');
   });
+  it('suggestion strip wraps the going summary instead of ellipsizing it', () => {
+    expect(read('components/CrewSuggestionStrip.tsx')).toMatch(/<Text style=\{styles\.going\} maxFontSizeMultiplier/);
+  });
   it('confirm and alert copy: Make owner, mapped nudge error, shared end-poll copy, reform without a zero', () => {
     const crew = read('app/(tabs)/crew.tsx');
     expect(crew).toContain("text: 'Make owner'");

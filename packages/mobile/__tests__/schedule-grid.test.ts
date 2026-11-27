@@ -24,6 +24,60 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(src).toContain('typeStyle');
   });
 
+  it('grid and timeline set blocks lay the pick and clash badge beside the title, not over it', () => {
+    for (const file of ['app/grid.tsx', 'components/TimelineView.tsx']) {
+      const src = read(file);
+      const iconRow = src.slice(src.indexOf('  iconRow: {'), src.indexOf('  },', src.indexOf('  iconRow: {')));
+      expect(iconRow).not.toContain("position: 'absolute'");
+      expect(src).toMatch(/titleRow: \{\s*flexDirection: 'row'/);
+    }
+  });
+
+  it('grid and timeline blocks inset the title from the clash hatch', () => {
+    const grid = read('app/grid.tsx');
+    expect(grid).toMatch(/cellClashed: \{\s*paddingLeft: t\.spacing\[3\]/);
+    expect(grid.match(/styles\.cell, cellStyle, hatchInset/g)).toHaveLength(2);
+    const timeline = read('components/TimelineView.tsx');
+    expect(timeline).toMatch(/setBlockClashed: \{\s*paddingLeft: t\.spacing\[3\]/);
+    expect(timeline).toContain('mark ? styles.setBlockClashed : null');
+  });
+
+  it('day chips leave room for two chips inside the gutter at font scale 1.3', () => {
+    const src = read('components/ScheduleDayChips.tsx');
+    const chip = src.slice(src.indexOf('  dayChip: {'), src.indexOf('  dayChipBg: {'));
+    expect(chip).toContain('paddingHorizontal: t.spacing[4]');
+    expect(chip).not.toContain('paddingHorizontal: t.spacing[6]');
+  });
+
+  it('grid time gutter widens at large text so "12PM" keeps clear of the screen edge', () => {
+    const src = read('app/grid.tsx');
+    expect(src).toContain('const GUTTER_W_LARGE = 56');
+    expect(src).toContain('const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W');
+    expect(src).toContain('twoUpColumnWidth(windowW, gutterW)');
+    expect(src).toContain('<View style={[styles.corner, { width: gutterW }]} />');
+  });
+
+  it('grid cell title takes as many lines as the cell height allows instead of a fixed two', () => {
+    const src = read('app/grid.tsx');
+    expect(src).toContain('numberOfLines={cellTitleLines(height, textScale, height >= 48)}');
+    expect(src).toContain('const textScale = Math.min(fontScale, MAX_FONT_SCALE)');
+  });
+
+  it('the NOW line sits behind opaque set tiles on the grid and the timeline, with its label in the gutter', () => {
+    const grid = read('app/grid.tsx');
+    const nowLine = grid.slice(grid.indexOf('  nowLine: {'), grid.indexOf('  nowLabel: {'));
+    expect(nowLine).not.toContain('zIndex');
+    expect(grid).toContain('backgroundColor: t.colors.bg.primary,');
+    expect(grid).toContain('styles.cellTint');
+    expect(grid).toContain('style={[styles.nowLabel, { top: nowPx - nowLabelH / 2 }]}');
+    const tl = read('components/TimelineView.tsx');
+    const block = tl.slice(tl.indexOf('  setBlock: {'), tl.indexOf('  setBlockTint: {'));
+    expect(block).toContain('zIndex: 1');
+    const line = tl.slice(tl.indexOf('  nowLine: {'), tl.indexOf('  nowDot: {'));
+    expect(line).toContain('zIndex: 0');
+    expect(tl).toContain('styles.setBlockTint');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

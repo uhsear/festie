@@ -126,13 +126,26 @@ export const useStyles = makeStyles((t) => ({
   // Timeline refresh button. The shortcuts scroll sideways inside their own slot.
   freshnessRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: t.spacing[2],
+    rowGap: t.spacing[1],
+    paddingTop: t.spacing[2],
+  },
+  // Timeline status line: one row that scrolls sideways. flexGrow 0 keeps the row at the
+  // chips' own height inside the page ScrollView.
+  statusScroll: {
+    flexGrow: 0,
+  },
+  statusScrollContent: {
     alignItems: 'center',
     gap: t.spacing[2],
     paddingTop: t.spacing[2],
   },
+  // 32 pt like the chips beside it; the caller's hitSlop restores the 44 pt target.
   compactRefreshButton: {
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 32,
+    minHeight: 32,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: t.radii.default,

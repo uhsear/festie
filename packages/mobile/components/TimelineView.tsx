@@ -229,6 +229,7 @@ function StageColumn({
               key={s.id}
               style={[
                 styles.setBlock,
+                mark ? styles.setBlockClashed : null,
                 {
                   top: top + 2,
                   height,
@@ -236,7 +237,8 @@ function StageColumn({
                   right: 2,
                   borderLeftColor: pickColor ?? stageColor,
                   borderLeftWidth: myPick ? 4 : 3,
-                  backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card,
+                  // Opaque base (the column's own fill) under the card tint: the NOW line cannot show through.
+                  backgroundColor: t.colors.bg.secondary,
                 },
               ]}
               onPress={() => onSetPress(s)}
@@ -248,10 +250,29 @@ function StageColumn({
               accessibilityRole="button"
               accessibilityLabel={label}
             >
+              <View
+                style={[styles.setBlockTint, { backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card }]}
+                pointerEvents="none"
+              />
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
-              <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {name}
-              </Text>
+              {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
+              <View style={styles.titleRow}>
+                <Text style={[styles.setArtist, styles.setTitle]} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {name}
+                </Text>
+                {mark || myPick ? (
+                  <View style={styles.iconRow}>
+                    {mark ? (
+                      <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                        {clashMinutes(mark.overlapMin)}
+                      </Text>
+                    ) : null}
+                    {myPick && pickColor ? (
+                      <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
               {height > ROW_HEIGHT * 1.5 ? (
                 <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {timeText}
@@ -261,18 +282,6 @@ function StageColumn({
                 <Text style={styles.clashText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {mark.text}
                 </Text>
-              ) : null}
-              {mark || myPick ? (
-                <View style={styles.iconRow}>
-                  {mark ? (
-                    <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {clashMinutes(mark.overlapMin)}
-                    </Text>
-                  ) : null}
-                  {myPick && pickColor ? (
-                    <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
-                  ) : null}
-                </View>
               ) : null}
               {crew > 0 && height >= ROW_HEIGHT * 2 ? (
                 <View style={styles.crewBadge}>
@@ -563,30 +572,34 @@ export default function TimelineView({
 
   return (
     <View style={styles.root}>
-      <View style={styles.hintRow}>
-        <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
-        <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
-        </Text>
-      </View>
-
-      <View style={styles.chipRow}>
-        <ClashChip count={count} picked={picked} />
-      </View>
-
-      {nextPickLabel ? (
-        <View
-          style={styles.countdownRow}
-          accessibilityRole="text"
-          accessibilityLabel={`Up next in ${nextPickLabel.eta}: ${nextPickLabel.name}`}
-        >
-          <Ionicons name="musical-notes" size={t.iconSize.xs} color={t.colors.accent.coral} />
-          <Text style={styles.countdownText} numberOfLines={1}>
-            Up next in <Text style={styles.countdownEta}>{nextPickLabel.eta}</Text> ·{' '}
-            <Text style={styles.countdownName}>{nextPickLabel.name}</Text>
+      {/* The how-to line teaches a first-timer; once a set is picked on this day it is chrome
+          that only pushes the timeline down. */}
+      {picked === 0 ? (
+        <View style={styles.hintRow}>
+          <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
+          <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
           </Text>
         </View>
       ) : null}
+
+      {/* The clash chip and the up-next line share one row; the up-next text wraps beside the chip. */}
+      <View style={styles.statusRow}>
+        <ClashChip count={count} picked={picked} />
+        {nextPickLabel ? (
+          <View
+            style={styles.countdownRow}
+            accessibilityRole="text"
+            accessibilityLabel={`Up next in ${nextPickLabel.eta}: ${nextPickLabel.name}`}
+          >
+            <Ionicons name="musical-notes" size={t.iconSize.xs} color={t.colors.accent.coral} />
+            <Text style={styles.countdownText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Up next in <Text style={styles.countdownEta}>{nextPickLabel.eta}</Text> ·{' '}
+              <Text style={styles.countdownName}>{nextPickLabel.name}</Text>
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       <FlatList
         ref={carouselRef}
@@ -690,10 +703,8 @@ const useStyles = makeStyles((t) => ({
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    flexShrink: 1,
     gap: t.spacing[1],
-    paddingBottom: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
   },
   countdownText: {
     ...typeStyle('micro'),
@@ -789,6 +800,18 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     overflow: 'hidden',
+    zIndex: 1,
+  },
+  setBlockTint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  // The 6 pt clash hatch runs down the left edge; this leaves a clear gap before the title.
+  setBlockClashed: {
+    paddingLeft: t.spacing[3],
   },
   setArtist: {
     ...typeStyle('caption', 600),
@@ -806,13 +829,19 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro', 700),
     color: t.colors.clash.mark,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  setTitle: {
+    flex: 1,
+  },
   iconRow: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    marginTop: 2,
   },
   crewBadge: {
     position: 'absolute',
@@ -830,15 +859,20 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.aqua,
   },
-  chipRow: {
+  statusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
     paddingBottom: t.spacing[2],
   },
   nowLine: {
     position: 'absolute',
     right: 0,
     height: 2,
-    zIndex: 8,
+    // Below set blocks (zIndex 1): the opaque card hides the line instead of striking through its text.
+    zIndex: 0,
   },
   nowDot: {
     position: 'absolute',

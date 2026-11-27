@@ -37,6 +37,8 @@ import OfflineStatusChip from '../OfflineStatusChip';
 import { useStyles } from './styles';
 import type { UseViewAsReturn } from '@festie/shared/hooks';
 
+const COMPACT_HIT_SLOP = { top: 6, bottom: 6, left: 6, right: 6 };
+
 const GROUP_BY_OPTIONS: readonly { value: ScheduleGroupBy; label: string }[] = SCHEDULE_GROUP_BYS.map((g) => ({
   value: g.key,
   label: g.label,
@@ -142,6 +144,39 @@ export default function ScheduleControls({
   // Group by only applies to the Cards list, and only when there is something to group.
   const showGroupBy = viewMode === 'cards' && filteredSets.length > 0;
   const showPhaseActions = !ready.visible && homeActions.length > 0 && !!phase && dismissedPhase !== phase;
+  const timeline = viewMode === 'timeline';
+  const statusItems = (
+    <>
+      <ScheduleStatusLine showSave={!!currentProfile} />
+      {/* Cards and fallback views support pull-to-refresh. Timeline owns both
+          scroll axes, so narrow phones need this compact manual action after
+          the header sheds secondary icons to preserve the festival title. */}
+      {width < 400 && timeline ? (
+        <TouchableOpacity
+          style={styles.compactRefreshButton}
+          onPress={handleRefresh}
+          disabled={isLoading}
+          hitSlop={COMPACT_HIT_SLOP}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh schedule"
+          accessibilityState={{ busy: isLoading }}
+        >
+          {isLoading ? (
+            <ActivityIndicator size="small" color={t.colors.accent.aqua} />
+          ) : (
+            <Ionicons name="refresh" size={t.iconSize.action} color={t.colors.accent.aqua} />
+          )}
+        </TouchableOpacity>
+      ) : null}
+      {/* In Cards the phase shortcuts and the offline chip wrap with the status chips, so a chip
+          that does not fit beside them drops to the next line whole instead of being clipped. */}
+      {showPhaseActions && phase ? (
+        <PhaseHomeActions compact inline={timeline} actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
+      ) : null}
+      {user ? <OfflineStatusChip remind /> : null}
+    </>
+  );
   return (
 <>
   {/* Before the festival the Festival ready checklist takes the band's place
@@ -159,46 +194,34 @@ export default function ScheduleControls({
   {/* Live-day Now & Next surface: shows the picked set playing now / up next
       inline, tapping through to the full Now & Next screen. Renders nothing
       when there's no current/upcoming pick. */}
-  <View style={{ paddingHorizontal: hPad }}>
-    <NowNextStrip onPress={() => router.push('/festival-mode')} />
-  </View>
+  {/* Cards only: the Timeline carries its own up-next line and now line, and the header's
+      Now pill opens the full surface, so the strip would only push the timeline down. */}
+  {viewMode === 'cards' ? (
+    <View style={{ paddingHorizontal: hPad }}>
+      <NowNextStrip onPress={() => router.push('/festival-mode')} />
+    </View>
+  ) : null}
 
   {/* F19 — offline-honest freshness for the flagship schedule surface,
       matching the crew tab's chip. Driven by festivalDataStore's
-      _festivalCachedAt; renders nothing until the schedule is cached once. */}
-  <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
-    <ScheduleStatusLine showSave={!!currentProfile} />
-    {/* The phase shortcuts share this line with the freshness label instead of
-        taking a band of their own. */}
-    {showPhaseActions && phase ? (
-      <PhaseHomeActions compact actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
-    ) : null}
-    {/* Cards and fallback views support pull-to-refresh. Timeline owns both
-        scroll axes, so narrow phones need this compact manual action after
-        the header sheds secondary icons to preserve the festival title. */}
-    {width < 400 && viewMode === 'timeline' ? (
-      <TouchableOpacity
-        style={styles.compactRefreshButton}
-        onPress={handleRefresh}
-        disabled={isLoading}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Refresh schedule"
-        accessibilityState={{ busy: isLoading }}
-      >
-        {isLoading ? (
-          <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-        ) : (
-          <Ionicons name="refresh" size={t.iconSize.action} color={t.colors.accent.aqua} />
-        )}
-      </TouchableOpacity>
-    ) : null}
-  </View>
-  {user ? (
-    <View style={{ paddingHorizontal: hPad, paddingTop: t.spacing[2] }}>
-      <OfflineStatusChip remind />
-    </View>
-  ) : null}
+      _festivalCachedAt; renders nothing until the schedule is cached once.
+      Timeline keeps the status chip, refresh, phase shortcuts and offline chip on one
+      scrolling line (the right edge fades) so the day tabs and the timeline start in the
+      upper half of the screen. Cards wrap them, because its page scrolls as one list. */}
+  {viewMode === 'timeline' ? (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.statusScroll}
+      contentContainerStyle={[styles.statusScrollContent, { paddingHorizontal: hPad }]}
+      keyboardShouldPersistTaps="handled"
+      fadingEdgeLength={Platform.OS === 'android' ? 32 : 0}
+    >
+      {statusItems}
+    </ScrollView>
+  ) : (
+    <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>{statusItems}</View>
+  )}
 
   {/* DC1 — search and the stage / my-picks + phase-action setup chrome are
       folded behind the search/filter toggles in the control row above; only
