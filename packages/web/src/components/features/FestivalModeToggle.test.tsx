@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useFestivalModeStore } from '@festie/shared';
+import { useFestivalStore } from '@festie/shared/stores';
 import FestivalModeToggle from './FestivalModeToggle';
 
 let mockPathname = '/cards';
@@ -41,6 +42,22 @@ describe('FestivalModeToggle', () => {
     const link = screen.getByTestId('festival-mode-toggle');
     expect(link).toHaveAccessibleName('Now & Next');
     expect(screen.getByText('Now & Next')).toHaveClass('max-[359px]:hidden');
+  });
+
+  it('glows on /festival-mode only while the festival is on', () => {
+    mockPathname = '/festival-mode';
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    const set = (offset: number) =>
+      useFestivalStore.setState({ currentFestival: { id: 'f1', name: 'F' } as never, days: [{ id: 'd1', label: 'D', date: day(offset) }] as never });
+    set(30);
+    const { unmount } = render(<FestivalModeToggle />);
+    expect(screen.getByTestId('festival-mode-toggle')).toHaveClass('bg-accent-aqua');
+    expect(screen.getByTestId('festival-mode-toggle')).not.toHaveClass('shadow-lg');
+    unmount();
+    set(0);
+    render(<FestivalModeToggle />);
+    expect(screen.getByTestId('festival-mode-toggle')).toHaveClass('shadow-lg');
+    useFestivalStore.setState({ currentFestival: null, days: [] });
   });
 
   it('marks aria-current=page on /festival-mode', () => {

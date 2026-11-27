@@ -6,7 +6,7 @@ export type ConceptIconKey =
 
 /** One name per concept, shared by web and mobile. See docs/design/copy-voice.md. */
 export const COPY = {
-  nowNext: { name: 'Now & Next', open: 'Open Now & Next', icon: 'nowNext' },
+  nowNext: { name: 'Now & Next', open: 'Open Now & Next', comingUp: 'Coming up', icon: 'nowNext' },
   jumpToNow: { label: 'Jump to now', a11y: 'Jump to now, scroll to the current time', icon: 'jumpToNow' },
   picks: {
     tab: 'Picks', title: 'My picks', filterA11y: 'Show only my picks',

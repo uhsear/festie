@@ -49,11 +49,22 @@ export interface CrewDayOf {
  * Selects the first crew when none is open (as the crew screen does), then
  * refreshes statuses and meeting points for it. Offline, the persisted
  * crewStore copy keeps rendering.
+ *
+ * Pass `festivalId` to scope the surface to that festival: a crew from another
+ * festival is never shown, the crew for this festival is opened instead, and a
+ * festival with no crew of yours yields `crew: null`.
  */
-export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, timeZone?: string): CrewDayOf {
+export function useCrewDayOf(
+  nowMs: number,
+  days: ReadonlyArray<FestivalDay>,
+  timeZone?: string,
+  festivalId?: string,
+): CrewDayOf {
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
-  const crew = useCrewStore((s) => s.activeCrew);
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  // A crew with no festival (older rows) stays visible everywhere.
+  const crew = activeCrew && (!festivalId || !activeCrew.festivalId || activeCrew.festivalId === festivalId) ? activeCrew : null;
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const statuses = useCrewStore((s) => s.crewStatuses);
@@ -62,7 +73,7 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const lostContact = useLiveLocationStore((s) => s.lostContact);
   const sos = useActiveSos();
 
-  const firstCrewId = crews[0]?.id;
+  const firstCrewId = (festivalId ? crews.find((c) => c.festivalId === festivalId) : crews[0])?.id;
   // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
   const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {

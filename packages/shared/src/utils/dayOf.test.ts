@@ -3,6 +3,7 @@ import type { CrewMeetingPoint, FestivalDay, FestivalSet, SosEntry } from '../ty
 import {
   fmtStartsIn,
   startsInIsRelative,
+  festivalStartCopy,
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedWeekday,
@@ -374,5 +375,38 @@ describe('selectCrewWhereabouts status freshness', () => {
   it('labels at-stage with the stage name', () => {
     const rows = run([st('a', 'at-stage', '2026-09-04T20:30:00Z', 'Main Stage')]);
     expect(rows[0]!.statusLabel).toBe('At Main Stage');
+  });
+});
+
+describe('festivalStartCopy', () => {
+  const TZ = 'America/New_York';
+  // Sunday 2026-12-27 00:00 in New York.
+  const SUNDAY = Date.parse('2026-12-27T05:00:00Z');
+  const now30 = SUNDAY - 30 * 86_400_000 + 3_600_000;
+
+  it('a date-only festival 30 days out says the count, the date and that times are missing, once each', () => {
+    const copy = festivalStartCopy(SUNDAY, false, now30, TZ);
+    expect(copy).toEqual({ lead: '30 days', title: 'Sun, Dec 27', body: "Set times aren't out yet." });
+    expect(Object.values(copy).join(' ')).not.toMatch(/Starts|In 30/);
+  });
+
+  it('a timed festival far out names the first set instead of repeating the day count', () => {
+    const first = SUNDAY + 20 * 3_600_000;
+    const copy = festivalStartCopy(first, true, now30, TZ);
+    expect(copy.body).toBe(`First set Sun ${fmtZonedClock(first, TZ)}`);
+  });
+
+  it('counts down within half a day, and shows only the weekday while times are missing', () => {
+    const soon = SUNDAY + 20 * 3_600_000;
+    expect(festivalStartCopy(soon, true, soon - 3 * 3_600_000, TZ)).toEqual({
+      lead: 'in 3h',
+      title: `Starts Sun ${fmtZonedClock(soon, TZ)}`,
+      body: 'First set in 3h.',
+    });
+    expect(festivalStartCopy(SUNDAY, false, SUNDAY - 3_600_000, TZ)).toEqual({ title: 'Starts Sun' });
+  });
+
+  it('falls back when no start is known', () => {
+    expect(festivalStartCopy(null, false, now30, TZ)).toEqual({ title: 'Not started yet' });
   });
 });

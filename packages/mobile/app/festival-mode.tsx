@@ -85,8 +85,12 @@ export default function FestivalModeScreen() {
     next && isFixRecent(fix.at, nowMs)
       ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
       : null;
-  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
+  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone, currentFestival?.id);
   const after = selection.phase === 'after';
+  // A festival with no dates, or dates but no set times yet, has no schedule to download.
+  const hasScheduleToSave = selection.phase !== 'none' && (selection.phase !== 'before' || selection.startsAtTimed);
+  // While sets are live the hero cards are compact, so the next set follows them straight away instead of sitting below the crew.
+  const liveNow = selection.current.length > 0;
   const crewId = crew?.id;
   const balance = expenseBalances.find((b) => b.userId === user?.id)?.balance ?? 0;
 
@@ -111,6 +115,16 @@ export default function FestivalModeScreen() {
   const openSet = (set: FestivalSet) => router.push(`/set/${set.id}`);
   const heroShowsNext =
     selection.current.length === 0 && selection.phase === 'during' && (lineupMode || selection.todayCount > 0);
+  const upNext = (
+    <UpNext
+      items={heroShowsNext ? selection.upcoming.slice(1) : selection.upcoming}
+      nowMs={nowMs}
+      timeZone={timeZone}
+      b2bSeparator={currentFestival?.b2bSeparator}
+      getStageName={getStageName}
+      onOpenSet={openSet}
+    />
+  );
 
   return (
     <View style={styles.screen}>
@@ -152,7 +166,7 @@ export default function FestivalModeScreen() {
           </View>
           <View style={styles.metaRow}>
             <FreshnessChip surface="schedule" />
-            {user ? <OfflineStatusChip /> : null}
+            {user && hasScheduleToSave ? <OfflineStatusChip /> : null}
             <LowPowerIndicator />
           </View>
 
@@ -170,6 +184,8 @@ export default function FestivalModeScreen() {
             onWrap={user ? () => router.push('/wrap') : undefined}
             walk={walk}
           />
+
+          {liveNow ? upNext : null}
 
           {showsFestivalWeather(selection, nowMs) ? <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} /> : null}
 
@@ -220,14 +236,7 @@ export default function FestivalModeScreen() {
             />
           )}
 
-          <UpNext
-            items={heroShowsNext ? selection.upcoming.slice(1) : selection.upcoming}
-            nowMs={nowMs}
-            timeZone={timeZone}
-            b2bSeparator={currentFestival.b2bSeparator}
-            getStageName={getStageName}
-            onOpenSet={openSet}
-          />
+          {liveNow ? null : upNext}
 
           {/* Settings sit below the content: NOW comes first on this screen. */}
           <View style={styles.settings}>
