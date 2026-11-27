@@ -203,11 +203,12 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {currentStatus && (
           <span
             className={cn(
-              'type-micro inline-block shrink-0 rounded-full px-2 py-1',
+              // 12px, because the 10px micro role is unreadable for a status the user needs.
+              'type-micro !text-[length:var(--font-size-12)] inline-block shrink-0 rounded-full px-2 py-1',
               // Live reads the `live` token group (OD-3).
               currentStatus === 'ongoing' && 'bg-live-fill text-[var(--text-on-light-accent)]',
               currentStatus === 'upcoming' && 'border border-[var(--color-aqua-a4)] text-accent-aqua',
-              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-muted',
+              currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-secondary',
             )}
             data-testid="festival-status-pill"
           >
