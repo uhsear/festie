@@ -49,6 +49,14 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(chip).not.toContain('paddingHorizontal: t.spacing[6]');
   });
 
+  it('grid time gutter widens at large text so "12PM" keeps clear of the screen edge', () => {
+    const src = read('app/grid.tsx');
+    expect(src).toContain('const GUTTER_W_LARGE = 56');
+    expect(src).toContain('const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W');
+    expect(src).toContain('twoUpColumnWidth(windowW, gutterW)');
+    expect(src).toContain('<View style={[styles.corner, { width: gutterW }]} />');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

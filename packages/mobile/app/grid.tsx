@@ -48,7 +48,7 @@ import {
   type HourMark,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
-import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
@@ -77,6 +77,8 @@ import ScheduleResultsRow from '../components/ScheduleResultsRow';
 // Sticky left time gutter. Matches the timeline gutter width (useNowIndicator /
 // TimelineView use 44) so the two schedule surfaces line up visually.
 const GUTTER_W = 44;
+// Fits "12PM" in the micro role at the 1.4 cap plus the right inset and a left margin.
+const GUTTER_W_LARGE = 56;
 // Stage-column width is twoUpColumnWidth(windowW, GUTTER_W): two stages fill
 // the width next to the gutter (clamped to 120-220 px), and the horizontal
 // scroll snaps by one column.
@@ -116,7 +118,8 @@ export default function GridScreen() {
   const router = useRouter();
   const reduceMotion = useReduceMotion();
   const { width: windowW } = useWindowDimensions(); // re-render on rotation so the body re-measures.
-  const colW = twoUpColumnWidth(windowW, GUTTER_W);
+  const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W;
+  const colW = twoUpColumnWidth(windowW, gutterW);
   const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
   const pxPerMin = GRID_ZOOM_LEVELS[zoom]!;
   const { count: clashCount, marks, picked } = useDayClashes();
@@ -297,7 +300,7 @@ export default function GridScreen() {
   // ── PNG export (replicates wrap.tsx's off-screen captureRef pipeline) ──
   const [sharing, setSharing] = useState(false);
   const posterRef = useRef<HostInstance>(null);
-  const posterW = GUTTER_W + colW * Math.max(visibleStages.length, 1);
+  const posterW = gutterW + colW * Math.max(visibleStages.length, 1);
   const posterH = HEADER_H + totalH;
 
   const shareGridText = useCallback(async () => {
@@ -705,7 +708,7 @@ export default function GridScreen() {
       <ScheduleDayChips hPad={t.spacing[4]} />
       {resultsRow}
       <View style={styles.headerBar}>
-        <View style={styles.corner} />
+        <View style={[styles.corner, { width: gutterW }]} />
         <ScrollView
           ref={headerScrollRef}
           horizontal
@@ -730,8 +733,8 @@ export default function GridScreen() {
           ref={gutterScrollRef}
           scrollEnabled={false}
           showsVerticalScrollIndicator={false}
-          style={styles.gutterStrip}
-          contentContainerStyle={[styles.gutter, { height: totalH }]}
+          style={[styles.gutterStrip, { width: gutterW }]}
+          contentContainerStyle={[styles.gutter, { width: gutterW, height: totalH }]}
         >
           {hours.map(({ m, px }) => (
             <Text key={m} style={[styles.hourLabel, { top: px }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -834,7 +837,7 @@ export default function GridScreen() {
         style={[styles.poster, { width: posterW, height: posterH }]}
         pointerEvents="none"
       >
-        <View style={[styles.gutter, { height: posterH }]}>
+        <View style={[styles.gutter, { width: gutterW, height: posterH }]}>
           <View style={{ height: HEADER_H }} />
           <View style={{ height: totalH }}>
             {hours.map(({ m, px }) => (
