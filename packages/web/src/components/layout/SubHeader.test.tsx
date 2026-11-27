@@ -125,6 +125,14 @@ describe('SubHeader layout density', () => {
     expect(screen.queryByRole('search')).not.toBeInTheDocument();
   });
 
+  it.each(['/map', '/caught', '/rate'])('renders the festival picker alone on %s', (path) => {
+    mockPathname = path;
+    const { container } = render(<SubHeader dayOnly={false} festivalOnly={true} />);
+    expect(container.querySelector('nav[aria-label="Festival view controls"]')).not.toBeNull();
+    expect(screen.queryByRole('group', { name: 'Festival days' })).not.toBeInTheDocument();
+    mockPathname = '/cards';
+  });
+
   it('shows search box only when not dayOnly/festivalOnly', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(screen.getByRole('search')).toBeInTheDocument();
