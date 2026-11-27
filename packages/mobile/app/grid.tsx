@@ -548,6 +548,7 @@ export default function GridScreen() {
             borderColor: cellColor,
             borderWidth: 1,
           };
+          const hatchInset = mark ? styles.cellClashed : null;
 
           // The off-screen export poster is captured by react-native-view-shot;
           // it must be a flat View (a Pressable inside a captured tree is fine,
@@ -603,7 +604,7 @@ export default function GridScreen() {
 
           if (forExport) {
             return (
-              <View key={set.id} style={[styles.cell, cellStyle]}>
+              <View key={set.id} style={[styles.cell, cellStyle, hatchInset]}>
                 {inner}
               </View>
             );
@@ -613,7 +614,7 @@ export default function GridScreen() {
           return (
             <Pressable
               key={set.id}
-              style={[styles.cell, cellStyle]}
+              style={[styles.cell, cellStyle, hatchInset]}
               onPress={() => router.push(`/set/${set.id}`)}
               {...holdToPick(set.id, pick)}
               accessibilityRole="button"
@@ -1026,6 +1027,10 @@ const useStyles = makeStyles((t: Tokens) => ({
     paddingHorizontal: 7,
     overflow: 'hidden',
     gap: 2,
+  },
+  // The 6 pt clash hatch runs down the left edge; this leaves a clear gap before the title.
+  cellClashed: {
+    paddingLeft: t.spacing[3],
   },
   clashMinutes: {
     ...typeStyle('micro', 700),

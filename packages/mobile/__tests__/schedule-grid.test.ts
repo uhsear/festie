@@ -33,6 +33,15 @@ describe('T17 mobile Grid (source-level guards)', () => {
     }
   });
 
+  it('grid and timeline blocks inset the title from the clash hatch', () => {
+    const grid = read('app/grid.tsx');
+    expect(grid).toMatch(/cellClashed: \{\s*paddingLeft: t\.spacing\[3\]/);
+    expect(grid.match(/styles\.cell, cellStyle, hatchInset/g)).toHaveLength(2);
+    const timeline = read('components/TimelineView.tsx');
+    expect(timeline).toMatch(/setBlockClashed: \{\s*paddingLeft: t\.spacing\[3\]/);
+    expect(timeline).toContain('mark ? styles.setBlockClashed : null');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

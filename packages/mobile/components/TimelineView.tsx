@@ -229,6 +229,7 @@ function StageColumn({
               key={s.id}
               style={[
                 styles.setBlock,
+                mark ? styles.setBlockClashed : null,
                 {
                   top: top + 2,
                   height,
@@ -794,6 +795,10 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     overflow: 'hidden',
+  },
+  // The 6 pt clash hatch runs down the left edge; this leaves a clear gap before the title.
+  setBlockClashed: {
+    paddingLeft: t.spacing[3],
   },
   setArtist: {
     ...typeStyle('caption', 600),
