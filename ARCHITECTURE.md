@@ -415,7 +415,7 @@ Tests use Node's built-in test runner (`node:test` + `node:assert`). 309 backend
 - Critical path tests (`tests/critical-paths.test.ts`) -- end-to-end user journeys
 - Hardening tests (`tests/hardening.test.ts`) -- security, rate limits, session edge cases
 - Feature tests -- email-auth, crew-features, lineup-import, share, profiles, ratings, notifications
-- E2E tests (`tests/e2e/*.spec.ts`, 16 specs) -- Playwright browser automation
+- E2E tests (`tests/e2e/*.spec.ts`, 17 specs) -- Playwright browser automation
 - Web, shared and mobile packages use vitest (`pnpm --filter <package> test`)
 
 ```bash
