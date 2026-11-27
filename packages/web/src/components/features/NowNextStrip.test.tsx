@@ -58,6 +58,31 @@ describe('NowNextStrip', () => {
     expect(nav).toHaveBeenCalledWith({ to: '/festival-mode' });
   });
 
+  it('leads with the set ending first and folds concurrent live picks into a count', () => {
+    Object.assign(state, {
+      sets: [
+        mk('a', '2030-06-15', '20:00', '21:00', 0),
+        mk('b', '2030-06-15', '19:30', '20:30', 0),
+        mk('c', '2030-06-15', '20:15', '22:00', 0),
+      ],
+      currentProfile: { id: 'p1', picks: { a: 'must', b: 'want', c: 'maybe' } },
+    });
+    nowMs = local(2030, 5, 15, 20, 20);
+    render(<NowNextStrip />);
+    const strip = screen.getByTestId('now-next-strip');
+    expect(strip).toHaveTextContent('Beta');
+    expect(screen.getByTestId('now-next-more')).toHaveTextContent('+2 more live');
+    expect(
+      screen.getByRole('button', { name: 'Now playing: Beta at Main Stage, 10m left. +2 more live. Open Now and Next.' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no count when only one pick is live', () => {
+    nowMs = local(2030, 5, 15, 20, 48);
+    render(<NowNextStrip />);
+    expect(screen.queryByTestId('now-next-more')).toBeNull();
+  });
+
   it('wraps the artist name on two lines and truncates only the stage', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     render(<NowNextStrip />);
