@@ -120,6 +120,7 @@ describe('RatePage', () => {
     mocks.toRate = [];
     renderPage();
     expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
+    expect(screen.getByRole('link', { name: 'See the full list' }).className).toContain('border-accent-aqua');
   });
 
   it('hides the rating scale until Saw it is chosen', async () => {

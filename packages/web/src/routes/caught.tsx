@@ -28,6 +28,10 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
 import { ArtistNameButton } from '../components/features/ArtistName';
 
+// The one action on an empty list is an outlined accent pill, not a ghost chip.
+const primaryChipClass =
+  'min-h-11 px-5 rounded-full border border-accent-aqua text-sm font-semibold text-accent-aqua cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+
 const chipClass =
   'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
@@ -145,7 +149,8 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {countLine}
       </p>
-      <p className="text-xs text-text-secondary mt-1">{ratingCaption(null)}</p>
+      {/* The hint describes rows, so it waits for a row. */}
+      {!isEmpty && <p className="text-xs text-text-secondary mt-1">{ratingCaption(null)}</p>}
       <span className="sr-only" aria-live="polite">
         {announcement}
       </span>
@@ -302,7 +307,7 @@ function AddSet({
         aria-expanded={open}
         aria-controls="caught-add-panel"
         onClick={() => setOpen((o) => !o)}
-        className={chipClass}
+        className={primaryChipClass}
       >
         Add a set I caught
       </button>

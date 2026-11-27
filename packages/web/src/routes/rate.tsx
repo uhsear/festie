@@ -22,6 +22,9 @@ const ADVANCE_DELAY_MS = 300;
 const listLinkClass =
   'inline-flex min-h-11 items-center text-sm font-semibold text-accent-aqua underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
+const outlineLinkClass =
+  'inline-flex min-h-11 items-center justify-center rounded-full border border-accent-aqua px-5 text-sm font-semibold text-accent-aqua focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+
 const linkClass =
   'inline-flex min-h-11 items-center justify-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
@@ -146,8 +149,10 @@ function RateFlow({ festivalId }: { festivalId: string }) {
           title="Nothing to rate right now"
           description="Sets you picked show up here after they end."
         />
-        <div className="flex justify-center">
-          <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
+        {/* Say which festival this is about, so an empty page is not mistaken for a missing one. */}
+        <p className="text-center text-sm text-text-secondary">{data.festival.name}</p>
+        <div className="mt-4 flex justify-center">
+          <Link to="/caught" search={{ festival: festivalId }} className={outlineLinkClass}>
             See the full list
           </Link>
         </div>
