@@ -26,6 +26,7 @@ import SeenToggle from '../components/features/SeenToggle';
 import { cn } from '../lib/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
+import { useRouteFestivalId } from '../hooks/useRouteFestivalId';
 import { ArtistNameButton } from '../components/features/ArtistName';
 
 const chipClass =
@@ -47,8 +48,7 @@ export default function CaughtPage() {
 
 function CaughtPageInner() {
   const search = useSearch({ from: '/caught' });
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
-  const festivalId = search.festival ?? currentFestival?.id;
+  const festivalId = useRouteFestivalId(search.festival);
   if (!festivalId) {
     return (
       <EmptyState

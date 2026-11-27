@@ -26,6 +26,7 @@ import Switch from '../components/ui/Switch';
 import CrewWrapPoster from '../components/features/CrewWrapPoster';
 import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import { useToast } from '../lib/toastContext';
+import { useRouteFestivalId } from '../hooks/useRouteFestivalId';
 import { sharePoster, wrapShareLink } from '../lib/sharePoster';
 import WrapHero from '../components/wrap/WrapHero';
 import PosterPreview from '../components/wrap/PosterPreview';
@@ -56,7 +57,6 @@ export default function WrapPage() {
 function WrapPageInner() {
   const search = useSearch({ from: '/wrap' });
   const user = useAuthStore((s) => s.user);
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
   const activeCrew = useCrewStore((s) => s.activeCrew);
   const selectCrew = useCrewStore((s) => s.selectCrew);
   const showHandle = useUIStore((s) => s.wrapShowHandle);
@@ -67,7 +67,7 @@ function WrapPageInner() {
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'me' | 'crew'>('me');
 
-  const festivalId = search.festival ?? currentFestival?.id;
+  const festivalId = useRouteFestivalId(search.festival);
   const slug = useFestivalStore((s) => s.festivals.find((f) => f.id === festivalId)?.slug);
   // The active crew belongs to one festival; only send it for that festival's wrap.
   const crewParam = activeCrew && activeCrew.festivalId === festivalId ? activeCrew.id : null;
