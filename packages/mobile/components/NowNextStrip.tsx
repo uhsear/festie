@@ -67,6 +67,8 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
 
   const focus = nowSet ?? nextSet!;
   const isNow = !!nowSet;
+  // Concurrent live picks: the lead is the set ending first (same order as festival-mode); the rest fold into a count.
+  const moreLabel = isNow && current.length > 1 ? `+${current.length - 1} more live` : '';
   const name = artistDisplayName(focus.set, b2bSeparator);
   const stage = getStageName(focus.set.stageId) || '';
   // `upcoming` spans every festival day (not just today), so the soonest pick can
@@ -92,7 +94,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
     : 0;
 
   const a11y = isNow
-    ? `Now playing: ${name}${stage ? ` at ${stage}` : ''}, ${timing}, ${Math.round(progressPct * 100)}% through. Open Now & Next.`
+    ? `Now playing: ${name}${stage ? ` at ${stage}` : ''}, ${timing}, ${Math.round(progressPct * 100)}% through.${moreLabel ? ` ${moreLabel}.` : ''} Open Now & Next.`
     : `Up next: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now & Next.`;
 
   return (
@@ -125,6 +127,11 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
             </Text>
           ) : null}
           <Text style={[styles.timing, isNow && styles.timingNow]}>{timing}</Text>
+          {moreLabel ? (
+            <Text testID="now-next-more" style={[styles.timing, styles.timingNow]}>
+              {moreLabel}
+            </Text>
+          ) : null}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.muted} />
