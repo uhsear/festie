@@ -203,6 +203,51 @@ export function fmtZonedWeekday(ms: number, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', ...(timeZone ? { timeZone } : {}) }).format(new Date(ms));
 }
 
+/** `Sun, Dec 27` in the festival zone, or device-local when no zone is known. */
+export function fmtZonedDate(ms: number, timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(timeZone ? { timeZone } : {}),
+  }).format(new Date(ms));
+}
+
+const DAY_MS = 86_400_000;
+
+export interface FestivalStartCopy {
+  /** The big figure: a countdown, or a day count once the start is half a day or more away. */
+  lead?: string;
+  title: string;
+  body?: string;
+}
+
+/**
+ * What the Now surface says before the festival starts. Each fact appears once:
+ * within half a day it is a countdown and the start clock; further out it is a
+ * day count, the date, and whether set times exist. A date-only festival never
+ * shows a clock.
+ */
+export function festivalStartCopy(
+  startsAt: number | null,
+  startsAtTimed: boolean,
+  nowMs: number,
+  timeZone?: string,
+): FestivalStartCopy {
+  if (startsAt === null) return { title: 'Not started yet' };
+  if (startsAt - nowMs < DAY_MS / 2) {
+    if (!startsAtTimed) return { title: `Starts ${fmtZonedWeekday(startsAt, timeZone)}` };
+    const startsIn = fmtStartsIn(startsAt, nowMs, timeZone);
+    return { lead: startsIn, title: `Starts ${fmtZonedDayClock(startsAt, timeZone)}`, body: `First set ${startsIn}.` };
+  }
+  const days = Math.ceil((startsAt - nowMs) / DAY_MS);
+  return {
+    lead: `${days} day${days === 1 ? '' : 's'}`,
+    title: fmtZonedDate(startsAt, timeZone),
+    body: startsAtTimed ? `First set ${fmtZonedDayClock(startsAt, timeZone)}` : "Set times aren't out yet.",
+  };
+}
+
 /** Calendar days from `fromMs` to `targetMs` in the festival zone (device-local when no zone is known): 1 = tomorrow. */
 export function zonedCalendarDayDiff(fromMs: number, targetMs: number, timeZone?: string): number {
   const dayNumber = (ms: number) => {

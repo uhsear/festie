@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Home, MapPin, Users } from 'lucide-react';
+import { ChevronRight, Compass, Home, MapPin, Users } from 'lucide-react';
 import {
   fmtStartsIn,
   fmtZonedClock,
@@ -104,7 +104,7 @@ export function CrewNowSection({ crewName, rows, onOpenCrew }: CrewProps) {
           </button>
         )}
       </div>
-      <Button variant="primary" fullWidth onClick={onOpenCrew} data-testid="fm-find-crew">
+      <Button variant="secondary" fullWidth onClick={onOpenCrew} data-testid="fm-find-crew">
         Find your crew
         <ChevronRight className="w-4 h-4" aria-hidden="true" />
       </Button>
@@ -133,7 +133,8 @@ export function MeetNowCard({ meet, nowMs, timeZone, onOpenMeet }: MeetProps) {
   }
   return (
     <section aria-labelledby="fm-meet-title" className="flex flex-col gap-2" data-testid="fm-meet">
-      <h2 id="fm-meet-title" className="type-micro text-text-secondary">
+      <h2 id="fm-meet-title" className="type-label font-semibold text-text-primary flex items-center gap-1.5">
+        <Compass className="w-4 h-4 shrink-0" aria-hidden="true" />
         Where we meet
       </h2>
       <button

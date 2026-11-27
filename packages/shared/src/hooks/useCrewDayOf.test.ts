@@ -39,3 +39,38 @@ describe('useCrewDayOf first-crew selection', () => {
     expect(selectCrew).toHaveBeenCalledWith('old');
   });
 });
+
+describe('useCrewDayOf festival scope', () => {
+  const selectCrew = vi.fn().mockResolvedValue(undefined);
+  const inFestival = (id: string, festivalId: string) => ({ ...crew(id), festivalId }) as Crew;
+
+  beforeEach(() => {
+    selectCrew.mockClear();
+    useAuthStore.setState({ user: { id: 'u1' } } as never);
+  });
+
+  it('hides a crew from another festival and yields no crew when this festival has none', () => {
+    useCrewStore.setState({ crews: [inFestival('edc', 'f-edc')], activeCrew: inFestival('edc', 'f-edc'), crewLoading: false, selectCrew });
+    const { result } = renderHook(() => useCrewDayOf(0, [], undefined, 'f-hush'));
+    expect(result.current.crew).toBeNull();
+    expect(selectCrew).not.toHaveBeenCalled();
+  });
+
+  it('opens the crew of this festival when another festival crew is active', () => {
+    useCrewStore.setState({
+      crews: [inFestival('edc', 'f-edc'), inFestival('orchard', 'f-orchard')],
+      activeCrew: inFestival('edc', 'f-edc'),
+      crewLoading: false,
+      selectCrew,
+    });
+    const { result } = renderHook(() => useCrewDayOf(0, [], undefined, 'f-orchard'));
+    expect(result.current.crew).toBeNull();
+    expect(selectCrew).toHaveBeenCalledWith('orchard');
+  });
+
+  it('keeps the active crew when it belongs to this festival, or when no festival is given', () => {
+    useCrewStore.setState({ crews: [inFestival('orchard', 'f-orchard')], activeCrew: inFestival('orchard', 'f-orchard'), crewLoading: false, selectCrew });
+    expect(renderHook(() => useCrewDayOf(0, [], undefined, 'f-orchard')).result.current.crew?.id).toBe('orchard');
+    expect(renderHook(() => useCrewDayOf(0, [])).result.current.crew?.id).toBe('orchard');
+  });
+});

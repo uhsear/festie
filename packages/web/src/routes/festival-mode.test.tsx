@@ -64,10 +64,10 @@ const SETS = [
   { id: 's3', artist: 'Bicep', stageId: 'main', dayIndex: 1, startTime: '21:00', endTime: '22:00' },
 ];
 
-function setup(opts: { festival?: unknown; picks?: Record<string, string> | null; user?: boolean; error?: string } = {}) {
+function setup(opts: { sets?: unknown; festival?: unknown; picks?: Record<string, string> | null; user?: boolean; error?: string } = {}) {
   state = {
     currentFestival: opts.festival === undefined ? FESTIVAL : opts.festival,
-    sets: SETS,
+    sets: opts.sets ?? SETS,
     days: DAYS,
     currentProfile: opts.picks === null ? null : { picks: opts.picks ?? {} },
     festivals: [],
@@ -150,8 +150,23 @@ describe('FestivalModeView (Now surface)', () => {
     vi.setSystemTime(new Date('2026-06-09T12:00:00Z'));
     setup({ user: true, picks: { s1: 'must' } });
     render(<FestivalModeView />);
-    expect(screen.getByText('Starts Fri 5:00 PM')).toBeInTheDocument();
-    expect(screen.getByText('In 4 days.')).toBeInTheDocument();
+    expect(screen.getByText('Coming up')).toBeInTheDocument();
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveTextContent('4 days');
+    expect(screen.getByText('Fri, Jun 12')).toBeInTheDocument();
+    expect(screen.getByText('First set Fri 5:00 PM')).toBeInTheDocument();
+    expect(screen.queryByText(/In 4 days/)).toBeNull();
+    // Set times exist, so there is a schedule to download.
+    expect(screen.getByTestId('offline-chip')).toBeInTheDocument();
+  });
+
+  it('before a date-only festival: counts days, states the date, and offers no download', () => {
+    vi.setSystemTime(new Date('2026-06-09T12:00:00Z'));
+    setup({ user: true, sets: SETS.map(({ startTime: _s, endTime: _e, ...set }) => set) });
+    render(<FestivalModeView />);
+    expect(screen.getByText('Coming up')).toBeInTheDocument();
+    expect(screen.getByText('Fri, Jun 12')).toBeInTheDocument();
+    expect(screen.getByText("Set times aren't out yet.")).toBeInTheDocument();
+    expect(screen.queryByTestId('offline-chip')).toBeNull();
   });
 
   it('signed in with a crew: shows who is where and the meeting point, one tap to Meet', () => {

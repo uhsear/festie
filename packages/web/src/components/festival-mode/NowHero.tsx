@@ -6,8 +6,7 @@ import {
   fmtStartsIn,
   fmtTimeLeft,
   fmtZonedClock,
-  fmtZonedDayClock,
-  fmtZonedWeekday,
+  festivalStartCopy,
   startsInIsRelative,
   type DayOfSet,
   type NowNextSelection,
@@ -44,21 +43,6 @@ interface Props {
   onWrap?: () => void;
   /** Walk to the next set's stage, when a recent fix exists. */
   walk?: StageWalk | null;
-}
-
-const DAY_MS = 86_400_000;
-
-/** Lead countdown while the festival has not started: a timed first set counts down, anything further out counts days. */
-function startsLead(startsAt: number, nowMs: number, timeZone: string | undefined, timed: boolean): string | undefined {
-  if (startsAt - nowMs < DAY_MS / 2) return timed ? fmtStartsIn(startsAt, nowMs, timeZone) : undefined;
-  const days = Math.ceil((startsAt - nowMs) / DAY_MS);
-  return `${days} day${days === 1 ? '' : 's'}`;
-}
-
-function startsInWords(startsAt: number, nowMs: number, timeZone: string | undefined, timed: boolean): string | undefined {
-  if (startsAt - nowMs < DAY_MS / 2) return timed ? `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.` : undefined;
-  const days = Math.ceil((startsAt - nowMs) / DAY_MS);
-  return `In ${days} day${days === 1 ? '' : 's'}.`;
 }
 
 // The lead object: the set name in ink. The stage colour rides a rail, never the text, because the raw stage hues fail contrast on both themes.
@@ -179,13 +163,7 @@ export default function NowHero({
     body = (
       <Quiet
         icon={<CalendarClock />}
-        lead={startsAt ? startsLead(startsAt, nowMs, timeZone, startsAtTimed) : undefined}
-        title={
-          startsAt
-            ? `Starts ${startsAtTimed ? fmtZonedDayClock(startsAt, timeZone) : fmtZonedWeekday(startsAt, timeZone)}`
-            : 'Not started yet'
-        }
-        body={startsAt ? startsInWords(startsAt, nowMs, timeZone, startsAtTimed) : undefined}
+        {...festivalStartCopy(startsAt, startsAtTimed, nowMs, timeZone)}
       />
     );
   } else if (phase === 'after') {
@@ -274,7 +252,7 @@ export default function NowHero({
         ) : (
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-text-muted mr-1" aria-hidden="true" />
         )}
-        {lineupMode ? 'Now on the lineup' : 'Now'}
+        {phase === 'before' ? COPY.nowNext.comingUp : lineupMode ? 'Now on the lineup' : 'Now'}
       </h2>
       {body}
     </section>

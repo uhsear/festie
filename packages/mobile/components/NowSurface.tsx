@@ -5,10 +5,9 @@ import type { FestivalSet } from '@festie/shared/types';
 import {
   artistDisplayName,
   fmtStartsIn,
-  fmtZonedWeekday,
   fmtTimeLeft,
   fmtZonedClock,
-  fmtZonedDayClock,
+  festivalStartCopy,
   settleUpLine,
   festivalTint,
   startsInIsRelative,
@@ -38,7 +37,8 @@ import SetChangeEnter from './SetChangeEnter';
 
 // Countdown turns coral when a set is this close.
 const IMMINENT_MIN = 5;
-const DAY_MS = 86_400_000;
+// A live set this close to its end gets amber, so the one to leave for stands out among concurrent cards.
+const ENDING_SOON_MIN = 10;
 const MAX_CREW_ROWS = 5;
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -98,7 +98,7 @@ interface HeroProps {
   b2bSeparator?: string;
   lineupMode: boolean;
   getStageName: (stageId: string) => string | undefined;
-  /** Resolved colour for a stage; the lead set name is drawn in it. */
+  /** Resolved colour for a stage; drawn as the card's leading rail, never as text (raw stage hues fail contrast). */
   getStageColor?: (stageId: string) => string;
   /** Tints the Wrap thumbnail once the festival is over. Never rendered as text. */
   festivalName?: string;
@@ -128,16 +128,17 @@ export function NowHero({
   const live = current.length > 0;
   const next = upcoming[0];
   const name = (set: FestivalSet) => artistDisplayName(set, b2bSeparator);
-  const heading = lineupMode ? 'Now on the lineup' : 'Now';
-  const stageColor = (stageId: string) => {
+  const heading = phase === 'before' ? COPY.nowNext.comingUp : lineupMode ? 'Now on the lineup' : 'Now';
+  const stageRail = (stageId: string) => {
     const color = getStageColor?.(stageId);
-    return color ? { color } : null;
+    return color ? <View pointerEvents="none" style={[s.rail, { backgroundColor: color }]} /> : null;
   };
 
   let body: ReactNode;
   if (live) {
     body = current.map(({ set, end }) => {
       const stage = getStageName(set.stageId) || '';
+      const endingSoon = end - nowMs <= ENDING_SOON_MIN * 60_000;
       return (
         <SetChangeEnter key={set.id}>
         <AppPressable
@@ -147,15 +148,15 @@ export function NowHero({
           accessibilityLabel={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
           {...artistOpenActions(set, b2bSeparator)}
         >
-          <Text style={[s.artist, stageColor(set.stageId)]}>
+          {stageRail(set.stageId)}
+          <Text style={s.artist}>
             <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
           </Text>
-          {stage ? <Text style={s.secondary}>{stage}</Text> : null}
-          <View style={s.metaRow}>
-            <Text style={s.leadCountdown} testID="fm-lead-countdown">
+          <View style={s.liveRow}>
+            <Text style={[s.secondary, s.flex]}>{`${stage ? `${stage} · ` : ''}until ${fmtZonedClock(end, timeZone)}`}</Text>
+            <Text style={[s.leadCountdown, endingSoon && s.countdownImminent]} testID="fm-lead-countdown">
               {fmtTimeLeft(end, nowMs)}
             </Text>
-            <Text style={s.figure}>until {fmtZonedClock(end, timeZone)}</Text>
           </View>
         </AppPressable>
         </SetChangeEnter>
@@ -166,38 +167,7 @@ export function NowHero({
       <Quiet icon="calendar-outline" title="Set times aren't out yet" body="Now and next appear once the schedule is published." />
     );
   } else if (phase === 'before') {
-    const far = startsAt !== null && startsAt - nowMs >= DAY_MS / 2;
-    const days = startsAt !== null ? Math.ceil((startsAt - nowMs) / DAY_MS) : 0;
-    body = (
-      <Quiet
-        icon="calendar-outline"
-        lead={
-          startsAt === null
-            ? undefined
-            : far
-              ? `${days} day${days === 1 ? '' : 's'}`
-              : startsAtTimed
-                ? fmtStartsIn(startsAt, nowMs, timeZone)
-                : undefined
-        }
-        title={
-          startsAt === null
-            ? 'Not started yet'
-            : startsAtTimed
-              ? `Starts ${fmtZonedDayClock(startsAt, timeZone)}`
-              : `Starts ${fmtZonedWeekday(startsAt, timeZone)}`
-        }
-        body={
-          startsAt === null
-            ? undefined
-            : far
-              ? `In ${days} day${days === 1 ? '' : 's'}.`
-              : !startsAtTimed
-                ? undefined
-                : `First set ${fmtStartsIn(startsAt, nowMs, timeZone)}.`
-        }
-      />
-    );
+    body = <Quiet icon="calendar-outline" {...festivalStartCopy(startsAt, startsAtTimed, nowMs, timeZone)} />;
   } else if (phase === 'after') {
     body = (
       <Quiet
@@ -230,14 +200,15 @@ export function NowHero({
     body = (
       <SetChangeEnter key={next.set.id}>
       <AppPressable
-        style={s.card}
+        style={[s.card, s.railCard]}
         onPress={() => onOpenSet(next.set)}
         accessibilityRole="button"
         accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walkA11y}. Open details`}
         {...artistOpenActions(next.set, b2bSeparator)}
       >
+        {stageRail(next.set.stageId)}
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
-        <Text style={[s.artist, stageColor(next.set.stageId)]}>
+        <Text style={s.artist}>
           <ArtistNameRuns set={next.set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
         </Text>
         <View style={s.nextRow}>
@@ -350,7 +321,7 @@ export function CrewNow({ crewName, rows, onOpenCrew }: { crewName: string; rows
           </AppPressable>
         ) : null}
       </View>
-      <Button label="Find your crew" icon="people" onPress={onOpenCrew} />
+      <Button label="Find your crew" icon="people" variant="secondary" onPress={onOpenCrew} />
     </View>
   );
 }
@@ -531,12 +502,16 @@ const useStyles = makeStyles((t) => ({
   // Live is the one glowing state on this screen (Glow Means State).
   liveCard: {
     borderColor: t.colors.live.fill,
-    backgroundColor: t.colors.live.ring,
+    paddingLeft: t.spacing[5],
+    overflow: 'hidden',
   },
-  artist: { ...typeStyle('display-lg'), color: t.colors.text.primary },
+  railCard: { paddingLeft: t.spacing[5], overflow: 'hidden' },
+  rail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 6 },
+  liveRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: t.spacing[3] },
+  artist: { ...typeStyle('heading'), color: t.colors.text.primary },
   secondary: { ...typeStyle('label'), color: t.colors.text.secondary },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: t.spacing[3], rowGap: t.spacing[1] },
-  leadCountdown: { ...typeStyle('display-xl', undefined, { tabular: true }), color: t.colors.text.primary },
+  leadCountdown: { ...typeStyle('heading', undefined, { tabular: true }), color: t.colors.text.primary },
   leadCountdownLg: { ...typeStyle('display-lg', undefined, { tabular: true }), color: t.colors.text.primary },
   wrapThumb: { width: 54, height: 96, borderRadius: t.radii.default, borderWidth: 1, borderColor: t.colors.border.default, borderTopWidth: 3 },
   figure: { ...typeStyle('numeral', 600), color: t.colors.text.primary },
@@ -554,7 +529,7 @@ const useStyles = makeStyles((t) => ({
   walkText: { ...typeStyle('label'), color: t.colors.text.primary, flexShrink: 1 },
   countdownRow: { flexDirection: 'row', alignItems: 'baseline', gap: t.spacing[2] },
   countdown: { ...typeStyle('display-xl', undefined, { tabular: true }), color: t.colors.accent.aqua },
-  countdownImminent: { color: t.colors.accent.coral },
+  countdownImminent: { color: t.colors.accent.amber },
   quietRow: { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing[3] },
   quietTitle: { ...typeStyle('title'), color: t.colors.text.primary },
   list: {

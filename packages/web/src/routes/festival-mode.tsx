@@ -72,7 +72,7 @@ function FestivalModeViewInner() {
     next && isFixRecent(fix.at, nowMs)
       ? walkToStage(fix.coord, stageCoord(stages, next.set.stageId), next.start, nowMs)
       : null;
-  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone);
+  const { crew, whereabouts, meet } = useCrewDayOf(nowMs, days, timeZone, currentFestival?.id);
   const after = selection.phase === 'after';
   const crewId = crew?.id;
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
@@ -108,6 +108,8 @@ function FestivalModeViewInner() {
   const upNext = heroShowsNext ? selection.upcoming.slice(1) : selection.upcoming;
   // While sets are live the hero cards are compact, so the next set follows them straight away instead of sitting below the crew.
   const liveNow = selection.current.length > 0;
+  // A festival with no dates, or dates but no set times yet, has no schedule to download.
+  const hasScheduleToSave = selection.phase !== 'none' && (selection.phase !== 'before' || selection.startsAtTimed);
   const goCrew = () => navigate({ to: '/crew' });
 
   return (
@@ -196,7 +198,7 @@ function FestivalModeViewInner() {
         </div>
       </div>
 
-      {user ? <OfflineStatusChip className="mt-6" /> : null}
+      {user && hasScheduleToSave ? <OfflineStatusChip className="mt-6" /> : null}
     </div>
   );
 }
