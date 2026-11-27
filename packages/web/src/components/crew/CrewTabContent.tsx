@@ -10,6 +10,7 @@ import ExpensesTab from './ExpensesTab';
 import ActivityTab from './ActivityTab';
 import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils/navigation';
 import type { CrewMember } from '@festie/shared/types';
+import { sectionHeading } from '../../lib/styles';
 
 interface CrewTabContentProps {
   tab: CrewTabKey;
@@ -35,8 +36,6 @@ interface CrewTabContentProps {
 // Plan and Compare lead somewhere else; Create poll below is the one filled action on the tab.
 const NAV_ROW =
   'flex items-center gap-2 py-2 px-4 min-h-11 rounded-xl border border-border bg-bg-card text-text-primary hover:border-border-light transition-colors duration-(--duration-med) ease-(--ease-out) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
-
-const SECTION_HEADING = 'px-1 text-xs font-semibold uppercase tracking-wide text-text-muted';
 
 export default function CrewTabContent({
   tab,
@@ -87,7 +86,7 @@ export default function CrewTabContent({
           {findLead}
           <MeetingPointsTab crewId={crewId} currentUserId={currentUserId} focusSosUserId={focusSosUserId} isOwner={isOwner} />
           <section aria-labelledby="crew-activity-heading" className="space-y-3 pt-4">
-            <h3 id="crew-activity-heading" className={SECTION_HEADING}>
+            <h3 id="crew-activity-heading" className={sectionHeading}>
               Activity
             </h3>
             <ActivityTab crewId={crewId} />
@@ -107,19 +106,19 @@ export default function CrewTabContent({
             <ChevronRight className="w-4 h-4 ml-auto flex-shrink-0 text-text-muted" aria-hidden="true" />
           </Link>
           <section aria-labelledby="crew-polls-heading" className="space-y-3">
-            <h3 id="crew-polls-heading" className={SECTION_HEADING}>
+            <h3 id="crew-polls-heading" className={sectionHeading}>
               Polls
             </h3>
             <PollsTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />
           </section>
           <section aria-labelledby="crew-packing-heading" className="space-y-3">
-            <h3 id="crew-packing-heading" className={SECTION_HEADING}>
+            <h3 id="crew-packing-heading" className={sectionHeading}>
               Packing
             </h3>
             <PackingTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />
           </section>
           <section aria-labelledby="crew-rides-heading" className="space-y-3">
-            <h3 id="crew-rides-heading" className={SECTION_HEADING}>
+            <h3 id="crew-rides-heading" className={sectionHeading}>
               Rides
             </h3>
             <RidesTab crewId={crewId} currentUserId={currentUserId} isOwner={isOwner} />

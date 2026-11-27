@@ -471,6 +471,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       {expenses.length === 0 ? (
         <EmptyState
           illustration="emptyList"
+          compact
           title="No expenses yet"
           description={`Add the first one, for example: Gas, ${formatAmount(60, currency)}, split 4 ways.`}
         />

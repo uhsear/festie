@@ -32,6 +32,8 @@ interface EmptyStateProps {
     onClick: () => void;
   };
   className?: string;
+  /** A short, icon-only block for an empty section that shares a screen with others. Drops the illustration and the 200px floor. */
+  compact?: boolean;
   /** Heading level of the title. Defaults to 2; a page with no other content passes 1. */
   headingLevel?: 1 | 2 | 3;
 }
@@ -45,6 +47,7 @@ export default function EmptyState({
   ghostRow,
   secondaryCta,
   className,
+  compact = false,
   headingLevel = 2,
 }: EmptyStateProps) {
   const Heading = `h${headingLevel}` as const;
@@ -58,14 +61,15 @@ export default function EmptyState({
         // Vertical padding scales with viewport so the empty state stays
         // proportionate in tight panels (crew/picks) and roomy on desktop.
         // className can still override (e.g. festival-mode's compact slot).
-        'empty-state flex flex-col items-center justify-center gap-4 py-4 sm:py-6 px-6 text-center min-h-[200px]',
+        'empty-state flex flex-col items-center justify-center gap-4 py-4 sm:py-6 px-6 text-center',
+        compact ? 'min-h-0' : 'min-h-[200px]',
         className,
       )}
     >
       <div className="flex flex-col items-center gap-4 w-full">
         {ghostRow ? (
           <GhostRow kind={ghostRow} />
-        ) : illustration ? (
+        ) : illustration && !compact ? (
           <>
             <img
               alt=""
@@ -81,9 +85,11 @@ export default function EmptyState({
             </div>
           </>
         ) : (
-          icon && (
+          (icon || (compact && illustration)) && (
             <div className="flex justify-center">
-              <div className="text-text-secondary [&_svg]:w-12 [&_svg]:h-12">{icon}</div>
+              <div className="text-text-secondary [&_svg]:w-12 [&_svg]:h-12">
+                {icon ?? (illustration ? React.createElement(FALLBACK_ICON[illustration]) : null)}
+              </div>
             </div>
           )
         )}

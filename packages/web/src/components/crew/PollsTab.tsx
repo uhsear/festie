@@ -361,6 +361,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
       {polls.length === 0 ? (
         <EmptyState
           illustration="emptyList"
+          compact
           title="No polls yet"
           description="Ask the crew something."
         />

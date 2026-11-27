@@ -43,6 +43,7 @@ import { meetingPointsQuery } from '../../lib/queryPersist';
 import CrewStatus from './CrewStatus';
 import LiveLocationControls from './LiveLocationControls';
 import SegmentedTablist from '@/components/ui/SegmentedTablist';
+import { sectionHeading } from '../../lib/styles';
 
 // Lazy: CrewMap pulls in maplibre-gl (~200 kB gzip) at runtime. Keeping it behind
 // lazy() puts it in its own chunk so it never lands in the main bundle (mirrors
@@ -488,6 +489,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
       {view === 'list' && (
         <>
+          <h3 className={sectionHeading}>Meeting points</h3>
           {/* With no points the empty state carries the only Add button. */}
           {!showForm && (current.length > 0 || past.length > 0) && (
             <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
@@ -498,6 +500,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           {current.length === 0 && past.length === 0 ? (
             !showForm && <EmptyState
               illustration="emptyList"
+              compact
               title="No meeting points yet"
               description="Drop a pin so your crew knows where to meet."
               cta={{ label: 'Add meeting point', onClick: () => setShowForm(true) }}

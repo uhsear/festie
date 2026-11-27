@@ -20,6 +20,20 @@ describe('EmptyState', () => {
     expect(screen.getByText('Add a location to see it here.')).toHaveClass('text-pretty');
   });
 
+  it('compact drops the illustration and the 200px floor but keeps the icon', () => {
+    const { container } = render(<EmptyState title="No meeting points yet" illustration="emptyList" compact />);
+    expect(container.querySelector('.empty-state-illustration')).not.toBeInTheDocument();
+    expect(container.querySelector('svg')).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass('min-h-0');
+    expect(container.firstElementChild).not.toHaveClass('min-h-[200px]');
+  });
+
+  it('keeps the illustration and the 200px floor by default', () => {
+    const { container } = render(<EmptyState title="No picks yet" illustration="emptyList" />);
+    expect(container.querySelector('.empty-state-illustration')).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass('min-h-[200px]');
+  });
+
   it('renders the title as h1 when the empty state is the whole page', () => {
     render(<EmptyState title="Empty" headingLevel={1} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Empty');

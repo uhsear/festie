@@ -76,6 +76,7 @@ export default function ActivityTab({ crewId }: Props) {
       <div>
         <EmptyState
           icon={<Activity className="w-12 h-12" aria-hidden="true" />}
+          compact
           title="No activity yet"
           description="Crew events will appear here as they happen."
         />

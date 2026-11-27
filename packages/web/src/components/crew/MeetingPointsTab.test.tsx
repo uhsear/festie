@@ -409,6 +409,13 @@ describe('MeetingPointsTab', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
   });
 
+  it('labels the list and draws its empty state in the compact icon style, like Activity below', () => {
+    const { container } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByRole('heading', { name: 'Meeting points' })).toHaveClass('uppercase');
+    expect(screen.getByText('No meeting points yet')).toBeInTheDocument();
+    expect(container.querySelector('.empty-state-illustration')).not.toBeInTheDocument();
+  });
+
   it('maps the festival on screen for a crew of that festival', async () => {
     festivalState.currentFestival = { id: 'f1' };
     activeCrewState.activeCrew = { festivalId: 'f1' };

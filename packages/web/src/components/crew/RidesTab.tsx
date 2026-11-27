@@ -326,6 +326,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
       ) : visibleOffers.length === 0 ? (
         <EmptyState
           illustration="emptyList"
+          compact
           title="No rides yet"
           description="Offer a ride so the crew can take a seat."
           cta={showForm ? undefined : { label: 'Offer a ride', onClick: openCreate }}
