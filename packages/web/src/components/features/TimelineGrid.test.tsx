@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createRef } from 'react';
 import { render, fireEvent } from '@testing-library/react';
 import type { FestivalSet, Stage } from '@festie/shared/types';
-import TimelineGrid from './TimelineGrid';
+import TimelineGrid, { axisTickUnderNowPill } from './TimelineGrid';
 
 const stage = (id: string, name: string) => ({ id, name }) as Stage;
 const stages = [stage('s1', 'Main'), stage('s2', 'Forest'), stage('s3', 'Bass')];
@@ -72,6 +72,27 @@ describe('TimelineGrid', () => {
     // 10:20 is 20 minutes from the 10:30 label and 20 from 10:00: neither is blanked.
     const between = renderGrid(1024, (20 / 240) * 100 + 0);
     expect(labels(between.container)).toContain('10a');
+  });
+
+  it('blanks the half-hour label that sits a pill below the now line, not only the one beside it', () => {
+    const labels = (c: HTMLElement) => [...c.querySelectorAll('[class*="sticky left-0"]')].map((n) => n.textContent);
+    // 10:40 at 36px per slot: the 10:30 label is centred 12px under its line, 24px above the now line, so the two pills overlap.
+    const below = renderGrid(1024, (40 / 240) * 100);
+    expect(labels(below.container)).not.toContain('10:30a');
+    expect(labels(below.container)).toContain('11a');
+  });
+
+  it('finds the axis label under the pill by pixel distance at every zoom', () => {
+    // 29px per slot (the 390 grid): 12:42 is 12 minutes past 12:30, 23px under its line and 11px from the label's centre.
+    expect(axisTickUnderNowPill(12 * 60 + 42, 29)).toBe(12 * 60 + 30);
+    // On the label, and 2 minutes before it (the pill reaches up into the label).
+    expect(axisTickUnderNowPill(12 * 60 + 30, 29)).toBe(12 * 60 + 30);
+    expect(axisTickUnderNowPill(12 * 60 + 28, 29)).toBe(12 * 60 + 30);
+    // Clear of both neighbours: 12:20 is 39px under 12:00's line and 19px above 12:30's.
+    expect(axisTickUnderNowPill(12 * 60 + 20, 29)).toBeNull();
+    expect(axisTickUnderNowPill(12 * 60 + 15, 36)).toBeNull();
+    // A tighter zoom (21px) leaves less room, so a later minute still collides.
+    expect(axisTickUnderNowPill(12 * 60 + 50, 21)).toBe(12 * 60 + 30);
   });
 
   it('places the now line inside a track spanning only the time rows', () => {
