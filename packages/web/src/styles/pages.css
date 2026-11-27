@@ -62,7 +62,7 @@
 /* ── /cards: interaction overrides ───────────────────────────────────── */
 .card-grid .set-card:has(.set-card-click-target:active) {
   scale: var(--press-scale);
-  transition: scale 90ms var(--ease-standard);
+  transition: scale var(--duration-fast) var(--ease-standard);
 }
 @media (prefers-reduced-motion: reduce) {
   .card-grid .set-card:has(.set-card-click-target:active) {
@@ -93,7 +93,7 @@
   }
 }
 .card-grid .card-overlap {
-  animation: card-crew-in 240ms var(--ease-out) both;
+  animation: card-crew-in var(--duration-med) var(--ease-out) both;
 }
 .card-grid .card-priority-btn {
   position: relative;
@@ -300,7 +300,7 @@
 
 /* ── Set card enter + card grid base ─────────────────────────────────── */
 .set-card.card-enter {
-  animation: stagger-fade-in 0.3s var(--ease-out) both;
+  animation: stagger-fade-in var(--duration-slow) var(--ease-out) both;
 }
 .card-grid {
   padding-bottom: 20px;

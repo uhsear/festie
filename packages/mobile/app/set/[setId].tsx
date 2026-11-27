@@ -74,6 +74,7 @@ import { useNow } from '../../hooks/useNow';
 import Button from '../../components/Button';
 import SpotifyAttribution from '../../components/SpotifyAttribution';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
@@ -472,8 +473,7 @@ export default function SetDetailScreen() {
       return (
         <View style={styles.container}>
           <CloseButton onPress={dismiss} style={[styles.floatingClose, { top: topInset }]} />
-          <EmptyState
-            icon="cloud-offline-outline"
+          <LoadErrorState
             title="You're offline"
             message="You're offline, so this set link can't open yet."
             action={{

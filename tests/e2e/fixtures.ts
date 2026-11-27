@@ -40,9 +40,12 @@ function createFestivalFixture() {
       id: 'fest-1',
       name: 'Test Fest',
       location: 'Test Grounds',
+      // Map data, so /map renders the map and not the "not mapped yet" empty state. The stage pins
+      // are near the centre so a marker is in view at 390 by 844.
+      mapConfig: { version: 1, center: [-87.62, 41.88] },
       stages: [
-        { id: 'main', name: 'Main Stage', color: '#ff3366' },
-        { id: 'forest', name: 'Forest Stage', color: '#00e8d0' },
+        { id: 'main', name: 'Main Stage', color: '#ff3366', latitude: 41.8805, longitude: -87.6205 },
+        { id: 'forest', name: 'Forest Stage', color: '#00e8d0', latitude: 41.8795, longitude: -87.6195 },
       ],
       days: [
         {
@@ -67,7 +70,8 @@ function createFestivalFixture() {
       id: 'fest-2',
       name: 'Campfire Fest',
       location: 'Lakeside',
-      stages: [{ id: 'ember', name: 'Ember Stage', color: '#ff8c00' }],
+      mapConfig: null,
+      stages: [{ id: 'ember', name: 'Ember Stage', color: '#ff8c00', latitude: null, longitude: null }],
       days: [
         {
           label: 'Sunday',
@@ -126,14 +130,21 @@ async function truncateAllTables(pool: InstanceType<typeof Pool>) {
 async function seedFestivals(pool: InstanceType<typeof Pool>, festivals = createFestivalFixture()) {
   for (const festival of festivals) {
     await pool.query(
-      'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
-      [festival.id, festival.name, festival.location, festival.createdAt, festival.updatedAt],
+      'INSERT INTO festivals (id, name, location, created_at, updated_at, map_config) VALUES ($1, $2, $3, $4, $5, $6)',
+      [
+        festival.id,
+        festival.name,
+        festival.location,
+        festival.createdAt,
+        festival.updatedAt,
+        festival.mapConfig ? JSON.stringify(festival.mapConfig) : null,
+      ],
     );
     for (let si = 0; si < festival.stages.length; si++) {
       const stage = festival.stages[si]!;
       await pool.query(
-        'INSERT INTO festival_stages (festival_id, id, name, color, sort_order) VALUES ($1, $2, $3, $4, $5)',
-        [festival.id, stage.id, stage.name, stage.color, si],
+        'INSERT INTO festival_stages (festival_id, id, name, color, sort_order, latitude, longitude) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [festival.id, stage.id, stage.name, stage.color, si, stage.latitude, stage.longitude],
       );
     }
     for (let di = 0; di < festival.days.length; di++) {

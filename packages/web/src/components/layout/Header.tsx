@@ -154,7 +154,7 @@ export default function Header() {
                   aria-label={badged ? badgeA11yLabel(tab.label, crewBadge) : undefined}
                   className={cn(
                     'inline-flex items-center min-h-11 px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
-                    'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
+                    'transition-colors duration-(--duration-slow) ease-(--ease-standard) tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',
                     active && 'bg-aqua-a12 text-accent-aqua !border-aqua-a2 !rounded-xl',
@@ -226,7 +226,7 @@ export default function Header() {
             className={cn(
               'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-xl no-underline whitespace-nowrap',
               'text-accent-aqua text-[length:var(--font-size-14)] font-semibold tracking-[0.3px]',
-              'border border-accent-aqua/40 transition-colors duration-200',
+              'border border-accent-aqua/40 transition-colors duration-(--duration-med)',
               'hover:bg-aqua-a12 hover:border-accent-aqua/70',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             )}

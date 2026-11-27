@@ -9,7 +9,7 @@ import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFes
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
-import EmptyState from './EmptyState';
+import LoadErrorState from './LoadErrorState';
 import { Skeleton } from './Skeleton';
 import FollowButton from './FollowButton';
 import GuestLegalFooter from './GuestLegalFooter';
@@ -412,8 +412,7 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   if (error && festivals.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.scrollCentered} refreshControl={refreshControl}>
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={COPY.festivalLoad.errorTitle}
           message={error ?? COPY.festivalLoad.errorBody}
           action={{ label: COPY.festivalLoad.retry, onPress: handleRefresh }}

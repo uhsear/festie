@@ -36,7 +36,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
           onClick={() => onTabChange(t.key)}
           className={cn(
             'flex-1 min-w-0 justify-center px-2.5 max-[359px]:px-1 py-1.5 min-h-11 rounded-md flex items-center gap-1 text-xs font-medium whitespace-nowrap',
-            'transition-[scale,background-color,border-color,color] duration-150 ease-out press-scale',
+            'transition-[scale,background-color,border-color,color] duration-(--duration-med) ease-out press-scale',
             activeTab === t.key
               ? 'bg-accent-aqua/15 text-accent-aqua border border-accent-aqua/30'
               : 'bg-bg-card text-text-secondary border border-border hover:border-border-light',

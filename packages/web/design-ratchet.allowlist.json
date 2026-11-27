@@ -1,24 +1,6 @@
 {
   "entries": [
     {
-      "file": "src/components/admin/FestivalPickInsight.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/admin/PickDistribution.tsx",
-      "rule": "duration",
-      "max": 3,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/admin/TopSets.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
       "file": "src/components/crew/BeaconOverlay.tsx",
       "rule": "hex",
       "max": 2,
@@ -31,94 +13,10 @@
       "reason": "Map marker ring: white in both themes so a marker reads on any basemap."
     },
     {
-      "file": "src/components/crew/CrewTabBar.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/crew/CrewTabContent.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
       "file": "src/components/crew/InviteQRDialog.tsx",
       "rule": "hex",
       "max": 1,
       "reason": "QR quiet zone: scanners need a white background in both themes."
-    },
-    {
-      "file": "src/components/crew/PollOptionButton.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/CrewSuggestionStrip.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/DetailPanel.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/DetailPriorityPicker.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/DetailReminderPicker.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/FestivalDayBanner.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/FestivalModeToggle.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/OfflineReadinessCard.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/Onboarding.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/PhaseHomeActions.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/ScheduleImagePoster.tsx",
-      "rule": "rgb",
-      "max": 2,
-      "reason": "Poster artwork: html-to-image does not resolve CSS variables, so the glow gradient carries literal channels."
-    },
-    {
-      "file": "src/components/features/SetCard.tsx",
-      "rule": "duration",
-      "max": 4,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
       "file": "src/components/features/SharePicksDialog.tsx",
@@ -127,88 +25,10 @@
       "reason": "QR quiet zone: scanners need a white background in both themes."
     },
     {
-      "file": "src/components/features/TimelineGridCell.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/festival-mode/CrewNow.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/festival-mode/NowHero.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/Header.tsx",
-      "rule": "duration",
-      "max": 3,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/ScheduleViewSwitcher.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/SubHeader.tsx",
-      "rule": "duration",
-      "max": 7,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/UserMenu.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
       "file": "src/components/manage/FestivalLinkQRDialog.tsx",
       "rule": "hex",
       "max": 1,
       "reason": "QR quiet zone: scanners need a white background in both themes."
-    },
-    {
-      "file": "src/components/timeline/TBASection.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/timeline/TimelineLegend.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/AuthTabs.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/Button.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/Card.tsx",
-      "rule": "duration",
-      "max": 4,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/ui/StageBadge.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
       "file": "src/components/ui/StageBadge.tsx",
@@ -223,28 +43,10 @@
       "reason": "Text shadow alpha on a stage-colour fill."
     },
     {
-      "file": "src/components/ui/Switch.tsx",
-      "rule": "duration",
-      "max": 2,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/wrap/PosterFrame.tsx",
-      "rule": "rgb",
-      "max": 3,
-      "reason": "Poster artwork: builds rgba strings from token hex for the glow gradient, because html-to-image does not resolve CSS variables."
-    },
-    {
       "file": "src/lib/avatarInk.ts",
       "rule": "hex",
       "max": 1,
       "reason": "Contrast maths: the white ink option, compared against the avatar fill."
-    },
-    {
-      "file": "src/lib/styles.ts",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
       "file": "src/routes/friend-picks.tsx",
@@ -253,15 +55,9 @@
       "reason": "URL hash \"#add\", not a colour. The pattern matches it."
     },
     {
-      "file": "src/routes/grid.tsx",
-      "rule": "duration",
-      "max": 1,
-      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
       "file": "src/styles/animations.css",
       "rule": "rgb",
-      "max": 4,
+      "max": 3,
       "reason": "Alpha applied to the --accent-coral-rgb channel variable, so Daylight darkens the SOS glow."
     },
     {

@@ -46,7 +46,6 @@ import SettleUpCard, { type Balance } from './SettleUpCard';
 import PaymentsList from './PaymentsList';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { DollarSign, Plus } from 'lucide-react';
-import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import SegmentedTablist from '@/components/ui/SegmentedTablist';
 import { inputBase } from '../../lib/styles';
 import { invalidateCrewMoney } from '../../lib/queryPersist';
@@ -283,8 +282,6 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   };
   const totalSpent = sumExpenseAmounts(actualExpenses);
   const totalPlanned = sumExpenseAmounts(plannedExpenses);
-  // N1: tween the headline total when the live ledger changes instead of hard-cutting.
-  const animatedTotalSpent = useAnimatedNumber(totalSpent, { decimals: 2 });
   const visibleExpenses = selectVisibleExpenses(expenses, view);
   const nonZeroBalances = selectNonZeroBalances(balances);
   const toConfirm = paymentsToConfirm(expenses, currentUserId);
@@ -344,7 +341,10 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <div className="crew-stats-grid grid grid-cols-2 gap-2">
           <div className="p-3 rounded-xl bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Total spent</div>
-            <div className="text-lg font-bold text-text-primary tabular-nums">{formatAmount(animatedTotalSpent, currency)}</div>
+            {/* A live total snaps to its value; re-keying replays the 200 ms flash on every change. */}
+            <div key={totalSpent} className="value-flash rounded text-lg font-bold text-text-primary tabular-nums">
+              {formatAmount(totalSpent, currency)}
+            </div>
           </div>
           <div className="p-3 rounded-xl bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Your balance</div>

@@ -27,7 +27,7 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const baseStyles =
-    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,scale,outline-color] duration-200 ease-out cursor-pointer press-scale active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
+    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,scale,outline-color] duration-(--duration-med) ease-out cursor-pointer press-scale active:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
 
   const variantStyles: Record<ButtonVariant, string> = {
     primary:

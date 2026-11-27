@@ -251,7 +251,7 @@ button {
   font-size: 14px;
   text-decoration: none;
   transform: translateY(-200%);
-  transition: transform 0.15s ease-out;
+  transition: transform var(--duration-med) var(--ease-out);
 }
 .skip-link:focus,
 .skip-link:focus-visible {
