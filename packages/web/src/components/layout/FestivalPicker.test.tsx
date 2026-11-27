@@ -96,7 +96,8 @@ describe('FestivalPicker dialog', () => {
     const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
     expect(headings).toEqual(['Live now', 'Upcoming', 'Past']);
     expect(screen.getByTestId('festival-option-up')).toHaveTextContent('Miami');
-    expect(screen.getByTestId('festival-option-up')).toHaveTextContent(' · ');
+    // The place has its own truncating line, so a long venue never cuts the date.
+    expect(screen.getByText('Miami')).toHaveClass('truncate');
     expect(screen.getByTestId('festival-option-live')).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('festival-option-past')).not.toHaveAttribute('aria-current');
   });
@@ -140,7 +141,7 @@ describe('FestivalPicker dialog', () => {
     ];
     render(<FestivalPicker />);
     fireEvent.click(screen.getByTestId('festival-select'));
-    expect(screen.getByTestId('festival-progress-t')).toHaveTextContent('Set times');
+    expect(screen.queryByTestId('festival-progress-t')).not.toBeInTheDocument();
     expect(screen.getByTestId('festival-progress-d')).toHaveTextContent('Days only');
     expect(screen.getByTestId('festival-progress-l')).toHaveTextContent('Lineup only');
     expect(screen.queryByTestId('festival-progress-n')).not.toBeInTheDocument();

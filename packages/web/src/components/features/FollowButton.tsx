@@ -11,10 +11,12 @@ interface FollowButtonProps {
   festivalId: string;
   festivalName: string;
   size?: 'sm' | 'md';
+  /** Outline, not filled: for a list row where a filled button would outweigh the festival name. */
+  quiet?: boolean;
 }
 
 /** Follow toggle for a festival. A guest gets a prompt to create an account or sign in. */
-export default function FollowButton({ festivalId, festivalName, size = 'md' }: FollowButtonProps) {
+export default function FollowButton({ festivalId, festivalName, size = 'md', quiet = false }: FollowButtonProps) {
   const user = useAuthStore((s) => s.user);
   const following = useFollowStore((s) => s.festivalIds.includes(festivalId));
   const loaded = useFollowStore((s) => s.loaded);
@@ -55,7 +57,7 @@ export default function FollowButton({ festivalId, festivalName, size = 'md' }: 
   return (
     <>
       <Button
-        variant={following ? 'secondary' : 'primary'}
+        variant={following || quiet ? 'secondary' : 'primary'}
         size={size}
         disabled={busy}
         aria-pressed={following}
