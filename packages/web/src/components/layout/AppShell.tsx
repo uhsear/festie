@@ -1,4 +1,4 @@
-import { useEffect, Suspense } from 'react';
+import { useEffect, Suspense, lazy } from 'react';
 import { Outlet, useLocation } from '@tanstack/react-router';
 import { Loader } from 'lucide-react';
 import { useAuthStore, useFestivalModeStore } from '@festie/shared';
@@ -11,7 +11,6 @@ import { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
 import RouteAnnouncer from './RouteAnnouncer';
 import GuestFooter from './GuestFooter';
-import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
 import IOSInstallDrawer from '../features/IOSInstallDrawer';
@@ -38,6 +37,11 @@ import { SocketContext } from '../../lib/socketContext';
 import { useThemeSync } from '../../lib/theme';
 
 const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password', '/verify-email'];
+
+// The set sheet only mounts once a set is picked, so it stays out of the entry chunk and
+// loads on idle (below) before the first tap.
+const loadDetailPanel = () => import('../features/DetailPanel');
+const DetailPanel = lazy(loadDetailPanel);
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
@@ -127,6 +131,13 @@ export default function AppShell() {
   // Prefetch main-tab chunks on idle so switching between tabs is instant.
   useEffect(() => {
     prefetchMainRoutes();
+    const warmDetailPanel = () => void loadDetailPanel().catch(() => {});
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(warmDetailPanel, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(warmDetailPanel, 1000);
+    return () => clearTimeout(id);
   }, []);
 
   // Auth routes don't use app shell layout
@@ -224,15 +235,17 @@ export default function AppShell() {
         <ArtistSheetHost />
 
         {detailSet && (
-          <DetailPanel
-            key={detailSet.id}
-            set={detailSet}
-            autoOpenSpotify={detailAutoSpotify}
-            onClose={() => {
-              setDetailSet(null);
-              setDetailAutoSpotify(false);
-            }}
-          />
+          <Suspense fallback={null}>
+            <DetailPanel
+              key={detailSet.id}
+              set={detailSet}
+              autoOpenSpotify={detailAutoSpotify}
+              onClose={() => {
+                setDetailSet(null);
+                setDetailAutoSpotify(false);
+              }}
+            />
+          </Suspense>
         )}
       </div>
       </OfflineQueueContext.Provider>
