@@ -55,6 +55,8 @@ export function useSosRaise(crewId: string | null) {
     }
   }, [crewId, haptics]);
 
+  // A native system alert on purpose, not a token-styled dialog: the OS owns its focus and screen-reader
+  // announcement, scales with system text and contrast settings, and cannot be covered by an app overlay.
   const confirmRaise = useCallback(() => {
     if (!crewId) return;
     Alert.alert(
