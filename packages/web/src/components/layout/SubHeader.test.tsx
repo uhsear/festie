@@ -325,6 +325,17 @@ describe('SubHeader route scope', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Festival One' })).toBeInTheDocument();
     expect(screen.queryByTestId('festival-select')).not.toBeInTheDocument();
   });
+
+  it('puts the festival clock beside the /festival-mode title, in the page column', () => {
+    mockPathname = '/festival-mode';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const title = screen.getByTestId('festival-mode-title');
+    expect(screen.getByLabelText('Festival time')).toHaveTextContent(/\d:\d\d/);
+    // One flex row holds both, and it uses the same column widths as the page below it.
+    expect(title.parentElement).toContainElement(screen.getByLabelText('Festival time'));
+    expect(title.parentElement).toHaveClass('max-w-[560px]', 'lg:max-w-5xl', 'mx-auto');
+    expect(title.parentElement?.parentElement).toHaveClass('px-6');
+  });
 });
 
 describe('SubHeader status line', () => {

@@ -13,6 +13,7 @@ import {
   spotifyAttributionFor,
   visibleDayIndexes,
   festivalTimeLabel,
+  fmtZonedClock,
   formatDayChip,
   logicalDayIndexAt,
   resolveFestivalTimeZone,
@@ -30,6 +31,7 @@ import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/sh
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
+import LowPowerIndicator from '../features/LowPowerIndicator';
 import ScheduleStatusLine from '../features/ScheduleStatusLine';
 import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
@@ -166,10 +168,22 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // Now & Next carries no controls: the festival name is its page title, so the lead object owns the surface.
   if (pathname === FESTIVAL_MODE_PATH) {
     return currentFestival ? (
-      <div className="px-[var(--space-3)] sm:px-6 py-2 border-b border-border bg-[var(--color-bg-chrome)] shrink-0 min-w-0">
-        <h1 className="type-title text-text-primary break-words" data-testid="festival-mode-title">
-          {currentFestival.name}
-        </h1>
+      <div className="px-6 py-2 border-b border-border bg-[var(--color-bg-chrome)] shrink-0 min-w-0">
+        {/* Same column as the page below (festival-mode PAGE), so the title and the content share one left edge. */}
+        <div className="flex w-full min-w-0 max-w-[560px] lg:max-w-5xl mx-auto items-center justify-between gap-3">
+          <h1 className="type-title text-text-primary break-words min-w-0" data-testid="festival-mode-title">
+            {currentFestival.name}
+          </h1>
+          <div className="flex items-center gap-2 shrink-0">
+            <LowPowerIndicator />
+            <div className="flex flex-col items-end">
+              <span className="type-numeral text-text-secondary" aria-label="Festival time">
+                {fmtZonedClock(nowMs, timeZone)}
+              </span>
+              {timeLabel && <span className="type-caption text-text-muted">{timeLabel}</span>}
+            </div>
+          </div>
+        </div>
       </div>
     ) : null;
   }

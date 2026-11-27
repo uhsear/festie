@@ -115,12 +115,13 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByTestId('fm-now-card')).toHaveTextContent('30m left');
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login', search: { next: '/festival-mode' } });
-    expect(screen.getByLabelText('Festival time')).toHaveTextContent('5:30 PM');
   });
 
   it('signed in: shows the next pick with a countdown and where to walk', () => {
     setup({ user: true, picks: { s2: 'must', s3: 'maybe' } });
     render(<FestivalModeView />);
+    // The offline chip is a footer, not a header: the hero is the first thing on the page.
+    expect(screen.getByTestId('festival-mode-view').lastElementChild).toBe(screen.getByTestId('offline-chip'));
     const hero = screen.getByTestId('fm-next-hero');
     expect(hero).toHaveTextContent('Fred again..');
     expect(hero).toHaveTextContent('Head to Main Stage');
