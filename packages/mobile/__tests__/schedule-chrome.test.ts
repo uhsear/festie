@@ -29,24 +29,41 @@ describe('Lineup controls', () => {
   });
 
   it('folds the phase shortcuts into the status line row', () => {
-    const row = controls.slice(controls.indexOf('styles.freshnessRow'), controls.indexOf('<OfflineStatusChip remind />'));
+    const row = controls.slice(controls.indexOf('const statusItems'), controls.indexOf('  return (\n<>'));
     expect(row).toContain('<ScheduleStatusLine');
     expect(row).toContain('<PhaseHomeActions compact');
     expect(controls).not.toMatch(/<View style=\{\{ paddingHorizontal: hPad \}\}>\s*<PhaseHomeActions/);
   });
 
-  it('wraps the status row so a phase chip drops to the next line whole instead of clipping', () => {
+  it('keeps the Timeline status chips on one scrolling line and wraps them on Cards', () => {
+    expect(controls).toMatch(/viewMode === 'timeline' \? \(\s*<ScrollView\s+horizontal/);
+    expect(controls).toContain('fadingEdgeLength');
+    expect(controls).toMatch(/<View style=\{\[styles\.freshnessRow, \{ paddingHorizontal: hPad \}\]\}>\{statusItems\}<\/View>/);
+    expect(controls).toContain('inline={timeline}');
+    expect(read('components/PhaseHomeActions.tsx')).toContain('if (compact && inline) return content;');
+    const styles = read('components/schedule/styles.ts');
+    expect(styles).toMatch(/compactRefreshButton: \{\s*minWidth: 32,\s*minHeight: 32,/);
+  });
+
+  it('wraps the Cards status row so a phase chip drops to the next line whole instead of clipping', () => {
     const styles = read('components/schedule/styles.ts');
     expect(styles).toMatch(/freshnessRow: \{[^}]*flexWrap: 'wrap'/);
     const chips = read('components/PhaseHomeActions.tsx');
     expect(chips).toMatch(/rowCompact: \{[^}]*flexWrap: 'wrap'/);
-    // The compact chips sit in a plain View: a horizontal ScrollView cannot wrap and cuts the last chip.
+    // The wrapped compact chips sit in a plain View: a horizontal ScrollView cannot wrap and cuts the last chip.
     expect(chips).toMatch(/<View style=\{styles\.rowCompact\}>/);
   });
 
   it('keeps the offline chip in the status row, mounted in both views for its reminder', () => {
-    const row = controls.slice(controls.indexOf('styles.freshnessRow'), controls.indexOf('{/* DC1'));
+    const row = controls.slice(controls.indexOf('const statusItems'), controls.indexOf('  return (\n<>'));
     expect(row).toContain('{user ? <OfflineStatusChip remind /> : null}');
+    expect(controls).toContain('{statusItems}');
+  });
+
+  it('keeps the offline chip as short as the phase chips, with a 44 pt touch target', () => {
+    const chip = read('components/OfflineStatusChip.tsx');
+    expect(chip).toMatch(/chipButton: \{\s*minHeight: 32,/);
+    expect(chip).toContain('hitSlop={CHIP_HIT_SLOP}');
   });
 
   it('shows the Now strip on Cards only, since the Timeline has its own up-next line and the header Now pill', () => {

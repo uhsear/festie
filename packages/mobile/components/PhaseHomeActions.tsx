@@ -29,6 +29,8 @@ interface PhaseHomeActionsProps {
   onDismiss?: () => void;
   /** Slim variant for the schedule status line: no band margin, small chips with hit slop. */
   compact?: boolean;
+  /** With `compact`, return the chips bare so the caller's row lays them out (no wrapping wrapper). */
+  inline?: boolean;
 }
 
 /**
@@ -38,7 +40,7 @@ interface PhaseHomeActionsProps {
  * not empty. Tab destinations are not repeated here: the tab bar already
  * carries them. A `hint` renders as a plain chip, not a button.
  */
-export default function PhaseHomeActions({ actions, onDismiss, compact }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions, onDismiss, compact, inline }: PhaseHomeActionsProps) {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
@@ -98,6 +100,7 @@ export default function PhaseHomeActions({ actions, onDismiss, compact }: PhaseH
   );
 
   // The compact chips wrap inside the status line row, so none is ever cut at the screen edge.
+  if (compact && inline) return content;
   return compact ? (
     <View style={styles.wrapCompact}>
       <View style={styles.rowCompact}>{content}</View>

@@ -116,7 +116,8 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
 
 const useStyles = makeStyles((t: Tokens) => ({
   daysWrap: {
-    paddingVertical: t.spacing[3],
+    paddingTop: t.spacing[2],
+    paddingBottom: t.spacing[1],
   },
   daysContent: {
     paddingHorizontal: t.spacing[4],

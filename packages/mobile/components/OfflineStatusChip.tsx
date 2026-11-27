@@ -20,6 +20,8 @@ export default function OfflineStatusChip({ remind = false }: { remind?: boolean
   return <Chip festivalId={festivalId} remind={remind} />;
 }
 
+const CHIP_HIT_SLOP = { top: 6, bottom: 6, left: 6, right: 6 };
+
 function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
   const t = useTokens();
   const styles = useStyles();
@@ -65,6 +67,7 @@ function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
         style={[styles.chip, styles.chipButton]}
         onPress={download}
         disabled={isDownloading}
+        hitSlop={CHIP_HIT_SLOP}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
         accessibilityState={{ busy: isDownloading, disabled: isDownloading }}
@@ -88,8 +91,9 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[3],
     paddingVertical: t.spacing[1],
   },
+  // 32 pt like the phase chips beside it on the Lineup; hitSlop restores the 44 pt target.
   chipButton: {
-    minHeight: 44,
+    minHeight: 32,
   },
   // Bg lives on an absolutely-positioned sibling so the Text is never clipped
   // to the rounded bounds on Android (same pattern as FreshnessChip).
