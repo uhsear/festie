@@ -3,6 +3,7 @@ import { Users, MapPin, CalendarClock, Banknote } from 'lucide-react';
 import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
 import { cn } from '@/lib/utils';
+import CountBadge from '@/components/ui/CountBadge';
 
 const TAB_ICONS: Record<CrewTabKey, React.ReactNode> = {
   find: <MapPin className="w-4 h-4 shrink-0 max-[359px]:hidden" aria-hidden="true" />,
@@ -48,12 +49,9 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             const badge = badges?.[t.key];
             if (typeof badge === 'number' && badge > 0) {
               return (
-                <span
-                  className="ml-0.5 min-w-4 shrink-0 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold tabular-nums leading-none text-center"
-                  aria-label={`${badge} open`}
-                >
+                <CountBadge className="ml-0.5 shrink-0" aria-label={`${badge} open`}>
                   {badge}
-                </span>
+                </CountBadge>
               );
             }
             if (badge === true) {
