@@ -39,6 +39,9 @@ import { ArtistNameButton } from '../components/features/ArtistName';
 
 const WrapIcon = CONCEPT_ICON.wrap;
 
+const CTA_LINK =
+  'inline-flex min-h-11 items-center rounded-full border border-border px-5 text-sm font-semibold text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+
 export default function WrapPage() {
   return (
     <>
@@ -440,28 +443,44 @@ function CrewWrapTab({
           .join(' · ')}
       />
 
-      {/* Superlatives */}
-      <section className="flex flex-col gap-3">
-        <Superlative
-          label="Most-overlapping taste"
-          value={wrap.topOverlap ? `${wrap.topOverlap.aName} + ${wrap.topOverlap.bName}` : 'Rate more sets together'}
-          sub={
-            wrap.topOverlap
-              ? `${wrap.topOverlap.shared} shared favourite${wrap.topOverlap.shared === 1 ? '' : 's'}` +
+      {/* Superlatives: only real ones; with none, one card says what fills the page and links to it. */}
+      {wrap.topOverlap || wrap.biggestSpender ? (
+        <section className="flex flex-col gap-3">
+          {wrap.topOverlap && (
+            <Superlative
+              label="Most-overlapping taste"
+              value={`${wrap.topOverlap.aName} + ${wrap.topOverlap.bName}`}
+              sub={
+                `${wrap.topOverlap.shared} shared favourite${wrap.topOverlap.shared === 1 ? '' : 's'}` +
                 (wrap.topOverlap.sharedSets.length ? ` · ${wrap.topOverlap.sharedSets.slice(0, 3).join(', ')}` : '')
-              : undefined
-          }
-        />
-        <Superlative
-          label="Biggest spender"
-          value={wrap.biggestSpender ? wrap.biggestSpender.name : 'No expenses yet'}
-          sub={
-            wrap.biggestSpender
-              ? `fronted ${formatAmount(wrap.biggestSpender.amount, wrap.currency)}`
-              : undefined
-          }
-        />
-      </section>
+              }
+            />
+          )}
+          {wrap.biggestSpender && (
+            <Superlative
+              label="Biggest spender"
+              value={wrap.biggestSpender.name}
+              sub={`fronted ${formatAmount(wrap.biggestSpender.amount, wrap.currency)}`}
+            />
+          )}
+        </section>
+      ) : (
+        <Card padding="lg" data-testid="crew-wrap-empty">
+          <EmptyState
+            icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
+            title="Your crew wrap is still empty"
+            description="It fills with the sets you rated together and the money your crew split."
+          />
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link to="/rate" search={{ festival: festivalId }} className={CTA_LINK}>
+              Rate your sets
+            </Link>
+            <Link to="/crew" search={{ tab: 'money' }} className={CTA_LINK}>
+              Add an expense
+            </Link>
+          </div>
+        </Card>
+      )}
 
       <CrewPhotosCard crewId={crewId} currentUrl={photoAlbumUrl} onSaved={onPhotosSaved} />
 

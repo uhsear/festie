@@ -38,6 +38,7 @@ vi.mock('@festie/shared/stores', () => {
 vi.mock('@festie/shared/utils', async (orig) => ({
   artistOf: (await orig<typeof import('@festie/shared/utils')>()).artistOf,
   sortRatingsForWrap: (await orig<typeof import('@festie/shared/utils')>()).sortRatingsForWrap,
+  formatAmount: (cents: number) => `$${cents / 100}`,
   buildWrapCards: () => mocks.cards,
   isWrapUnlocked: () => true,
   selectSetsToRate: () => mocks.toRate,
@@ -150,5 +151,41 @@ describe('WrapPage', () => {
     fireEvent.click(screen.getAllByRole('tab')[0]!);
     expect(await screen.findByText('carousel')).toBeTruthy();
     expect(screen.getByRole('tablist', { name: 'Wrap view' })).toBe(tabs);
+  });
+
+  describe('crew wrap with no data', () => {
+    const emptyWrap = {
+      memberCount: 1,
+      setsSeenTogether: [],
+      topOverlap: null,
+      biggestSpender: null,
+      perMember: [],
+      totalSplit: 0,
+      currency: 'USD',
+    };
+
+    it('shows one empty card with link buttons, not label and instruction rows', async () => {
+      mocks.get.mockResolvedValue({ ...response, crew: { id: 'c1', name: 'Squad' }, wrap: emptyWrap });
+      renderPage();
+      fireEvent.click((await screen.findAllByRole('tab'))[1]!);
+      expect(await screen.findByTestId('crew-wrap-empty')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Rate your sets' }).getAttribute('href')).toBe('/rate?festival=past1');
+      expect(screen.getByRole('link', { name: 'Add an expense' }).getAttribute('href')).toBe('/crew?tab=money');
+      expect(screen.queryByText('Rate more sets together')).toBeNull();
+      expect(screen.queryByText('No expenses yet')).toBeNull();
+    });
+
+    it('shows only the superlatives that have data', async () => {
+      mocks.get.mockResolvedValue({
+        ...response,
+        crew: { id: 'c1', name: 'Squad' },
+        wrap: { ...emptyWrap, biggestSpender: { name: 'Ana', amount: 5000 } },
+      });
+      renderPage();
+      fireEvent.click((await screen.findAllByRole('tab'))[1]!);
+      expect(await screen.findByText('Ana')).toBeTruthy();
+      expect(screen.queryByTestId('crew-wrap-empty')).toBeNull();
+      expect(screen.queryByText('Most-overlapping taste')).toBeNull();
+    });
   });
 });
