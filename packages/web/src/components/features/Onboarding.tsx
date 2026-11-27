@@ -88,11 +88,12 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
     if (visible) markOnboardingCompleted();
   }, [visible]);
 
-  // Focus management + keyboard trap. The shared hook moves initial focus into
-  // the card on mount, wraps Tab / Shift+Tab so focus can't escape to the page
+  // Focus management + keyboard trap. The shared hook moves initial focus to
+  // the card itself on mount (not the close button, which would show a keyboard
+  // ring to mouse and touch users on first load), wraps Tab / Shift+Tab so focus can't escape to the page
   // behind the modal, closes on Escape (WCAG 2.1.2), and restores focus to the
   // previously-focused element on unmount.
-  useKeyboardTrap(cardRef, visible, dismiss);
+  useKeyboardTrap(cardRef, visible, dismiss, 'container');
 
   // Prevent the page behind the modal from scrolling while onboarding is open.
   useEffect(() => {
@@ -148,6 +149,8 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
       {/* Card */}
       <div
         ref={cardRef}
+        tabIndex={-1}
+        data-focus-sink
         className={cn(
           'relative w-full max-w-sm rounded-2xl border border-border-light',
           'bg-bg-primary shadow-2xl p-6 flex flex-col items-center text-center',

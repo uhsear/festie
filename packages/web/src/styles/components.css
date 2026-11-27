@@ -280,6 +280,12 @@ a:focus-visible,
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: -2px;
 }
+/* A container that only receives programmatic focus (Onboarding's card) is
+   not a keyboard stop; a ring on it would show on first load. */
+[data-focus-sink]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 
 /* Disabled + placeholder contrast. Pairs the muted text with an explicit
    disabled surface tone so a disabled control reads as inert rather than
