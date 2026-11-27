@@ -57,6 +57,12 @@ describe('T17 mobile Grid (source-level guards)', () => {
     expect(src).toContain('<View style={[styles.corner, { width: gutterW }]} />');
   });
 
+  it('grid cell title takes as many lines as the cell height allows instead of a fixed two', () => {
+    const src = read('app/grid.tsx');
+    expect(src).toContain('numberOfLines={cellTitleLines(height, textScale, height >= 48)}');
+    expect(src).toContain('const textScale = Math.min(fontScale, MAX_FONT_SCALE)');
+  });
+
   it('results row keeps its Clear all filters label', () => {
     expect(read('components/ScheduleResultsRow.tsx')).toContain('Clear all filters');
   });

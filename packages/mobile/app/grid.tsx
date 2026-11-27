@@ -50,6 +50,7 @@ import {
 import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE, type Tokens } from '../hooks/useTokens';
 import { safeStageColor } from '../lib/stageColor';
+import { cellTitleLines } from '../lib/gridCellText';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -117,7 +118,8 @@ export default function GridScreen() {
   const styles = useStyles();
   const router = useRouter();
   const reduceMotion = useReduceMotion();
-  const { width: windowW } = useWindowDimensions(); // re-render on rotation so the body re-measures.
+  const { width: windowW, fontScale } = useWindowDimensions(); // re-render on rotation so the body re-measures.
+  const textScale = Math.min(fontScale, MAX_FONT_SCALE);
   const gutterW = useLargeText() ? GUTTER_W_LARGE : GUTTER_W;
   const colW = twoUpColumnWidth(windowW, gutterW);
   const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
@@ -561,7 +563,11 @@ export default function GridScreen() {
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               {/* The badge sits beside the title, not over it: the title wraps in the space the badge leaves. */}
               <View style={styles.titleRow}>
-                <Text style={[styles.cellArtist, styles.cellTitle]} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                <Text
+                  style={[styles.cellArtist, styles.cellTitle]}
+                  numberOfLines={cellTitleLines(height, textScale, height >= 48)}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
                   {dn}
                 </Text>
                 {mark || pick ? (
