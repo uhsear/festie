@@ -21,3 +21,17 @@ describe('CrewTabBar', () => {
     expect(onTabChange).toHaveBeenCalledWith('money');
   });
 });
+
+describe('CrewTabBar layout', () => {
+  it('spans the page gutter as four equal columns, so no tab hides at a narrow width', () => {
+    render(<CrewTabBar activeTab="find" onTabChange={() => {}} />);
+    const list = screen.getByRole('tablist');
+    expect(list).toHaveClass('grid', 'grid-cols-4', 'w-full');
+    expect(list.className).not.toMatch(/\bpx-\d/);
+  });
+
+  it('keeps every tab at the 44px touch height', () => {
+    render(<CrewTabBar activeTab="find" onTabChange={() => {}} />);
+    for (const tab of screen.getAllByRole('tab')) expect(tab).toHaveClass('min-h-11');
+  });
+});
