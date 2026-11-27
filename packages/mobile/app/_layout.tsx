@@ -523,7 +523,7 @@ function AuthGate() {
   useQueueDrain(!loading);
   useOtaUpdatePrompt();
 
-  // Backstop: BootOverlay lifts the native splash once it has painted in the persisted theme.
+  // Backstop: BootOverlay lifts the native splash once it has painted.
   // This covers an overlay that never lays out. The 4s bootTimedOut ceiling already triggers
   // `loading = false`, so hideAsync is always called even if fonts or rehydration hang.
   useEffect(() => {
@@ -668,7 +668,7 @@ function AuthGate() {
       )}
       {!loading && <Toaster />}
       <ArtistSheetHost />
-      {loading && <BootOverlay hydrated={hydrated && uiHydrated} themeReady={uiHydrated} />}
+      {loading && <BootOverlay hydrated={hydrated && uiHydrated} />}
       {introShowing && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );

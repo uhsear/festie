@@ -3,9 +3,8 @@ import { Image, StyleSheet, Text } from 'react-native';
 import Animated, { FadeOut } from 'react-native-reanimated';
 import NetInfo from '@react-native-community/netinfo';
 import * as SplashScreen from 'expo-splash-screen';
-import { useUIStore } from '@festie/shared/stores';
 import { duration as motionDuration } from '@festie/shared/tokens';
-import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { tokens, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { BOOT_STATUS_DELAY_MS, bootStatusLine } from '../lib/bootStatus';
 
@@ -13,9 +12,11 @@ import { BOOT_STATUS_DELAY_MS, bootStatusLine } from '../lib/bootStatus';
 // native splash hands off to this view without the mark moving.
 const SPLASH_MARK_SIZE = 200;
 const MARK_STAGE = require('../assets/splash-icon.png');
-const MARK_DAYLIGHT = require('../assets/splash-icon-daylight.png');
 
-const useStyles = makeStyles((t) => ({
+// The native splash is one dark ground in every theme (app.json has no Daylight variant), so the
+// overlay paints Stage tokens too. The theme change then happens in the fade-out, not as a hard cut.
+const t = tokens;
+const styles = StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
@@ -33,21 +34,19 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
     ...typeStyle('caption'),
   },
-}));
+});
 
 /** Covers the app while the root loads: the splash mark where the native splash drew it, then a status line after 1.5 s. */
-export default function BootOverlay({ hydrated, themeReady }: { hydrated: boolean; themeReady: boolean }) {
-  const styles = useStyles();
-  const theme = useUIStore((s) => s.theme);
+export default function BootOverlay({ hydrated }: { hydrated: boolean }) {
   const reduceMotion = useReduceMotion();
   const [offline, setOffline] = useState<boolean | null>(null);
   const [laidOut, setLaidOut] = useState(false);
 
-  // Lift the native splash only once this view has painted in the persisted theme, so the mark
-  // is on screen under it. The root's `!loading` call stays as the backstop.
+  // Lift the native splash only once this view has painted, so the mark is on screen under it.
+  // The root's `!loading` call stays as the backstop.
   useEffect(() => {
-    if (laidOut && themeReady) SplashScreen.hideAsync().catch(() => {});
-  }, [laidOut, themeReady]);
+    if (laidOut) SplashScreen.hideAsync().catch(() => {});
+  }, [laidOut]);
 
   useEffect(() => {
     let live = true;
@@ -70,7 +69,7 @@ export default function BootOverlay({ hydrated, themeReady }: { hydrated: boolea
       exiting={reduceMotion ? undefined : FadeOut.duration(motionDuration.med)}
     >
       <Image
-        source={theme === 'daylight' ? MARK_DAYLIGHT : MARK_STAGE}
+        source={MARK_STAGE}
         style={styles.mark}
         resizeMode="contain"
         accessible={false}

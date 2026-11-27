@@ -1,6 +1,7 @@
 // The boot overlay must hand off from the native splash without the mark moving, so its
 // size and art are pinned to the expo-splash-screen config, and it speaks only real state.
 import { BOOT_STATUS_DELAY_MS, bootStatusLine } from '../lib/bootStatus';
+import { tokens } from '../hooks/useTokens';
 import { read } from './read-source';
 
 const overlay = read('components/BootOverlay.tsx');
@@ -17,8 +18,12 @@ describe('boot overlay handoff', () => {
     expect(overlay).toContain("justifyContent: 'center'");
   });
 
-  it('paints the token ground, not a literal, and fades out', () => {
+  it('paints the Stage token ground in every theme, not a literal, and fades out', () => {
     expect(overlay).toContain('t.colors.bg.primary');
+    expect(overlay).toContain('const t = tokens');
+    expect(overlay).not.toContain('MARK_DAYLIGHT');
+    expect(overlay).not.toContain('useUIStore');
+    expect(tokens.colors.bg.primary).toBe(splashPlugin.backgroundColor);
     expect(overlay).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(overlay).toContain('FadeOut');
   });
@@ -44,10 +49,8 @@ describe('bootStatusLine', () => {
 });
 
 describe('splash handoff', () => {
-  it('lifts the native splash from the overlay layout, gated on the theme being known', () => {
+  it('lifts the native splash from the overlay layout', () => {
     expect(overlay).toContain('onLayout={() => setLaidOut(true)}');
-    expect(overlay).toContain('laidOut && themeReady');
-    expect(overlay).toContain('SplashScreen.hideAsync()');
-    expect(layout).toContain('themeReady={uiHydrated}');
+    expect(overlay).toContain('if (laidOut) SplashScreen.hideAsync()');
   });
 });
