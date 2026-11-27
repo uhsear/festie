@@ -1,15 +1,18 @@
 import { useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { ChevronRight } from 'lucide-react';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useFestival } from '@festie/shared/hooks';
 import {
   selectNowNext,
   resolveFestivalTimeZone,
+  logicalDayIndexAt,
   artistDisplayName,
   fmtStartsIn,
   fmtTimeLeft,
 } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
+import { cn } from '../../lib/utils';
 import ArtistName, { RowOpenButton } from './ArtistName';
 
 /**
@@ -23,6 +26,7 @@ export default function NowNextStrip() {
   const user = useAuthStore((s) => s.user);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
+  const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { getStageName } = useFestival();
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
@@ -37,6 +41,9 @@ export default function NowNextStrip() {
   const current = selection?.current[0];
   const focus = current ?? selection?.upcoming[0];
   if (!focus) return null;
+  // While the festival is running, the strip belongs to today: a Tomorrow tab must not announce a set playing now.
+  const todayIndex = logicalDayIndexAt(days, nowMs, timeZone);
+  if (todayIndex !== null && typeof selectedDay === 'number' && selectedDay !== todayIndex) return null;
 
   const isNow = !!current;
   const name = artistDisplayName(focus.set, currentFestival?.b2bSeparator);
@@ -51,7 +58,10 @@ export default function NowNextStrip() {
       <div
         key={focus.set.id}
         data-testid="now-next-strip"
-        className="fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-secondary px-4 text-left"
+        className={cn(
+          'fm-card-enter motion-reduce:animate-none relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-xl border border-border-default bg-bg-card px-4 text-left',
+          isNow && 'border-l-[3px] border-l-live-fill',
+        )}
       >
         <RowOpenButton
           label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}
@@ -74,6 +84,7 @@ export default function NowNextStrip() {
           {stage && <span className="block truncate text-text-secondary">{stage}</span>}
         </span>
         <span className="shrink-0 text-sm text-text-secondary tabular-nums">{timing}</span>
+        <ChevronRight className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
         {isNow && (
           <span
             aria-hidden="true"
