@@ -131,7 +131,9 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
                       </Text>
                     </View>
                   )}
-                  <Text style={styles.going} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {/* No line cap: beside the avatars, Add and Dismiss a 393 dp card has room for
+                      about 20 characters, so "3 going — 1 want, 2 must" wraps instead of ellipsizing. */}
+                  <Text style={styles.going} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                     {goingLabel(nudge.count, nudge.breakdown)}
                   </Text>
                 </View>
