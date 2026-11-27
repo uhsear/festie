@@ -291,7 +291,9 @@ function SetCard({
         className={cn(
           'card-artist',
           'relative z-[2] pointer-events-none',
-          'type-title font-bold leading-[1.15] mb-1 break-words',
+          // 24px display role: the artist is the largest line on the card. (The container-query sizes in
+          // components.css have no container ancestor here, so they never applied.)
+          'type-heading mb-1 break-words',
           dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
       >

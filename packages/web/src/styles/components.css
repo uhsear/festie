@@ -47,10 +47,9 @@
 .card-grid > .card-enter {
   container-type: inline-size;
 }
-/* The artist is the largest line on the card at every width: 16px when squeezed, 20px by default, 24px when wide. */
 @container (max-width: 319px) {
   .set-card .card-artist {
-    font-size: var(--font-size-16);
+    font-size: var(--font-size-14);
     letter-spacing: -0.2px;
   }
   .set-card .card-footer {
@@ -58,9 +57,14 @@
     gap: 8px;
   }
 }
+@container (min-width: 320px) and (max-width: 419px) {
+  .set-card .card-artist {
+    font-size: var(--font-size-16);
+  }
+}
 @container (min-width: 420px) {
   .set-card .card-artist {
-    font-size: var(--font-size-24);
+    font-size: var(--font-size-20);
     letter-spacing: -0.4px;
   }
 }

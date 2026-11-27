@@ -616,6 +616,13 @@ describe('SetCard', () => {
     order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
   });
 
+  it('makes the artist the largest line: 24px heading over a 14px time label', () => {
+    render(<SetCard {...defaultProps} />);
+    expect(document.querySelector('.card-artist')).toHaveClass('type-heading');
+    expect(document.querySelector('.card-time')).toHaveClass('type-label');
+    expect(document.querySelector('.card-time')).not.toHaveClass('type-title');
+  });
+
   it('keeps Listen an icon button with its name', () => {
     const spotify = makeSet({ artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }] } as unknown as Partial<FestivalSet>);
     render(<SetCard {...defaultProps} set={spotify} />);
