@@ -6,6 +6,7 @@ import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useSosSeenAck } from './useSosSeenAck';
 import type { Crew, FestivalDay, SosEntry } from '../types';
 import { crewForFestival, defaultCrewId } from '../utils/crewPlan';
+import { useCurrentFestivalCrew } from './useActiveCrew';
 import {
   selectActiveMeet,
   selectActiveSos,
@@ -60,12 +61,8 @@ export interface CrewDayOf {
 export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, timeZone?: string): CrewDayOf {
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const crew = useCurrentFestivalCrew();
   const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? s.currentFestivalId);
-  const crew = useMemo(
-    () => (activeCrew && (!activeCrew.festivalId || activeCrew.festivalId === festivalId) ? activeCrew : null),
-    [activeCrew, festivalId],
-  );
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const statuses = useCrewStore((s) => s.crewStatuses);

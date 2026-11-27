@@ -90,6 +90,17 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
 }
 
 /**
+ * The open crew when it belongs to the selected festival, else null. Festival-scoped
+ * surfaces (Now, set detail) read this so a crew of another festival never shows under
+ * the selected one. It only reads: followFestivalCrew and useActiveCrew open the crew.
+ */
+export function useCurrentFestivalCrew(): Crew | null {
+  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const festivalId = useFestivalStore((s) => s.currentFestival?.id ?? s.currentFestivalId);
+  return activeCrew && (!activeCrew.festivalId || activeCrew.festivalId === festivalId) ? activeCrew : null;
+}
+
+/**
  * The crew the map shows layers for. The selected festival follows the Lineup tab, so the
  * active crew can belong to another festival. When the user has a crew for the selected
  * festival, this selects it (once per crew) so its members and meeting points load.
