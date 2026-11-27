@@ -196,9 +196,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
       <nav
         className={cn(
           'sub-header',
-          // Density: compact (tighter) on <640px, comfortable on desktop.
-          'flex items-center px-[var(--space-3)] py-2 gap-[var(--space-3)]',
-          'sm:px-6 sm:py-3 sm:gap-[var(--space-6)]',
+          // Density: compact (tighter) on <640px, comfortable on desktop. px-6 is the page gutter, so the chrome and the content below share one left edge.
+          'flex items-center px-6 py-2 gap-[var(--space-3)]',
+          'sm:py-3 sm:gap-[var(--space-6)]',
           'bg-[var(--color-bg-chrome)] backdrop-saturate-150 backdrop-blur-sm',
           'border-b border-border flex-wrap shrink-0',
           // --space-9 never existed in the scale (invalid var -> column-gap

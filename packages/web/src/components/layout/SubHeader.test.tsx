@@ -104,12 +104,19 @@ describe('SubHeader layout density', () => {
   it('applies compact horizontal rhythm on small widths and comfortable on desktop', () => {
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     const nav = getNav();
-    // Compact (mobile-first) defaults use the space-3 token.
-    expect(nav.className).toContain('px-[var(--space-3)]');
+    // Compact (mobile-first) defaults use the space-3 token for gaps.
     expect(nav.className).toContain('gap-[var(--space-3)]');
     // Comfortable desktop overrides behind the sm: breakpoint.
-    expect(nav.className).toContain('sm:px-6');
     expect(nav.className).toContain('sm:gap-[var(--space-6)]');
+  });
+
+  it('insets the chrome by the page gutter at every width, so chips line up with the content below', () => {
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    // The page <main> uses px-6 (24px); a 12px phone inset left the day chips and picker half a gutter left of it.
+    const nav = getNav();
+    expect(nav).toHaveClass('px-6');
+    expect(nav.className).not.toContain('px-[var(--space-3)]');
+    expect(nav.className).not.toContain('sm:px-6');
   });
 
   it('keeps day tabs visible with consistent space-3 gap', () => {
