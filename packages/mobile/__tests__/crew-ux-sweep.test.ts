@@ -15,6 +15,11 @@ describe('crew UX sweep guards', () => {
     expect(src).not.toContain('AccessibilityInfo');
     expect(src).toMatch(/useEffect\(\(\) => \{\s*setError\(null\);/);
   });
+  it('crew header keeps the member count and its noun together', () => {
+    const src = read('app/(tabs)/crew.tsx');
+    expect(src).toContain(String.raw`.replace(/(\d+) (members?)/, '$1\u00A0$2')`);
+    expect('5 members'.replace(/(\d+) (members?)/, '$1\u00A0$2')).toBe('5\u00A0members');
+  });
   it('crew tab clears a stale store error on focus', () => {
     const src = read('app/(tabs)/crew.tsx');
     expect(src).toMatch(/useCallback\(\(\) => \{[^}]*?setError\(null\);\s*if \(sectionsFailed\)/s);
