@@ -354,7 +354,7 @@ export default function AccountScreen() {
         <LinkRow
           icon="document-text-outline"
           title="Third-party notices"
-          hint="Open-source licences"
+          hint="Open-source licenses"
           onPress={() => {
             haptics.tap();
             void WebBrowser.openBrowserAsync('https://festie.us/third-party-notices.txt');

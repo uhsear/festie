@@ -93,7 +93,7 @@ export default function CrewNoCrewView({
           accessibilityLabel="Invite code"
         />
         <Button
-          label="Join by Code"
+          label="Join with code"
           variant="secondary"
           onPress={handleJoin}
           disabled={!inviteCode.trim()}

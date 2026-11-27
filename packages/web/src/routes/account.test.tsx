@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ACCOUNT_SECTIONS } from '@festie/shared/constants';
+import { ACCOUNT_COPY, ACCOUNT_SECTIONS } from '@festie/shared/constants';
 
 // Mock the router — account.tsx redirects to /login via useNavigate when no user.
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
@@ -109,7 +109,7 @@ describe('AccountPage', () => {
   it('renders the identity card and the page title', () => {
     render(<AccountPage />);
     expect(screen.getByTestId('identity-card')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1, name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: ACCOUNT_COPY.title })).toBeInTheDocument();
   });
 
   it('scrolls the Danger zone into view for the /account#danger link on the public delete-account page', () => {

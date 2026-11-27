@@ -248,7 +248,7 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
             ) : (
               <>
                 <Ionicons name="trash" size={t.iconSize.sm} color={t.colors.text.onAccent} style={styles.submitIcon} />
-                <Text style={styles.submitText}>Delete My Account</Text>
+                <Text style={styles.submitText}>Delete my account</Text>
               </>
             )}
           </TouchableOpacity>
