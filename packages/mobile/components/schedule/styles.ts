@@ -126,8 +126,10 @@ export const useStyles = makeStyles((t) => ({
   // Timeline refresh button. The shortcuts scroll sideways inside their own slot.
   freshnessRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: t.spacing[2],
+    columnGap: t.spacing[2],
+    rowGap: t.spacing[1],
     paddingTop: t.spacing[2],
   },
   compactRefreshButton: {

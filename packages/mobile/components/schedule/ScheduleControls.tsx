@@ -159,20 +159,19 @@ export default function ScheduleControls({
   {/* Live-day Now & Next surface: shows the picked set playing now / up next
       inline, tapping through to the full Now & Next screen. Renders nothing
       when there's no current/upcoming pick. */}
-  <View style={{ paddingHorizontal: hPad }}>
-    <NowNextStrip onPress={() => router.push('/festival-mode')} />
-  </View>
+  {/* Cards only: the Timeline carries its own up-next line and now line, and the header's
+      Now pill opens the full surface, so the strip would only push the timeline down. */}
+  {viewMode === 'cards' ? (
+    <View style={{ paddingHorizontal: hPad }}>
+      <NowNextStrip onPress={() => router.push('/festival-mode')} />
+    </View>
+  ) : null}
 
   {/* F19 — offline-honest freshness for the flagship schedule surface,
       matching the crew tab's chip. Driven by festivalDataStore's
       _festivalCachedAt; renders nothing until the schedule is cached once. */}
   <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
     <ScheduleStatusLine showSave={!!currentProfile} />
-    {/* The phase shortcuts share this line with the freshness label instead of
-        taking a band of their own. */}
-    {showPhaseActions && phase ? (
-      <PhaseHomeActions compact actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
-    ) : null}
     {/* Cards and fallback views support pull-to-refresh. Timeline owns both
         scroll axes, so narrow phones need this compact manual action after
         the header sheds secondary icons to preserve the festival title. */}
@@ -193,12 +192,14 @@ export default function ScheduleControls({
         )}
       </TouchableOpacity>
     ) : null}
+    {/* The phase shortcuts and the offline chip share this wrapping row, so a chip that
+        does not fit beside the status line drops to the next line whole instead of being
+        clipped, and the two no longer take a band each. */}
+    {showPhaseActions && phase ? (
+      <PhaseHomeActions compact actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
+    ) : null}
+    {user ? <OfflineStatusChip remind /> : null}
   </View>
-  {user ? (
-    <View style={{ paddingHorizontal: hPad, paddingTop: t.spacing[2] }}>
-      <OfflineStatusChip remind />
-    </View>
-  ) : null}
 
   {/* DC1 — search and the stage / my-picks + phase-action setup chrome are
       folded behind the search/filter toggles in the control row above; only

@@ -43,57 +43,69 @@ export default function PhaseHomeActions({ actions, onDismiss, compact }: PhaseH
   const styles = useStyles();
   const router = useRouter();
 
-  return (
-    <View style={compact ? styles.wrapCompact : styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={compact ? styles.rowCompact : styles.row}>
-        {actions.map((a) => {
-          if (a.kind === 'hint' || a.key === 'first-pick') {
-            return (
-              <View key={a.key} testID={`phase-action-${a.key}`} style={compact ? styles.chipCompact : styles.chip} accessibilityLabel={a.a11y}>
-                <Ionicons name="star-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
-                <Text style={styles.chipText} numberOfLines={1}>
-                  {a.label}
-                </Text>
-              </View>
-            );
-          }
-          const target = TARGETS[a.key];
-          const iconColor = target.danger ? t.colors.accent.coral : t.colors.text.secondary;
+  // The trailing no-break space absorbs Fabric's one-glyph under-measure of a Text after an icon sibling.
+  const content = (
+    <>
+      {actions.map((a) => {
+        if (a.kind === 'hint' || a.key === 'first-pick') {
           return (
-            <TouchableOpacity
-              key={a.key}
-              testID={`phase-action-${a.key}`}
-              style={compact ? styles.chipCompact : styles.chip}
-              hitSlop={compact ? COMPACT_HIT_SLOP : undefined}
-              // Tab destinations switch tabs (navigate dedupes to the existing
-              // tab instance); the root-level pushed routes (Wrap) must
-              // PUSH so Back pops cleanly to the schedule with the festival
-              // context intact. router.navigate on those cross-navigator routes
-              // warps the stack and can pop the user out to the OS home screen.
-              onPress={() => (target.href.startsWith('/(tabs)') ? router.navigate(target.href) : router.push(target.href))}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={a.a11y}
-            >
-              <Ionicons name={target.icon} size={t.iconSize.sm} color={iconColor} />
+            <View key={a.key} testID={`phase-action-${a.key}`} style={compact ? styles.chipCompact : styles.chip} accessibilityLabel={a.a11y}>
+              <Ionicons name="star-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
               <Text style={styles.chipText} numberOfLines={1}>
-                {a.label}
+                {a.label + '\u00A0'}
               </Text>
-            </TouchableOpacity>
+            </View>
           );
-        })}
-        {onDismiss ? (
+        }
+        const target = TARGETS[a.key];
+        const iconColor = target.danger ? t.colors.accent.coral : t.colors.text.secondary;
+        return (
           <TouchableOpacity
-            style={compact ? styles.dismissButtonCompact : styles.dismissButton}
+            key={a.key}
+            testID={`phase-action-${a.key}`}
+            style={compact ? styles.chipCompact : styles.chip}
             hitSlop={compact ? COMPACT_HIT_SLOP : undefined}
-            onPress={onDismiss}
-            activeOpacity={0.7}
+            // Tab destinations switch tabs (navigate dedupes to the existing
+            // tab instance); the root-level pushed routes (Wrap) must
+            // PUSH so Back pops cleanly to the schedule with the festival
+            // context intact. router.navigate on those cross-navigator routes
+            // warps the stack and can pop the user out to the OS home screen.
+            onPress={() => (target.href.startsWith('/(tabs)') ? router.navigate(target.href) : router.push(target.href))}
+            activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Hide these shortcuts"
+            accessibilityLabel={a.a11y}
           >
-            <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.muted} />
+            <Ionicons name={target.icon} size={t.iconSize.sm} color={iconColor} />
+            <Text style={styles.chipText} numberOfLines={1}>
+              {a.label + '\u00A0'}
+            </Text>
           </TouchableOpacity>
-        ) : null}
+        );
+      })}
+      {onDismiss ? (
+        <TouchableOpacity
+          style={compact ? styles.dismissButtonCompact : styles.dismissButton}
+          hitSlop={compact ? COMPACT_HIT_SLOP : undefined}
+          onPress={onDismiss}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Hide these shortcuts"
+        >
+          <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.muted} />
+        </TouchableOpacity>
+      ) : null}
+    </>
+  );
+
+  // The compact chips wrap inside the status line row, so none is ever cut at the screen edge.
+  return compact ? (
+    <View style={styles.wrapCompact}>
+      <View style={styles.rowCompact}>{content}</View>
+    </View>
+  ) : (
+    <View style={styles.wrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {content}
       </ScrollView>
     </View>
   );
@@ -106,15 +118,17 @@ const useStyles = makeStyles((t) => ({
     marginTop: t.spacing[3],
     paddingBottom: t.spacing[2],
   },
-  // Status-line slot: it takes the width the status chips leave. The compact chips are
-  // 32 pt tall; hitSlop restores the 44 pt target.
+  // Status-line slot: the chips sit beside the status chips when they fit and wrap whole
+  // to the next line when they do not. The compact chips are 32 pt tall; hitSlop restores
+  // the 44 pt target.
   rowCompact: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: t.spacing[2],
     alignItems: 'center',
-    paddingVertical: t.spacing[2],
   },
   wrapCompact: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   chipCompact: {

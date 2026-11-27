@@ -566,30 +566,34 @@ export default function TimelineView({
 
   return (
     <View style={styles.root}>
-      <View style={styles.hintRow}>
-        <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
-        <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
-        </Text>
-      </View>
-
-      <View style={styles.chipRow}>
-        <ClashChip count={count} picked={picked} />
-      </View>
-
-      {nextPickLabel ? (
-        <View
-          style={styles.countdownRow}
-          accessibilityRole="text"
-          accessibilityLabel={`Up next in ${nextPickLabel.eta}: ${nextPickLabel.name}`}
-        >
-          <Ionicons name="musical-notes" size={t.iconSize.xs} color={t.colors.accent.coral} />
-          <Text style={styles.countdownText} numberOfLines={1}>
-            Up next in <Text style={styles.countdownEta}>{nextPickLabel.eta}</Text> ·{' '}
-            <Text style={styles.countdownName}>{nextPickLabel.name}</Text>
+      {/* The how-to line teaches a first-timer; once a set is picked on this day it is chrome
+          that only pushes the timeline down. */}
+      {picked === 0 ? (
+        <View style={styles.hintRow}>
+          <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
+          <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
           </Text>
         </View>
       ) : null}
+
+      {/* The clash chip and the up-next line share one row; the up-next text wraps beside the chip. */}
+      <View style={styles.statusRow}>
+        <ClashChip count={count} picked={picked} />
+        {nextPickLabel ? (
+          <View
+            style={styles.countdownRow}
+            accessibilityRole="text"
+            accessibilityLabel={`Up next in ${nextPickLabel.eta}: ${nextPickLabel.name}`}
+          >
+            <Ionicons name="musical-notes" size={t.iconSize.xs} color={t.colors.accent.coral} />
+            <Text style={styles.countdownText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Up next in <Text style={styles.countdownEta}>{nextPickLabel.eta}</Text> ·{' '}
+              <Text style={styles.countdownName}>{nextPickLabel.name}</Text>
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       <FlatList
         ref={carouselRef}
@@ -693,10 +697,8 @@ const useStyles = makeStyles((t) => ({
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    flexShrink: 1,
     gap: t.spacing[1],
-    paddingBottom: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
   },
   countdownText: {
     ...typeStyle('micro'),
@@ -839,8 +841,12 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.aqua,
   },
-  chipRow: {
+  statusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[3],
     paddingBottom: t.spacing[2],
   },
   nowLine: {
