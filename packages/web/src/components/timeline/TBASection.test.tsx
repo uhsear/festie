@@ -55,7 +55,7 @@ describe('TBASection', () => {
         allTba
       />,
     );
-    for (const [name, word] of [['Must See', 'Must'], ['Want to See', 'Want'], ['Maybe', 'Maybe']]) {
+    for (const [name, word] of [['Must See', 'Must'], ['Want to See', 'Want'], ['Maybe', 'Maybe']] as const) {
       expect(screen.getByRole('button', { name })).toHaveTextContent(word);
       expect(screen.getByRole('button', { name }).className).toContain('min-h-11');
     }
