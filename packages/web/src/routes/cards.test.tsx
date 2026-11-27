@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const festivalState: Record<string, unknown> = {};
+const ready = { visible: false };
 const nowMs = Date.UTC(2026, 10, 7, 21, 0);
 
 vi.mock('@festie/shared/stores', () => ({
@@ -17,7 +18,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ setDetailSet: vi.fn(), setDetailAutoSpotify: vi.fn() }),
 }));
 vi.mock('@festie/shared/hooks', () => ({
-  useFestivalReady: () => ({ visible: false, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
+  useFestivalReady: () => ({ visible: ready.visible, items: [], doneCount: 0, total: 4, progressLabel: '', hide: vi.fn() }),
   useCanPick: () => true,
   usePicks: () => ({ getMyPick: () => null, getOtherPicks: () => [] }),
   useFestival: () => ({
@@ -48,6 +49,7 @@ vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => null
 vi.mock('../components/features/ScheduleEmptyState', () => ({ default: () => <div data-testid="empty-state" /> }));
 vi.mock('../components/features/SetTimesBanner', () => ({ default: () => null }));
 vi.mock('../components/features/DiscoverRow', () => ({ default: () => null }));
+vi.mock('../components/features/FestivalReadyCard', () => ({ default: () => <div data-testid="ready-card" /> }));
 vi.mock('../components/features/LineupFlyer', () => ({ default: () => <div data-testid="lineup-flyer" /> }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => <div data-testid="cards-skeleton" /> }));
 vi.mock('../components/layout/RouteErrorBoundary', () => ({
@@ -255,6 +257,14 @@ describe('CardsView lineup flyer', () => {
     render(<CardsView />);
     expect(screen.getByTestId('lineup-flyer')).toBeInTheDocument();
     expect(screen.queryAllByTestId('set-card')).toHaveLength(0);
+  });
+
+  it('puts the flyer, which says times are not out, above the checklist', () => {
+    ready.visible = true;
+    render(<CardsView />);
+    ready.visible = false;
+    const flyer = screen.getByTestId('lineup-flyer');
+    expect(flyer.compareDocumentPosition(screen.getByTestId('ready-card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('brings the cards back, and drops the flyer, once one set has a time', () => {

@@ -51,6 +51,12 @@ describe('getFestivalReadyChecklist', () => {
     expect(r.items.filter((i) => i.done).map((i) => i.key)).toEqual([key]);
   });
 
+  it('leaves out picking and downloading while no set has a time', () => {
+    const r = getFestivalReadyChecklist({ ...none, timesPending: true });
+    expect(r.items.map((i) => i.key)).toEqual(['crew', 'reminders']);
+    expect(r.total).toBe(2);
+  });
+
   it('writes a11y strings', () => {
     const r = getFestivalReadyChecklist({ ...none, hasCrew: true });
     expect(r.items[0]!.a11y).toMatch(/, not done yet$/);

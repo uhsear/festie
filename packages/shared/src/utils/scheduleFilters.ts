@@ -295,6 +295,11 @@ export function searchHiddenByFilters(
   return query.trim() !== '' && daySets.some((s) => setMatchesSearch(s, query, stages as Stage[]));
 }
 
+/** True when the festival has sets but none has a start time yet (a days-only festival): nothing can be timed or downloaded. */
+export function setTimesPending(sets: readonly FestivalSet[] | null | undefined): boolean {
+  return !!sets && sets.length > 0 && sets.every((s) => !s.startTime);
+}
+
 /** True when any set on the day has a start and end time, whatever the filters hide. */
 export function dayHasTimedSets(daySets: readonly FestivalSet[]): boolean {
   return daySets.some((s) => !!s.startTime && !!s.endTime);

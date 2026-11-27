@@ -5,6 +5,7 @@ import {
   filterScheduleSets,
   groupScheduleSets,
   hourBucketLabel,
+  setTimesPending,
   hasAnyPick,
   sanitizeSchedulePrefs,
   scheduleEmptyCopy,
@@ -184,6 +185,15 @@ describe('hidden days', () => {
     expect(toggleHiddenDay([0, 1], 3, 2)).toEqual([0, 1]);
     expect(toggleHiddenDay([1], 3, 0)).toEqual([0, 1]);
     expect(toggleHiddenDay([0, 1], 3, 0)).toEqual([1]);
+  });
+});
+
+describe('setTimesPending', () => {
+  it('is true only when there are sets and none has a start time', () => {
+    expect(setTimesPending([set('a', 'A', 'Ada')])).toBe(true);
+    expect(setTimesPending([set('a', 'A', 'Ada'), set('b', 'A', 'Bo', { startTime: '20:00' })])).toBe(false);
+    expect(setTimesPending([])).toBe(false);
+    expect(setTimesPending(undefined)).toBe(false);
   });
 });
 

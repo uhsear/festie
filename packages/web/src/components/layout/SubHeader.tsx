@@ -18,6 +18,7 @@ import {
   resolveFestivalTimeZone,
   resolveStageColor,
   SCHEDULE_GROUP_BYS,
+  setTimesPending,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import type { FestivalDay } from '@festie/shared/types/domain';
@@ -358,7 +359,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         </div>
 
         {(currentProfile || onSchedulePath) && (
-          <ScheduleStatusLine showFreshness={onSchedulePath} className="max-md:order-3" />
+          <ScheduleStatusLine showFreshness={onSchedulePath && !setTimesPending(sets)} className="max-md:order-3" />
         )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}

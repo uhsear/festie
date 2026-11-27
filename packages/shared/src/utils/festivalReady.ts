@@ -33,6 +33,8 @@ export function getFestivalReadyChecklist(input: {
   hasCrew: boolean;
   remindersOn: boolean;
   offlineReady: boolean;
+  /** No set has a time yet: picking and downloading are impossible, so those steps are left out. */
+  timesPending?: boolean;
 }): { items: FestivalReadyItem[]; doneCount: number; total: number } {
   const doneByKey: Record<FestivalReadyKey, boolean> = {
     picks: input.pickCount + (input.interestCount ?? 0) > 0,
@@ -40,7 +42,7 @@ export function getFestivalReadyChecklist(input: {
     reminders: input.remindersOn,
     offline: input.offlineReady,
   };
-  const keys: FestivalReadyKey[] = ['picks', 'crew', 'reminders', 'offline'];
+  const keys: FestivalReadyKey[] = input.timesPending ? ['crew', 'reminders'] : ['picks', 'crew', 'reminders', 'offline'];
   const items = keys.map((key) => {
     const { label, hint } = FESTIVAL_READY_COPY.items[key];
     if (key === 'picks' && input.hasLineup) {

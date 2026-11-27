@@ -170,6 +170,9 @@ function CardsViewInner() {
 
   return (
     <>
+      {/* A flyer says why there are no sets (times are not out) and offers Follow, so it leads the checklist. */}
+      {flyer ? <LineupFlyer model={flyer} /> : null}
+
       {/* Before the festival the Festival ready checklist takes the band's place until it is done or hidden. */}
       {/* Next useful steps for this phase; empty (hidden) when there is nothing to do or dismissed. */}
       {ready.visible ? (
@@ -180,7 +183,6 @@ function CardsViewInner() {
 
       {flyer ? null : <SetTimesBanner />}
       <DiscoverRow />
-      {flyer ? <LineupFlyer model={flyer} /> : null}
       {/* A search lists the matching announced acts under the set results instead (below). */}
       {q || flyer ? null : <AnnouncedLineup model={announced} />}
 
