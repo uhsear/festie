@@ -1,8 +1,8 @@
 // Line heights of the grid cell's text roles at font scale 1 (typeStyle: round(1.3 * size)).
 const CAPTION_LINE_H = 16;
 const MICRO_LINE_H = 13;
-// Cell paddingVertical (5 + 5) and the 2 dp gap above the time row.
-const CELL_PAD_V = 10;
+// Cell paddingVertical (5 + 5) plus the 1 dp border above and below.
+const CELL_PAD_V = 12;
 const CELL_GAP = 2;
 const MAX_TITLE_LINES = 3;
 

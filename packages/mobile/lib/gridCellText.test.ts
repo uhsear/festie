@@ -7,6 +7,10 @@ describe('cellTitleLines', () => {
   it('keeps two lines in a mid cell at normal text', () => {
     expect(cellTitleLines(60, 1, true)).toBe(2);
   });
+  it('counts the cell border so the last line is never clipped', () => {
+    expect(cellTitleLines(59, 1, true)).toBe(2);
+    expect(cellTitleLines(58, 1, true)).toBe(1);
+  });
   it('never drops below one line and never exceeds three', () => {
     expect(cellTitleLines(44, 1.4, false)).toBe(1);
     expect(cellTitleLines(600, 1, true)).toBe(3);
