@@ -324,7 +324,6 @@ describe('TimelineGridCell badge layout', () => {
     const el = renderCell('a', 0, 1.5, null, { crew });
     expect(el.querySelectorAll(AVATAR)).toHaveLength(0);
     expect(el.querySelector('[data-clash-minutes]')).toBeNull();
-    expect(el.querySelector('[data-clash-minutes]')).toBeNull();
     expect(el.querySelector('svg.lucide-users')!.closest('div')!.contains(el.querySelector('[title="a"]'))).toBe(true);
     expect(el.querySelector('.tl-pick-row')).toBeNull();
   });
