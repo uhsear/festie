@@ -4,6 +4,7 @@ import {
   EMPTY_SCHEDULE_PREFS,
   filterScheduleSets,
   groupScheduleSets,
+  hourBucketLabel,
   hasAnyPick,
   sanitizeSchedulePrefs,
   scheduleEmptyCopy,
@@ -186,6 +187,15 @@ describe('hidden days', () => {
   });
 });
 
+describe('hourBucketLabel', () => {
+  it('names the hour range, not a time, and crosses noon and midnight', () => {
+    expect(hourBucketLabel(16)).toBe('4–5 PM');
+    expect(hourBucketLabel(11)).toBe('11 AM–12 PM');
+    expect(hourBucketLabel(23)).toBe('11 PM–12 AM');
+    expect(hourBucketLabel(0)).toBe('12–1 AM');
+  });
+});
+
 describe('groupScheduleSets', () => {
   const labels = (g: { label: string; sets: FestivalSet[] }[]) => g.map((x) => `${x.label}:${ids(x.sets).join(',')}`);
   const night = [
@@ -197,8 +207,8 @@ describe('groupScheduleSets', () => {
 
   it('time: hour sections in festival-day order, after-midnight last, TBA at the end', () => {
     expect(labels(groupScheduleSets(night, 'time', stages))).toEqual([
-      '11:00 PM:eve,eve2',
-      '1:00 AM:late',
+      '11 PM–12 AM:eve,eve2',
+      '1–2 AM:late',
       'TBA:tba',
     ]);
   });

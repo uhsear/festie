@@ -2,7 +2,7 @@ import type { FestivalSet, Stage, Priority, Profile } from '../types/domain';
 import type { FestivalPhase } from './festivalTime';
 import { foldLetters, setMatchesSearch } from './setSearch';
 import { byStartTime } from './scheduleFormat';
-import { artistDisplayName, formatTime } from './format';
+import { artistDisplayName } from './format';
 import { setGenres } from './discover';
 
 export type ScheduleView = 'cards' | 'timeline' | 'grid';
@@ -76,6 +76,16 @@ function groupRuns(
  * sets stay at the end of their festival day (T1); TBA sets last. Stage: festival
  * stage order. A-Z: first letter of the first artist, "#" last.
  */
+/** '4-5 PM' (en dash): a bucket of start hours, so it never reads as the time of a 4:30 set. */
+export function hourBucketLabel(hour: number): string {
+  const end = (hour + 1) % 24;
+  const h12 = (h: number) => h % 12 || 12;
+  const ap = (h: number) => (h < 12 ? 'AM' : 'PM');
+  return ap(hour) === ap(end)
+    ? `${h12(hour)}–${h12(end)} ${ap(hour)}`
+    : `${h12(hour)} ${ap(hour)}–${h12(end)} ${ap(end)}`;
+}
+
 export function groupScheduleSets(
   sets: readonly FestivalSet[],
   groupBy: ScheduleGroupBy,
@@ -107,7 +117,7 @@ export function groupScheduleSets(
   return groupRuns(
     sorted,
     (s) => (s.startTime ? s.startTime.slice(0, 2) : 'tba'),
-    (key) => (key === 'tba' ? 'TBA' : formatTime(`${key}:00`)),
+    (key) => (key === 'tba' ? 'TBA' : hourBucketLabel(Number(key))),
   );
 }
 
