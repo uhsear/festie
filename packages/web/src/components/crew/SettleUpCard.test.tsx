@@ -41,6 +41,18 @@ describe('SettleUpCard', () => {
     expect(screen.queryByRole('button', { name: 'Remind Mira' })).toBeNull();
   });
 
+  it('stacks the heading above a full-width two-column switch, so no label wraps mid-word', () => {
+    setup();
+    const heading = screen.getByText('Settle up');
+    const tablist = screen.getByRole('tablist', { name: 'Settle-up view' });
+    expect(heading.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.parentElement).toBe(tablist.parentElement);
+    expect(tablist).toHaveClass('grid', 'grid-cols-2');
+    for (const tab of screen.getAllByRole('tab')) {
+      expect(tab).toHaveClass('text-sm', 'break-normal');
+    }
+  });
+
   it('says so when nothing is owed', () => {
     setup({ myPayments: [], myReceipts: [] });
     expect(screen.getByText("You're all settled up.")).toBeInTheDocument();
