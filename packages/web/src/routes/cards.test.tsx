@@ -109,12 +109,26 @@ describe('CardsView order and earlier row', () => {
   it('expands and collapses the earlier sets', async () => {
     render(<CardsView />);
     await userEvent.click(screen.getByRole('button', { name: /Earlier today \(2\), show/ }));
-    const toggle = screen.getByRole('button', { name: 'Hide earlier sets' });
+    // One label with its count in both states; aria-expanded and the chevron carry the direction.
+    const toggle = screen.getByRole('button', { name: 'Earlier today (2)' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveTextContent('Hide earlier sets');
     expect(ids()).toEqual(['early', 'mid', 'now', 'late']);
     await userEvent.click(toggle);
     expect(ids()).toEqual(['now', 'late']);
+  });
+
+  it('flows time groups down balanced columns from md up, and stage groups as side-by-side columns', () => {
+    const { unmount } = render(<CardsView />);
+    const region = screen.getByRole('region', { name: 'Card view' });
+    expect(region.className).toContain('md:[column-width:300px]');
+    expect(region.classList.contains('grid')).toBe(false);
+    unmount();
+    festivalState.scheduleGroupBy = 'stage';
+    render(<CardsView />);
+    const stageRegion = screen.getByRole('region', { name: 'Card view' });
+    expect(stageRegion.classList.contains('grid')).toBe(true);
+    expect(stageRegion.className).not.toContain('column-width');
+    delete festivalState.scheduleGroupBy;
   });
 
   it('shows ended sets, with no fold row, when nothing is left today', () => {
