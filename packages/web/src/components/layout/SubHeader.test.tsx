@@ -572,6 +572,14 @@ describe('SubHeader desktop row plan', () => {
     expect(rowBreak2.className).toContain('md:max-xl:basis-full');
   });
 
+  it.each([
+    ['festival-only', true, false],
+    ['day-only', false, true],
+  ])('has no row break on a %s page, so no empty second row sits under the picker', (_name, festivalOnly, dayOnly) => {
+    render(<SubHeader dayOnly={dayOnly} festivalOnly={festivalOnly} />);
+    expect(screen.queryByTestId('subheader-row-break')).toBeNull();
+  });
+
   it('sizes the day rail to its whole chip set and never shrinks a chip, so a chip is never cut to its first letters', () => {
     storeState.days = mkDays(3);
     render(<SubHeader dayOnly={false} festivalOnly={false} />);

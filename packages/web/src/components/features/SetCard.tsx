@@ -32,6 +32,8 @@ interface SetCardProps {
     initials?: string;
   }>;
   clashLabel?: string | null;
+  /** Other clashing sets beyond the one `clashLabel` names; shown as its own chip so truncation never cuts it. */
+  clashMore?: number;
   b2bSeparator?: string;
 }
 
@@ -54,6 +56,7 @@ function SetCard({
   stageColor = 'var(--color-stage-fallback)',
   friendProfiles = [],
   clashLabel,
+  clashMore = 0,
   b2bSeparator,
 }: SetCardProps) {
   const myPick = useMyPick(set.id);
@@ -327,14 +330,22 @@ function SetCard({
           {hasConflict && (
             <span
               className={cn(
-                'inline-flex items-center gap-1 max-w-full',
+                'inline-flex items-center gap-1 min-w-0 max-w-full',
                 'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
                 'bg-[var(--color-clash-tint)] text-text-primary',
               )}
-              title={clashLabel}
+              title={clashMore > 0 ? `${clashLabel} +${clashMore} more` : clashLabel}
             >
-              <ClashHatch className="h-4 w-1.5" />
-              <span className="max-w-full truncate">{clashLabel}</span>
+              <ClashHatch className="h-4 w-1.5 shrink-0" />
+              <span className="min-w-0 truncate">{clashLabel}</span>
+            </span>
+          )}
+          {hasConflict && clashMore > 0 && (
+            <span
+              data-testid="clash-more-chip"
+              className="inline-flex shrink-0 items-center text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight bg-[var(--color-clash-tint)] text-text-primary"
+            >
+              +{clashMore} more
             </span>
           )}
           {move && (
@@ -450,7 +461,7 @@ function setCardPropsAreEqual(prev: Readonly<SetCardProps>, next: Readonly<SetCa
     if (pf.profileId !== nf.profileId || pf.priority !== nf.priority) return false;
   }
 
-  if (prev.clashLabel !== next.clashLabel) return false;
+  if (prev.clashLabel !== next.clashLabel || prev.clashMore !== next.clashMore) return false;
 
   return true;
 }

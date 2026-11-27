@@ -385,18 +385,23 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {/* md up: a full-width zero-height line between row 1 (picker, status pill, view, day chips, and from xl Group by) and row 2 (Filters, search, My picks, Group by below xl, and from xl the stage chips and status; below xl those two take row 3). A flex line never shrinks below zero, so the two row gaps around it stay. */}
-        <div
-          aria-hidden="true"
-          data-testid="subheader-row-break"
-          className="hidden md:order-1 md:block md:h-0 md:basis-full"
-        />
+        {/* Only when there is a row 2: festival-only and day-only pages have just the status line there, which sits on row 1. */}
+        {!dayOnly && !festivalOnly && (
+          <>
+            <div
+              aria-hidden="true"
+              data-testid="subheader-row-break"
+              className="hidden md:order-1 md:block md:h-0 md:basis-full"
+            />
 
-        {/* Below xl the stage chips and the status line take a third row of their own, so a long stage list never runs into the status. */}
-        <div
-          aria-hidden="true"
-          data-testid="subheader-row-break-2"
-          className="hidden md:max-xl:order-3 md:max-xl:block md:max-xl:h-0 md:max-xl:basis-full"
-        />
+            {/* Below xl the stage chips and the status line take a third row of their own, so a long stage list never runs into the status. */}
+            <div
+              aria-hidden="true"
+              data-testid="subheader-row-break-2"
+              className="hidden md:max-xl:order-3 md:max-xl:block md:max-xl:h-0 md:max-xl:basis-full"
+            />
+          </>
+        )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div

@@ -116,6 +116,8 @@ function FestivalModeViewInner() {
     <div className={PAGE} data-testid="festival-mode-view">
       {/* Phone: one column in priority order (order-*). Desktop: two columns;
           `contents` lets the children join the phone column directly. */}
+      {/* A section that renders nothing leaves an empty wrapper, which `empty:hidden` takes out of the flex gap
+          (three of them stacked a 70px dead band under the hero). */}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
         <div className="contents lg:flex lg:flex-col lg:gap-6">
           <div className="order-1">
@@ -134,7 +136,7 @@ function FestivalModeViewInner() {
               walk={walk}
             />
           </div>
-          <div className={liveNow ? 'order-1' : 'order-4'}>
+          <div className={liveNow ? 'order-1 empty:hidden' : 'order-4 empty:hidden'}>
             <UpNextList
               items={upNext}
               nowMs={nowMs}
@@ -145,12 +147,12 @@ function FestivalModeViewInner() {
             />
           </div>
           {showsFestivalWeather(selection, nowMs) ? (
-            <div className="order-1">
+            <div className="order-1 empty:hidden">
               <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
             </div>
           ) : null}
           {user ? (
-            <div className="order-1">
+            <div className="order-1 empty:hidden">
               <CaughtNowCard
                 key={currentFestival.id}
                 festivalId={currentFestival.id}

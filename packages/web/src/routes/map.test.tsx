@@ -192,6 +192,18 @@ describe('MapView', () => {
     expect(screen.queryByRole('button', { name: /SOS/ })).not.toBeInTheDocument();
   });
 
+  it('centres the add action with the empty state, and keeps it at the left under a real map', async () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1' };
+    const { container } = render(<MapView />);
+    await screen.findByTestId('crew-map');
+    const page = container.querySelector('.map-page')!;
+    // The rule only fires when the page holds an empty state; the link keeps its own self-start.
+    expect(page.className).toContain('[&:has(.empty-state)>a]:self-center');
+    expect(screen.getByRole('link', { name: 'Add a meeting point' }).className).toContain('self-start');
+    expect(screen.getByRole('link', { name: 'Add a meeting point' }).parentElement).toBe(page);
+  });
+
   it('links a crew member to the Crew tab, where meeting points are added', async () => {
     h.user = { id: 'u1' };
     h.crew = { id: 'c1' };

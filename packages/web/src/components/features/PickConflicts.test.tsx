@@ -184,6 +184,29 @@ describe('PickConflicts', () => {
     expect(screen.getByText('Suggested').className).toContain('border-accent-aqua');
   });
 
+  it('lays every row out the same: the priority and Suggested badges share one wrapping line, never a column', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const lines = screen.getAllByTestId('clash-row-badges');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(line.className).toContain('flex-wrap');
+      expect(line.className).not.toContain('flex-col');
+      expect(line.querySelector('.type-micro')).not.toBeNull();
+    }
+    const suggested = screen.getByText('Suggested');
+    expect(lines.filter((l) => l.contains(suggested))).toHaveLength(1);
+    // The badge line is a row of its own, not nested in the title row beside the chevron.
+    expect(screen.getAllByRole('button', { name: /Open details for/ })[0]!.parentElement!.contains(lines[0]!)).toBe(false);
+  });
+
+  it('wraps the clash header as whole items: the meta text never breaks inside', () => {
+    render(<PickConflicts groups={[twoPickGroup()]} />);
+    const header = screen.getByRole('heading', { level: 2 }).parentElement!;
+    expect(header.className).toContain('flex-wrap');
+    const meta = screen.getByText(/overlap/);
+    expect(meta.className).toContain('whitespace-nowrap');
+  });
+
   it('renders the groups prop without calling buildPickConflicts', () => {
     render(<PickConflicts groups={[twoActs()]} />);
     expect(screen.getByText('Artist s1')).toBeInTheDocument();

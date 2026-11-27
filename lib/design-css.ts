@@ -11,7 +11,7 @@
 import { FESTIE_MARK_VIEWBOX, festieMarkSvgBody } from '../packages/shared/src/brand/festieMark';
 import { colors } from '../packages/shared/src/tokens/colors';
 import { colorsDaylight } from '../packages/shared/src/tokens/colorsDaylight';
-import { fontFamily, letterSpacing } from '../packages/shared/src/tokens/typography';
+import { fontFamily, letterSpacing, wordSpacing } from '../packages/shared/src/tokens/typography';
 import { escapeHtml } from './helpers/sanitize.js';
 
 type Palette = typeof colors | typeof colorsDaylight;
@@ -70,7 +70,7 @@ export const fontFaceCss = [
 export const baseCss = `* { box-sizing: border-box; }
 body { margin: 0; background: var(--ds-bg); color: var(--ds-text); font-family: ${FONT_BODY}; line-height: 1.5; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.2; text-wrap: balance; }
-h1 { font-family: ${FONT_DISPLAY}; font-weight: 700; letter-spacing: ${letterSpacing.display}em; }
+h1 { font-family: ${FONT_DISPLAY}; font-weight: 700; letter-spacing: ${letterSpacing.display}em; word-spacing: ${wordSpacing.display}em; }
 p, li { text-wrap: pretty; }
 time, .ds-time { font-variant-numeric: tabular-nums; }`;
 
@@ -80,7 +80,7 @@ export const ctaCss = `.ds-cta { display: inline-flex; align-items: center; just
 
 const lockupCss = `.ds-lockup { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ds-text); text-decoration: none; }
 .ds-lockup svg { width: 2rem; height: 2rem; }
-.ds-wordmark { font-family: ${FONT_DISPLAY}; font-weight: 700; font-size: 1.5rem; letter-spacing: ${letterSpacing.display}em; }`;
+.ds-wordmark { font-family: ${FONT_DISPLAY}; font-weight: 700; font-size: 1.5rem; letter-spacing: ${letterSpacing.display}em; word-spacing: ${wordSpacing.display}em; }`;
 
 /** Everything a server page needs inside one `<style>`: tokens, fonts, base rules, CTA and lockup. */
 export const designCss = [stageRootCss, daylightCss, fontFaceCss, baseCss, ctaCss, lockupCss].join('\n');

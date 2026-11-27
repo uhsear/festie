@@ -131,6 +131,17 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByText('Start a crew for Bonnaroo 2026')).toBeInTheDocument();
   });
 
+  it('hides the wrapper of a section that renders nothing, so it adds no gap under the hero', () => {
+    setup({ user: false, sets: [SETS[0]] });
+    render(<FestivalModeView />);
+    const wrappers = [...screen.getByTestId('festival-mode-view').querySelectorAll<HTMLElement>('div')].filter((d) =>
+      d.className.split(' ').some((c) => /^order-\d$/.test(c)),
+    );
+    const empty = wrappers.filter((w) => w.childElementCount === 0);
+    expect(empty.length).toBeGreaterThan(0);
+    for (const w of empty) expect(w.className).toContain('empty:hidden');
+  });
+
   it('passes walk: null to the hero when there is no fix', () => {
     setup({ user: true, picks: { s2: 'must' } });
     render(<FestivalModeView />);

@@ -303,7 +303,8 @@ function CardsViewInner() {
                       stageName={sn}
                       stageColor={sc}
                       friendProfiles={others}
-                      clashLabel={clashBadges.get(set.id)?.label}
+                      clashLabel={clashBadges.get(set.id)?.base}
+                      clashMore={clashBadges.get(set.id)?.more}
                       b2bSeparator={currentFestival?.b2bSeparator}
                     />
                   </div>
