@@ -54,7 +54,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { FIND_FRIEND_COPY, LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { FIND_FRIEND_COPY, LIVE_SHARE_COPY, OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { colors, elevation } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -1318,7 +1318,7 @@ export default function OfflineMap({
               ? "The map didn't load. Showing your saved meeting points."
               : remotePmtilesUrl
                 ? 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'
-                : 'This festival has no offline map. Showing your saved meeting points.'}
+                : OFFLINE_MAP_COPY.noMapYet}
           </Text>
           {loadFailed ? (
             <Button label="Retry map" size="sm" variant="secondary" onPress={retryMap} maxFontSizeMultiplier={MAX_FONT_SCALE} />

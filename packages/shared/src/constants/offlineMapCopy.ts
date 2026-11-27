@@ -13,5 +13,8 @@ export const OFFLINE_MAP_COPY = {
   // Any failure that is not a space refusal: 404, network, HTTP error.
   downloadFailed: "Couldn't save the map. Check your connection and try again.",
   basemapNotSaved: 'Base map not saved. Download it on the Picks tab while you have signal.',
+  // Map tab banner when the festival has no map archive. "Download for offline" still saves the schedule, so
+  // the banner must not say "no offline map" next to it; it states the festival has no map to save.
+  noMapYet: 'This festival has no map yet. Showing your saved meeting points.',
   siteplanNeedsConnection: 'The site plan needs a connection. The base map still works offline.',
 } as const;

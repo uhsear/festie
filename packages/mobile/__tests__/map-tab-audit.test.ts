@@ -80,4 +80,9 @@ describe('map GPS watch lifecycle', () => {
     const src = readFileSync(join(__dirname, '../components/OfflineMap.tsx'), 'utf8');
     expect(src).toMatch(/useFocusEffect\(\s*useCallback\(\(\) => \{[\s\S]*?return \(\) => \{\s*focusedRef\.current = false;\s*watchSubRef\.current\?\.remove\(\);/);
   });
+
+  it('says the festival has no map, not no offline map, beside the Download for offline chip', () => {
+    expect(src).toContain('OFFLINE_MAP_COPY.noMapYet');
+    expect(src).not.toContain('has no offline map');
+  });
 });

@@ -30,4 +30,9 @@ describe('offlineMapCopy', () => {
   it('has a plain message for a failed download', () => {
     expect(OFFLINE_MAP_COPY.downloadFailed).toBe("Couldn't save the map. Check your connection and try again.");
   });
+
+  it('no-map banner does not contradict the download chip', () => {
+    expect(OFFLINE_MAP_COPY.noMapYet).toBe('This festival has no map yet. Showing your saved meeting points.');
+    expect(OFFLINE_MAP_COPY.noMapYet).not.toMatch(/offline/i);
+  });
 });
