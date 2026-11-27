@@ -24,6 +24,8 @@ interface TimelineStaticLayerProps {
   visibleStages: Stage[];
   timeBounds: { minMin: number; maxMin: number; totalSlots: number };
   rowHeight: number;
+  /** Minute of the axis label the NOW pill sits on, so that one label is blanked instead of printed under the pill. */
+  hiddenTickMin: number | null;
 }
 
 /**
@@ -62,6 +64,7 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
   visibleStages,
   timeBounds,
   rowHeight,
+  hiddenTickMin,
 }: TimelineStaticLayerProps) {
   const rules = columnRules(timeBounds.minMin, rowHeight);
   return (
@@ -92,7 +95,7 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
               borderBottom: mm === 0 ? '1px solid var(--color-border-light)' : '1px solid var(--color-border)',
             }}
           >
-            {show ? fmtAxisHour(mins) : ''}
+            {show && mins !== hiddenTickMin ? fmtAxisHour(mins) : ''}
           </div>
         );
       })}
@@ -167,6 +170,16 @@ export default function TimelineGrid({
   // "10:30a" at the 320px viewport without clipping the leading digit.
   const gutterW = vpW <= 430 ? 52 : 70;
   const compact = vpW < 640;
+
+  // The NOW pill hangs in the gutter and would print over the nearest half-hour label.
+  // Half the pill is about 14px, which is this many minutes of the axis; the value only
+  // changes when the line crosses a label, so the memoised layer does not rebuild every tick.
+  const hiddenTickMin = useMemo(() => {
+    if (nowIndicator === null) return null;
+    const nowMin = timeBounds.minMin + (nowIndicator / 100) * timeBounds.totalSlots * SLOT_MINUTES;
+    const nearest = Math.round(nowMin / 30) * 30;
+    return Math.abs(nowMin - nearest) <= (14 * SLOT_MINUTES) / rowHeight ? nearest : null;
+  }, [nowIndicator, timeBounds.minMin, timeBounds.totalSlots, rowHeight]);
 
   // Roving focus: one cell is the tab stop, arrow keys move between cells.
   const navCells = useMemo<GridNavCell[]>(() => {
@@ -251,7 +264,7 @@ export default function TimelineGrid({
               // Mobile: smaller text, tighter letter-spacing so wide tracking
               // doesn't eat the narrow column. The name clamps to 2 lines in the
               // inner span, so a third line cannot peek through the padding.
-              'text-[length:var(--font-size-10)] leading-[1.15] tracking-[0.3px] px-1 py-1',
+              'text-[length:var(--font-size-12)] leading-[1.15] tracking-[0.3px] px-1 py-1',
               // Desktop: restore full sizing + roomier tracking.
               'md:text-[length:var(--font-size-12)] md:leading-normal md:tracking-[1.5px] md:px-2 md:py-2.5',
               'md:whitespace-normal',
@@ -267,7 +280,12 @@ export default function TimelineGrid({
 
       {/* Static background: left-axis time labels + per-stage cells. Memoized
           so the ~hundreds of static divs don't rebuild on every parent render. */}
-      <TimelineStaticLayer visibleStages={visibleStages} timeBounds={timeBounds} rowHeight={rowHeight} />
+      <TimelineStaticLayer
+        visibleStages={visibleStages}
+        timeBounds={timeBounds}
+        rowHeight={rowHeight}
+        hiddenTickMin={hiddenTickMin}
+      />
 
       {/* Set blocks */}
       {visibleStages.map((st, ci) => {
@@ -319,7 +337,7 @@ export default function TimelineGrid({
           <div
             className={cn(
               'timeline-now-label',
-              'absolute left-0 right-0 h-[3px]',
+              'absolute left-0 right-0 h-[2px] opacity-80',
               'bg-[var(--color-live-fill)]',
               'shadow-[0_0_12px_var(--color-live-ring)]',
             )}
@@ -327,7 +345,7 @@ export default function TimelineGrid({
           >
             <div
               className={cn(
-                'absolute -left-[5px] -top-[3.5px]',
+                'absolute -left-[5px] -top-[4px]',
                 'w-2.5 h-2.5 rounded-full',
                 'bg-[var(--color-live-fill)]',
                 'ring-2 ring-[var(--color-bg-primary)]',
