@@ -32,6 +32,29 @@ describe('Sheet', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('marks the sheet a focus sink only when it opens with no opener, such as from a URL', async () => {
+    const { unmount } = render(
+      <Sheet open onOpenChange={vi.fn()} title="Deep link">
+        <p>Body</p>
+      </Sheet>,
+    );
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-focus-sink');
+    unmount();
+
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+    render(
+      <Sheet open onOpenChange={vi.fn()} title="From a control">
+        <p>Body</p>
+      </Sheet>,
+    );
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveFocus());
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('data-focus-sink');
+    opener.remove();
+  });
+
   it('returns focus to the opener on Escape', async () => {
     function Harness() {
       const [open, setOpen] = useState(false);

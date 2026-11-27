@@ -19,13 +19,18 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
  *
  * - Closes on Escape via the provided `onClose` callback.
  * - Wraps Tab / Shift+Tab so focus cycles within the container.
- * - Moves initial focus to the first focusable child on mount.
+ * - Moves initial focus to the first focusable child on mount, or to the
+ *   container itself when `initialFocus` is `'container'` (the container then
+ *   needs `tabIndex={-1}`). Programmatic focus on a button before any input
+ *   makes browsers match `:focus-visible`, so a mouse or touch user would see
+ *   a keyboard ring on first load; the container takes that focus instead.
  * - Returns focus to the previously-focused element on unmount.
  */
 export function useKeyboardTrap(
   containerRef: RefObject<HTMLElement | null>,
   isActive: boolean,
   onClose: () => void,
+  initialFocus: 'first' | 'container' = 'first',
 ) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -42,7 +47,8 @@ export function useKeyboardTrap(
       const first = focusable[0]!;
       const last = focusable[focusable.length - 1]!;
 
-      if (e.shiftKey && document.activeElement === first) {
+      // Shift+Tab from the container itself would otherwise leave the trap.
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === containerRef.current)) {
         e.preventDefault();
         last.focus();
       } else if (!e.shiftKey && document.activeElement === last) {
@@ -68,12 +74,15 @@ export function useKeyboardTrap(
 
     // Delay one frame so the container's children are rendered
     const raf = requestAnimationFrame(() => {
-      if (containerRef.current) getFocusable(containerRef.current)[0]?.focus();
+      const container = containerRef.current;
+      if (!container) return;
+      if (initialFocus === 'container') container.focus();
+      else getFocusable(container)[0]?.focus();
     });
 
     return () => {
       cancelAnimationFrame(raf);
       previouslyFocused?.focus();
     };
-  }, [isActive, containerRef]);
+  }, [isActive, containerRef, initialFocus]);
 }

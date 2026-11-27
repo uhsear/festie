@@ -255,15 +255,20 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
             detail-glass utility owns all four glass properties; rounded-* owns radii. */}
         <Drawer.Content
           aria-label="Set detail panel"
+          data-focus-sink
           className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] h-[96dvh] flex flex-col
                      rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua
                      lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh
                      lg:w-[420px] lg:max-w-full
                      lg:rounded-none lg:rounded-l-[16px]"
           onOpenAutoFocus={(e: Event) => {
+            const hadOpener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body;
             returnFocus.onOpenAutoFocus();
             e.preventDefault();
-            closeBtnRef.current?.focus();
+            // A deep link has no opener and no prior input, so a focused button would draw the keyboard ring for a
+            // mouse or touch user. The panel itself takes focus then; opened from a control, the close button does.
+            const target = hadOpener ? closeBtnRef.current : closeBtnRef.current?.closest<HTMLElement>('[data-focus-sink]');
+            target?.focus();
           }}
           onCloseAutoFocus={returnFocus.onCloseAutoFocus}
         >

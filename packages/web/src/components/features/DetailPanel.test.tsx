@@ -28,6 +28,7 @@ vi.mock('vaul', () => ({
     }: {
       children: React.ReactNode;
       'aria-label'?: string;
+      'data-focus-sink'?: boolean;
       onOpenAutoFocus?: (e: Event) => void;
       onCloseAutoFocus?: (e: Event) => void;
     }) => {
@@ -40,7 +41,7 @@ vi.mock('vaul', () => ({
         return () => close.current?.(new Event('focusScope.autoFocusOnUnmount', { cancelable: true }));
       }, []);
       return (
-        <div data-testid="drawer-content" aria-label={props['aria-label']}>
+        <div data-testid="drawer-content" aria-label={props['aria-label']} tabIndex={-1} data-focus-sink={props['data-focus-sink']}>
           {children}
         </div>
       );
@@ -278,6 +279,13 @@ describe('DetailPanel', () => {
       expect(screen.getByRole('button', { name: 'Close detail panel' })).toHaveFocus();
       unmount();
       expect(opener).toHaveFocus();
+    });
+
+    it('focuses the panel, not the close button, when opened from a deep link with no opener', () => {
+      render(<DetailPanel {...defaultProps} />);
+      const panel = screen.getByTestId('drawer-content');
+      expect(panel).toHaveAttribute('data-focus-sink');
+      expect(panel).toHaveFocus();
     });
 
     it('falls back to the grid cell open button when the opener is gone', () => {
