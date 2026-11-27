@@ -910,6 +910,7 @@ export default function TimelineScreen() {
           stage/phase filters fold inline below (in `controls`) only when their
           toggle is on or they carry active state, reclaiming vertical space. */}
       <ScheduleViewSwitcher
+        flyerShowing={!!flyer}
         festivalHasTimedSets={festivalHasTimedSets}
         filtersActive={filtersActive}
         filtersOpen={filtersOpen}

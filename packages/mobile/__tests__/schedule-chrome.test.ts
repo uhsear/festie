@@ -7,7 +7,7 @@ describe('Lineup view switcher', () => {
   it('keeps Grid out of the segmented control', () => {
     expect(src).toContain("!== 'grid'");
     expect(src).not.toContain('VIEW_OPTIONS_WITH_GRID');
-    expect(src).toContain('options={VIEW_OPTIONS}');
+    expect(src).toContain('options={flyerShowing ? FLYER_OPTIONS : VIEW_OPTIONS}');
     expect(src).toContain('onChange={setScheduleView}');
   });
 

@@ -68,8 +68,8 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const active = showFailed || showOffline || showSyncing;
 
   // Report the bar's live presence to the chrome so the stack below it knows whether a bar
-  // already paints behind the status bar. Every bar is one line high and ends inside a screen
-  // header's top padding, so it floats over the screen without covering the header. Reset to
+  // already paints behind the status bar. The bars float over the screen; the root reports
+  // the overlay's height (TopBannerContext), so a screen header pads below them. Reset to
   // false on unmount so a stale "active" can't strand the inset.
   useEffect(() => {
     onActiveChange?.(active);
@@ -80,8 +80,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
     if (showFailed) {
       return (
         <TouchableOpacity
-          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top }]}
-          hitSlop={{ bottom: t.spacing[2] }}
+          style={[styles.banner, styles.bannerFailed, { paddingTop: insets.top, minHeight: insets.top + 44 }]}
           onPress={() => setSheetOpen(true)}
           accessibilityRole="button"
           accessibilityLabel={`${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync — review`}

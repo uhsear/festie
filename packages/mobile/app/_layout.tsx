@@ -29,6 +29,7 @@ import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UIProvider } from '../contexts/UIContext';
+import { TopBannerProvider, useSetTopBannerHeight } from '../contexts/TopBannerContext';
 import OfflineBanner from '../components/OfflineBanner';
 import Toaster from '../components/Toaster';
 import SosBanner from '../components/SosBanner';
@@ -345,6 +346,8 @@ function AuthGate() {
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
+  // Screen headers pad by the overlay's height, so no strip covers a header.
+  const setTopBannerHeight = useSetTopBannerHeight();
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -653,7 +656,11 @@ function AuthGate() {
           </ErrorBoundary>
         </View>
       {!loading && (
-        <View style={styles.topOverlay} pointerEvents="box-none">
+        <View
+          style={styles.topOverlay}
+          pointerEvents="box-none"
+          onLayout={(e) => setTopBannerHeight(Math.ceil(e.nativeEvent.layout.height))}
+        >
           <OfflineBanner onActiveChange={setBannerActive} />
           <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />
           <AnnouncementBanner padTop={!bannerActive && !sosActive} />
@@ -696,7 +703,9 @@ function RootLayout() {
   return (
     <SafeAreaProvider>
       <UIProvider>
-        <AuthGate />
+        <TopBannerProvider>
+          <AuthGate />
+        </TopBannerProvider>
       </UIProvider>
     </SafeAreaProvider>
   );
