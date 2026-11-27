@@ -63,7 +63,7 @@ export default function MembersTab({
       )}
       {members.length > 0 ? (
         <>
-        <div className="flex items-baseline justify-between px-1 pb-1">
+        <div className="flex items-baseline justify-between pb-1">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Members</h3>
           <span className="text-xs text-text-secondary">{memberCountLabel(members.length, maxMembers)}</span>
         </div>

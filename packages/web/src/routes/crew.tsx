@@ -27,6 +27,7 @@ import IconButton from '../components/ui/IconButton';
 import GuestTeaser from '../components/features/GuestTeaser';
 import { useCrewAdmin } from '../components/crew/useCrewAdmin';
 import { useToast } from '../lib/toastContext';
+import { sectionHeading } from '../lib/styles';
 import PromptDialog from '../components/ui/PromptDialog';
 import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -412,7 +413,7 @@ function CrewViewInner() {
 
           {/* Setup rows sit after the day-of content. */}
           <section aria-labelledby="crew-setup-heading" className="space-y-4 pt-2">
-            <h2 id="crew-setup-heading" className="px-1 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <h2 id="crew-setup-heading" className={sectionHeading}>
               Plan and setup
             </h2>
             {activeCrew.inviteCode && members.length > 1 && (
