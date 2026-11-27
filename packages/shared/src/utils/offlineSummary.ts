@@ -68,7 +68,12 @@ function agoFrom(ms: number, nowMs?: number): string {
   return timeAgo(nowMs == null ? ms : ms + (Date.now() - nowMs));
 }
 
-export function offlineStatusLabel(summary: OfflineSummary, nowMs?: number): string {
+/**
+ * `hasMap` false: the download saves schedule, picks and crew but no map, so an offer to
+ * "download for offline" on an unmapped festival's Map screen would read as a map download.
+ */
+export function offlineStatusLabel(summary: OfflineSummary, nowMs?: number, hasMap = true): string {
+  const offer = hasMap ? 'Download for offline' : 'Save schedule offline';
   switch (summary.overall) {
     case 'syncing': return 'Downloading for offline…';
     case 'ready': {
@@ -78,8 +83,8 @@ export function offlineStatusLabel(summary: OfflineSummary, nowMs?: number): str
     case 'partial':
       return summary.hasError
         ? 'Offline download incomplete'
-        : `Download for offline · ${summary.savedCount} of ${summary.totalCount} saved`;
-    default: return 'Download for offline';
+        : `${offer} · ${summary.savedCount} of ${summary.totalCount} saved`;
+    default: return offer;
   }
 }
 

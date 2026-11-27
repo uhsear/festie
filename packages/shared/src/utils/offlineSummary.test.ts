@@ -50,6 +50,13 @@ describe('summarizeOffline', () => {
     expect(offlineStatusLabel(s)).toBe('Download for offline · 2 of 5 saved');
     expect(offlineActionLabel(s)).toBe('Download');
   });
+  it('names the save as the schedule, not a download, when the festival has no map', () => {
+    const none = summarizeOffline(steps(all('idle')), 'live');
+    expect(offlineStatusLabel(none, undefined, false)).toBe('Save schedule offline');
+    expect(offlineStatusLabel(none, undefined, true)).toBe('Download for offline');
+    const some = summarizeOffline(steps({ ...all('idle'), schedule: r('ready'), picks: r('ready') }), 'live');
+    expect(offlineStatusLabel(some, undefined, false)).toBe('Save schedule offline · 2 of 5 saved');
+  });
   it('partial with an error keeps the incomplete wording and Retry', () => {
     const s = summarizeOffline(steps({ ...all('idle'), schedule: r('ready'), art: r('error') }), 'live');
     expect(s.hasError).toBe(true);

@@ -54,7 +54,7 @@ import {
 } from '@festie/shared/utils';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { FIND_FRIEND_COPY, LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { FIND_FRIEND_COPY, LIVE_SHARE_COPY, OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { colors, elevation } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -1308,22 +1308,23 @@ export default function OfflineMap({
     const hasAny = coorded.length > 0 || uncoordedPoints.length > 0 || livePins.length > 0;
     return (
       <ScrollView style={styles.screen} contentContainerStyle={[styles.fallbackContent, { paddingBottom: bottomPad + bottomInset }]}>
-        <View style={styles.banner}>
-          <Ionicons name="cloud-offline-outline" size={iconSize.action} color={t.colors.accent.amber} />
-          {/* Say only what is true for THIS festival: a download helps only when
-              an archive exists to download, and the control that starts it lives on
-              Schedule, Map and My Picks (there is nothing to fetch once you are offline). */}
-          <Text style={styles.bannerText}>
-            {loadFailed
-              ? "The map didn't load. Showing your saved meeting points."
-              : remotePmtilesUrl
-                ? 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'
-                : 'This festival has no offline map. Showing your saved meeting points.'}
-          </Text>
-          {loadFailed ? (
-            <Button label="Retry map" size="sm" variant="secondary" onPress={retryMap} maxFontSizeMultiplier={MAX_FONT_SCALE} />
-          ) : null}
-        </View>
+        {/* The banner carries offline-download advice only. A festival with no map archive says so once,
+            in the "isn't mapped yet" note below. */}
+        {loadFailed || remotePmtilesUrl ? (
+          <View style={styles.banner}>
+            <Ionicons name="cloud-offline-outline" size={iconSize.action} color={t.colors.accent.amber} />
+            {/* Say only what is true for THIS festival: the control that starts a download lives on
+                Schedule, Map and My Picks (there is nothing to fetch once you are offline). */}
+            <Text style={styles.bannerText}>
+              {loadFailed
+                ? "The map didn't load. Showing your saved meeting points."
+                : 'Download this festival from the Schedule or Map screen while you still have signal to use the map offline. Showing your saved meeting points.'}
+            </Text>
+            {loadFailed ? (
+              <Button label="Retry map" size="sm" variant="secondary" onPress={retryMap} maxFontSizeMultiplier={MAX_FONT_SCALE} />
+            ) : null}
+          </View>
+        ) : null}
 
         {/* SOS first — safety-critical, even with no map. One row per active SOS. */}
         {sosList.map((s) => (
